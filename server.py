@@ -318,6 +318,15 @@ if os.environ.get("YTDLP_COOKIES_TXT"):  # cookies.txt contents pasted into an e
         f.write(os.environ["YTDLP_COOKIES_TXT"].replace("\\n", "\n"))
 if os.path.isfile(_COOKIES):
     BASE_YDL["cookiefile"] = _COOKIES
+# Stream URLs are bound to the IP that resolved them, so the audio passthrough
+# must leave through the same proxy as yt-dlp.
+YT_PROXY = os.environ.get("YT_PROXY") or ""
+if YT_PROXY:
+    BASE_YDL["proxy"] = YT_PROXY
+    _yt_open = urllib.request.build_opener(
+        urllib.request.ProxyHandler({"http": YT_PROXY, "https": YT_PROXY})).open
+else:
+    _yt_open = urllib.request.urlopen
 
 
 def _thumb(entry, vid):
@@ -938,7 +947,7 @@ class Handler(SimpleHTTPRequestHandler):
         if client_range:
             req.add_header("Range", client_range)
         try:
-            upstream = urllib.request.urlopen(req, timeout=30)
+            upstream = _yt_open(req, timeout=30)
         except HTTPError as e:
             self.send_response(e.code)
             self.end_headers()
@@ -1531,7 +1540,7 @@ def main():
     srv = ThreadingHTTPServer((HOST, PORT), Handler)
     print(f"Muse on  http://127.0.0.1:{PORT}", flush=True)
     print(f"yt-dlp {yt_dlp.version.__version__}, cookies: {BASE_YDL.get('cookiefile') or 'none'}, "
-          f"js runtime: {shutil.which('deno') or 'none'}", flush=True)
+          f"js runtime: {shutil.which('deno') or 'none'}, proxy: {YT_PROXY or 'none'}", flush=True)
     if PUBLIC_URL:
         threading.Thread(target=keep_awake, daemon=True).start()
     if not ON_RENDER:
