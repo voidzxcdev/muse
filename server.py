@@ -628,7 +628,11 @@ def _resolve_audio(video_id):
         try:
             with yt_dlp.YoutubeDL(fast) as ydl:
                 info = ydl.extract_info(url, download=False)
-            if not _stream_works(info.get("url") or ""):
+            t_extract = time.time() - now
+            ok = _stream_works(info.get("url") or "")
+            print(f"resolve {video_id}: extract {t_extract:.1f}s, check "
+                  f"{time.time() - now - t_extract:.1f}s", flush=True)
+            if not ok:
                 print(f"fast path: {video_id} stream refused, falling back", flush=True)
                 info = None
         except yt_dlp.utils.DownloadError as e:
