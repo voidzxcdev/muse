@@ -18,7 +18,19 @@ if [ "${WARP:-1}" = "1" ]; then
   if [ -f "$PROFILE" ]; then
     # IPv4 only: stream URLs are bound to one IP, and a tunnel that exits over
     # both v4 and v6 can resolve on one and download on the other.
-    sed -i -E '/^(Address|AllowedIPs|DNS) *= *[^ ]*:/d' "$PROFILE"
+    python - "$PROFILE" <<'EOF'
+import re, sys
+out = []
+for line in open(sys.argv[1]).read().splitlines():
+    m = re.match(r"\s*(Address|AllowedIPs|DNS)\s*=\s*(.*)", line)
+    if m:
+        keep = [v.strip() for v in m.group(2).split(",") if ":" not in v]
+        if not keep:
+            continue
+        line = f"{m.group(1)} = {', '.join(keep)}"
+    out.append(line)
+open(sys.argv[1], "w").write("\n".join(out) + "\n")
+EOF
     cat > wireproxy.conf <<EOF
 WGConfig = $PROFILE
 

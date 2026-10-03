@@ -582,7 +582,8 @@ def _stream_works(stream):
                                                       "Range": "bytes=0-1"})
         with _yt_open(req, timeout=8) as r:
             return r.status in (200, 206)
-    except Exception:
+    except Exception as e:
+        print(f"stream check failed: {str(e)[:120]}", flush=True)
         return False
 
 
@@ -624,8 +625,10 @@ def _resolve_audio(video_id):
             with yt_dlp.YoutubeDL(fast) as ydl:
                 info = ydl.extract_info(url, download=False)
             if not _stream_works(info.get("url") or ""):
+                print(f"fast path: {video_id} stream refused, falling back", flush=True)
                 info = None
-        except yt_dlp.utils.DownloadError:
+        except yt_dlp.utils.DownloadError as e:
+            print(f"fast path: {video_id} {str(e)[:120]}, falling back", flush=True)
             info = None
     if info is None:
         opts = dict(BASE_YDL, format="bestaudio/best", skip_download=True)
