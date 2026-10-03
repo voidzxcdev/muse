@@ -304,7 +304,7 @@ def drop_session(token):
 
 BASE_YDL = {
     "quiet": True,
-    "no_warnings": True,
+    "no_warnings": not ON_RENDER,
     "noplaylist": True,
     "socket_timeout": 20,
     "retries": 2,
@@ -1530,6 +1530,8 @@ def main():
     init_db()
     srv = ThreadingHTTPServer((HOST, PORT), Handler)
     print(f"Muse on  http://127.0.0.1:{PORT}", flush=True)
+    print(f"yt-dlp {yt_dlp.version.__version__}, cookies: {BASE_YDL.get('cookiefile') or 'none'}, "
+          f"js runtime: {shutil.which('deno') or 'none'}", flush=True)
     if PUBLIC_URL:
         threading.Thread(target=keep_awake, daemon=True).start()
     if not ON_RENDER:
