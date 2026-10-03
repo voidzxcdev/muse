@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: muse
+    runtime: docker
+    plan: free
+    region: frankfurt
+    healthCheckPath: /api/version
+    autoDeploy: true
+    envVars:
+      - key: DATABASE_URL
+        sync: false

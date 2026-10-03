@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0a0a0b" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Muse" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+  <title>Muse</title>
+  <link rel="preconnect" href="https://api.fontshare.com" />
+  <link rel="preconnect" href="https://i.ytimg.com" crossorigin />
+  <link rel="dns-prefetch" href="https://www.youtube.com" />
+  <link rel="dns-prefetch" href="https://music.youtube.com" />
+  <link href="https://api.fontshare.com/v2/css?f[]=clash-display@500,600,700&f[]=satoshi@400,500,700,900&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />
+  <link rel="stylesheet" href="style.css?v=130" />
+  <link rel="icon" href="/favicon.ico" sizes="32x32" />
+</head>
+<body class="home intro">
+  <div id="intro" aria-hidden="true">
+    <div class="intro-pill"><img class="blogo" src="/muselogo.png?v=130" alt="" /><span>Muse</span></div>
+  </div>
+
+  <aside id="side">
+    <button id="sideBrand" title="Home"><img class="blogo" src="/muselogo.png?v=130" alt="" /><span id="sideBrandText">Muse</span><span id="acctLink" title="Account">Account</span></button>
+    <nav class="snav">
+      <button data-view="home">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        <span>Home</span>
+      </button>
+      <button data-view="liked">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+        <span>Liked Songs</span><b id="likeCount"></b>
+      </button>
+    </nav>
+    <div class="side-head"><span>Playlists</span><button id="newPl" title="New playlist">+</button></div>
+    <div id="plList"></div>
+  </aside>
+
+  <div class="stage">
+    <header class="top">
+      <form id="searchForm" class="search" role="search">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input id="q" placeholder="Search a song…" autocomplete="off" spellcheck="false" />
+      </form>
+    </header>
+
+    <main class="wrap">
+      <div id="empty" class="empty" hidden></div>
+      <div id="homeFy" hidden></div>
+      <div id="loading" class="grid" hidden></div>
+      <div id="grid" class="grid" hidden></div>
+      <div id="view" hidden></div>
+    </main>
+
+    <footer class="player" id="player" hidden>
+      <img id="art" alt="" />
+      <div class="p-meta"><div id="ptitle">—</div></div>
+      <div class="p-center">
+        <div class="p-btns">
+          <button id="bLike" title="Like"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></button>
+          <button id="bShuffle" title="Shuffle"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg></button>
+          <button id="bPrev" title="Previous"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M18.5 6v12L9.5 12z"/><rect x="5" y="6" width="3" height="12" rx="1.5"/></svg></button>
+          <button id="bPlay" class="big" title="Play / Pause (space)">
+            <!-- Font Awesome Free 6 fa-play / fa-pause (CC BY 4.0) -->
+            <svg class="ic-play" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512" fill="currentColor"><path d="M73 39c-14.8-9.1-33.4-9.4-48.5-.9S0 62.6 0 80V432c0 17.4 9.4 33.4 24.5 41.9s33.7 8.1 48.5-.9L361 297c14.3-8.7 23-24.2 23-41s-8.7-32.2-23-41L73 39z"/></svg>
+            <svg class="ic-pause" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512" fill="currentColor"><path d="M48 64C21.5 64 0 85.5 0 112V400c0 26.5 21.5 48 48 48H80c26.5 0 48-21.5 48-48V112c0-26.5-21.5-48-48-48H48zm192 0c-26.5 0-48 21.5-48 48V400c0 26.5 21.5 48 48 48h32c26.5 0 48-21.5 48-48V112c0-26.5-21.5-48-48-48H240z"/></svg>
+          </button>
+          <button id="bNext" title="Next"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M5.5 6v12l9-6z"/><rect x="16" y="6" width="3" height="12" rx="1.5"/></svg></button>
+          <button id="bRepeat" title="Repeat: off → all → one"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg><b class="one">1</b></button>
+          <button id="bAdd" title="Add to playlist"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+        </div>
+        <div class="p-track">
+          <span id="pos">0:00</span>
+          <div class="p-line" id="pline" title="Seek">
+            <div class="p-fill" id="pfill"></div>
+            <div class="p-knob" id="pknob"></div>
+          </div>
+          <span id="dur">0:00</span>
+        </div>
+      </div>
+      <div class="p-right">
+        <input id="vol" type="range" min="0" max="100" value="85" title="Volume" />
+      </div>
+    </footer>
+  </div>
+
+  <div id="menu" class="menu" hidden></div>
+
+  <div id="modalWrap" class="modal-wrap" hidden>
+    <div class="modal" id="modalBox" role="dialog" aria-modal="true"></div>
+  </div>
+
+  <audio id="audio" preload="auto"></audio>
+  <input type="file" id="coverPick" accept="image/*" style="position:fixed;left:0;bottom:0;width:1px;height:1px;opacity:0;pointer-events:none;" />
+  <nav id="tabbar" aria-label="Primary">
+    <div id="tabInd"></div>
+    <button data-view="home">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      <span>Home</span>
+    </button>
+    <button data-view="liked">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+      <span>Liked</span>
+    </button>
+    <button id="tabLib">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+      <span>Library</span>
+    </button>
+  </nav>
+
+  <div id="sheet" hidden>
+    <div class="sheet-card">
+      <div class="sheet-grip"></div>
+      <button class="sheet-user" id="sheetUser"></button>
+      <div class="sheet-head"><span>Playlists</span><button id="sheetNew">+ New</button></div>
+      <div id="sheetPl"></div>
+    </div>
+  </div>
+
+  <div id="bigplayer" hidden>
+    <button id="bpClose" title="Close">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+    </button>
+    <div id="bpStage"></div>
+  </div>
+
+  <div id="toast" class="toast" hidden></div>
+  <script>
+  /* Failsafe: runs with zero dependencies. If the main script ever dies,
+     the intro still lifts at 3.2s and the real error gets toasted. */
+  window.__museErr = [];
+  window.__museBuild = 130;
+  window.addEventListener('error', function (e) {
+    try {
+      window.__museErr.push(String((e && e.message) || 'script error'));
+      if (window.console && window.console.debug) window.console.debug('[muse]', window.__museErr[0]);
+    } catch (_) {}
+  }, true);
+  setTimeout(function () {
+    var i = document.getElementById('intro');
+    if (i) {
+      i.style.transition = 'opacity .5s ease';
+      i.style.opacity = '0';
+      i.style.pointerEvents = 'none';
+      setTimeout(function () { var j = document.getElementById('intro'); if (j) j.remove(); }, 600);
+    }
+    document.body.classList.remove('intro');
+  }, 3200);
+  </script>
+  <script src="app.js?v=130"></script>
+</body>
+</html>

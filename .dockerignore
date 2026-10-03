@@ -1,0 +1,11 @@
+.git
+__pycache__
+*.pyc
+muse.db
+muse.db-*
+music
+covers
+*.log
+cookies.txt
+.env
+start.bat
