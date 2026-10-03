@@ -1,0 +1,9 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "muse",
+  "pages_build_output_dir": "../static",
+  "compatibility_date": "2026-10-03",
+  "vars": {
+    "BACKEND_ORIGIN": "https://muse-xbrh.onrender.com"
+  }
+}
