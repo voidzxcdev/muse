@@ -60,10 +60,46 @@ async function api(path) {
 }
 
 async function req(method, path, body) {
-  return fetchJSON(path, { method, headers: { 'Content-Type': 'application/json' },
+  const j = await fetchJSON(path, { method, headers: { 'Content-Type': 'application/json' },
     body: body === undefined ? undefined : JSON.stringify(body) }, 30000);
+  // Any edit can change what the saved views show; listening telemetry can't.
+  if (path !== '/api/event') swrClear(true);
+  return j;
 }
 const post = (p, b) => req('POST', p, b);
+
+/* Stale-while-revalidate for user data: paint the last copy from this device
+ * instantly, then repaint only if the server's answer differs. */
+const SWR = 'muse:swr:';
+function swrGet(path) {
+  try {
+    const s = JSON.parse(localStorage.getItem(SWR + path) || 'null');
+    if (!s) return null;
+    if (path !== '/api/me' && (!me || s.uid !== me.id)) return null;
+    return s.j;
+  } catch { return null; }
+}
+function swrPut(path, j) {
+  try {
+    const uid = path === '/api/me' ? j?.user?.id ?? null : me?.id ?? null;
+    localStorage.setItem(SWR + path, JSON.stringify({ uid, j }));
+  } catch {}
+}
+function swrClear(keepMe = false) {
+  try {
+    Object.keys(localStorage)
+      .filter((k) => k.startsWith(SWR) && !(keepMe && k === SWR + '/api/me'))
+      .forEach((k) => localStorage.removeItem(k));
+  } catch {}
+}
+async function swr(path, paint) {
+  const cached = swrGet(path);
+  if (cached) { try { paint(cached); } catch {} }
+  const j = await api(path);
+  swrPut(path, j);
+  if (!cached || JSON.stringify(cached) !== JSON.stringify(j)) paint(j);
+  return j;
+}
 
 const setHome = (h) => document.body.classList.toggle('home', h);
 
@@ -1017,7 +1053,10 @@ function applyTheme() {
 
 async function refreshMe() {
   try {
-    me = (await api('/api/me')).user;
+    const j = await api('/api/me');
+    me = j.user;
+    swrPut('/api/me', j);
+    if (!me) swrClear();
   } catch {
     me = null;
   }
@@ -1030,8 +1069,7 @@ async function refreshCounts() {
     return;
   }
   try {
-    const pls = await api('/api/playlists');
-    renderPlList(pls.playlists);
+    await swr('/api/playlists', (pls) => renderPlList(pls.playlists));
   } catch { /* offline-ish: keep old list */ }
 }
 
@@ -1227,17 +1265,19 @@ async function renderForYou(v) {
   v.querySelector('[data-vact]').innerHTML = vplayIc('data-fyplay="1"');
   paintHeaderPlay('foryou');
   try {
-    const j = await api('/api/recommendations?n=12');
-    if (currentView !== 'foryou') return;
-    if (!j.tracks.length) {
-      v.insertAdjacentHTML('beforeend',
-        '<div class="vempty">Like a few songs or answer the taste survey — then this page reads your mind.</div>');
-      return;
-    }
-    viewQueue = j.tracks.map((t) => ({ ...t }));
-    $('fyGrid').innerHTML = j.tracks.map(recoCardHTML).join('');
-    markLiked(j.tracks.map((t) => t.id));
-    prewarm(j.tracks);
+    await swr('/api/recommendations?n=12', (j) => {
+      if (currentView !== 'foryou') return;
+      if (!j.tracks.length) {
+        if (!v.querySelector('.vempty')) v.insertAdjacentHTML('beforeend',
+          '<div class="vempty">Like a few songs or answer the taste survey — then this page reads your mind.</div>');
+        return;
+      }
+      v.querySelector('.vempty')?.remove();
+      viewQueue = j.tracks.map((t) => ({ ...t }));
+      $('fyGrid').innerHTML = j.tracks.map(recoCardHTML).join('');
+      markLiked(j.tracks.map((t) => t.id));
+      prewarm(j.tracks);
+    });
   } catch (e) {
     v.insertAdjacentHTML('beforeend', `<div class="vempty">Couldn't tune in: ${escapeHtml(e.message)}</div>`);
   }
@@ -1247,7 +1287,14 @@ async function renderForYou(v) {
 async function renderLiked(v) {
   if (!me) { v.innerHTML = lockedHTML('Liked Songs', 'Everything you heart lands here.'); return; }
   try {
-    const j = await api('/api/likes');
+    await swr('/api/likes', (j) => paintLiked(v, j));
+  } catch (e) {
+    if (!v.querySelector('.trow')) v.innerHTML = `<div class="vempty">Couldn't load likes: ${escapeHtml(e.message)}</div>`;
+  }
+}
+
+function paintLiked(v, j) {
+  {
     if (currentView !== 'liked') return;
     viewQueue = j.tracks.map((t) => ({ ...t }));
     // Prime the truth: every row here IS liked — otherwise the next
@@ -1260,8 +1307,6 @@ async function renderLiked(v) {
         : '<div class="vempty">Nothing hearted yet — right-click any song and hit Like.</div>');
     if (j.tracks.length) v.querySelector('[data-vact]').innerHTML = vplayIc('data-playall="1"');
     paintHeaderPlay('liked');
-  } catch (e) {
-    v.innerHTML = `<div class="vempty">Couldn't load likes: ${escapeHtml(e.message)}</div>`;
   }
 }
 
@@ -1269,7 +1314,14 @@ async function renderLiked(v) {
 async function renderPlaylist(v, pid) {
   if (!me) { v.innerHTML = lockedHTML('Playlist', 'Your collections live here.'); return; }
   try {
-    const pl = await api(`/api/playlists/${pid}/tracks`);
+    await swr(`/api/playlists/${pid}/tracks`, (pl) => paintPlaylist(v, pid, pl));
+  } catch (e) {
+    if (!v.querySelector('.vhead')) v.innerHTML = `<div class="vempty">Couldn't open playlist: ${escapeHtml(e.message)}</div>`;
+  }
+}
+
+function paintPlaylist(v, pid, pl) {
+  {
     if (currentView !== 'playlist' || viewArg !== pid) return;
     viewQueue = pl.tracks.map((t) => ({ ...t }));
     const total = pl.tracks.reduce((a, t) => a + (t.duration || 0), 0);
@@ -1291,8 +1343,6 @@ async function renderPlaylist(v, pid) {
            </div>`);
     paintHeaderPlay('playlist', pid);
     markLiked(pl.tracks.map((t) => t.id));
-  } catch (e) {
-    v.innerHTML = `<div class="vempty">Couldn't open playlist: ${escapeHtml(e.message)}</div>`;
   }
 }
 
@@ -2116,6 +2166,7 @@ function openProfile() {
   $('pfLogout').addEventListener('click', async () => {
     try { await post('/api/logout', {}); } catch {}
     me = null;
+    swrClear();
     likedSet = new Set();
     homeFyKey = '';
     $('homeFy').hidden = true;
@@ -2570,7 +2621,19 @@ function bootAccountUI() {
     const m = $('menu');
     if (m && !m.hidden && !m.contains(e.target) && !e.target.closest('[data-menu]')) closeMenu();
   });
-  refreshMe().then(() => { refreshCounts(); maybeSurvey(); if (currentView === 'home') loadHomeFy(); restorePlace(); });
+  // Returning users boot from this device's last copy; the network answer
+  // only redraws if the signed-in account actually changed.
+  const bootMe = swrGet('/api/me')?.user || null;
+  const afterMe = () => { refreshCounts(); if (currentView === 'home') loadHomeFy(); restorePlace(); };
+  if (bootMe) { me = bootMe; applyTheme(); afterMe(); }
+  refreshMe().then(() => {
+    if (!bootMe || !me || me.id !== bootMe.id) {
+      afterMe();
+      paintLikedSet();
+      if (!me && ['foryou', 'liked', 'playlist'].includes(currentView)) showView('home');
+    }
+    maybeSurvey();
+  });
   // Measured header offset: the docked list header (.vhead) pins exactly
   // under the sticky search bar, whatever its height actually is.
   const fitTop = () => {

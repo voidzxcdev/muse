@@ -31,7 +31,7 @@ HOST = "0.0.0.0"  # localhost-only would be "127.0.0.1"; 0.0.0.0 = this LAN (pho
 ON_RENDER = bool(os.environ.get("RENDER"))
 PUBLIC_URL = (os.environ.get("RENDER_EXTERNAL_URL") or "").rstrip("/")
 DATABASE_URL = os.environ.get("DATABASE_URL") or ""  # set → Postgres (Supabase); unset → local SQLite
-BUILD = 131  # bump every release — the UI polls this and prompts reload
+BUILD = 132  # bump every release — the UI polls this and prompts reload
 
 SEARCH_TTL = 600      # seconds to cache a search
 URL_TTL = 6 * 3600    # googlevideo URLs live ~6h
@@ -150,6 +150,9 @@ CREATE TABLE IF NOT EXISTS secrets(name TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS covers(
   playlist_id INTEGER PRIMARY KEY REFERENCES playlists(id) ON DELETE CASCADE,
   data BYTEA NOT NULL, ctype TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS reco(
+  user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  ts DOUBLE PRECISION NOT NULL, data TEXT NOT NULL);
 """
 
 
@@ -204,6 +207,9 @@ def init_db():
           user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
           genres TEXT DEFAULT '[]', moods TEXT DEFAULT '[]',
           artists TEXT DEFAULT '[]', created REAL);
+        CREATE TABLE IF NOT EXISTS reco(
+          user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+          ts REAL NOT NULL, data TEXT NOT NULL);
         """)
         # Backfill columns for DBs created by older versions.
         cols = {r[1] for r in con.execute("PRAGMA table_info(users)")}
@@ -668,8 +674,15 @@ def _resolve_audio(video_id):
     return payload
 
 
-_reco_cache = {}     # user_id -> (ts, tracks)
-RECO_TTL = 600
+_reco_cache = {}     # user_id -> (ts, tracks); mirrored in the reco table
+_reco_stale = set()  # taste changed since the cached mix was built
+_reco_busy = set()   # users with a rebuild in flight
+_reco_lock = threading.Lock()
+# A rebuild fans out into ~15 YouTube lookups; on a fraction of a CPU two at
+# once would starve every other request, so they queue.
+_reco_gate = threading.Semaphore(1)
+RECO_TTL = 1800
+RECO_N = 15
 
 _STOPWORDS = {"official", "video", "audio", "lyrics", "lyric", "hd", "hq",
              "4k", "full", "album", "ep", "feat", "ft", "vs", "part", "music",
@@ -771,8 +784,7 @@ def _ytm_many(queries, per=5):
 
 
 def _bust_reco(uid):
-    for k in [k for k in _reco_cache if k[0] == uid]:
-        _reco_cache.pop(k, None)
+    _reco_stale.add(uid)
 
 
 def mix_orbit(seeds, per=12):
@@ -813,12 +825,72 @@ def mix_orbit(seeds, per=12):
     return out
 
 
+def _reco_save(uid, tracks):
+    now = time.time()
+    _reco_cache[uid] = (now, tracks)
+    try:
+        with _db_lock, db() as con:
+            con.execute("INSERT INTO reco(user_id, ts, data) VALUES(?,?,?) "
+                        "ON CONFLICT(user_id) DO UPDATE SET ts=excluded.ts, data=excluded.data",
+                        (uid, now, json.dumps(tracks)))
+    except Exception as e:
+        print(f"reco save failed: {e}", flush=True)
+
+
+def _reco_rebuild(uid):
+    try:
+        _reco_stale.discard(uid)
+        try:
+            with _reco_gate:
+                tracks = _compute_recos(uid)
+        except Exception as e:
+            print(f"reco build failed for {uid}: {e}", flush=True)
+            tracks = []
+        if tracks:
+            _reco_save(uid, tracks)
+        return tracks
+    finally:
+        with _reco_lock:
+            _reco_busy.discard(uid)
+
+
+def _reco_claim(uid):
+    with _reco_lock:
+        if uid in _reco_busy:
+            return False
+        _reco_busy.add(uid)
+        return True
+
+
 def recommendations(user_id, n=12):
+    """Stale-while-revalidate: any saved mix answers instantly; a rebuild runs
+    in the background when it's old, from another day, or taste changed."""
+    hit = _reco_cache.get(user_id)
+    if hit is None:
+        with _db_lock, db() as con:
+            row = con.execute("SELECT ts, data FROM reco WHERE user_id=?", (user_id,)).fetchone()
+        if row:
+            hit = (row["ts"], json.loads(row["data"]))
+            _reco_cache[user_id] = hit
+    if hit:
+        now = time.time()
+        stale = (now - hit[0] > RECO_TTL or user_id in _reco_stale
+                 or int(hit[0] // 86400) != int(now // 86400))
+        if stale and _reco_claim(user_id):
+            threading.Thread(target=_reco_rebuild, args=(user_id,), daemon=True).start()
+        return hit[1][:n]
+    if _reco_claim(user_id):
+        return _reco_rebuild(user_id)[:n]
+    for _ in range(80):  # another request is building this user's first mix
+        time.sleep(0.5)
+        if user_id in _reco_cache:
+            return _reco_cache[user_id][1][:n]
+    return []
+
+
+def _compute_recos(user_id, n=RECO_N):
     now = time.time()
     day = int(now // 86400)
-    key = (user_id, day, n)
-    if key in _reco_cache and now - _reco_cache[key][0] < RECO_TTL:
-        return _reco_cache[key][1]
     up_aff, tok_aff, heard, liked_titles, survey, seeds = taste_profile(user_id)
     queries = []
     top_ups = sorted(((a, w) for a, w in up_aff.items() if w > 0),
@@ -926,9 +998,7 @@ def recommendations(user_id, n=12):
                  "reason": "Fresh for you"} for c in cands if c["id"] not in heard][:30]
     # Daily rotation: same growing pool, a different window every day.
     start = (day * 7) % max(1, len(pool))
-    tracks = [pool[(start + i) % len(pool)] for i in range(min(n, len(pool)))]
-    _reco_cache[key] = (now, tracks)
-    return tracks
+    return [pool[(start + i) % len(pool)] for i in range(min(n, len(pool)))]
 
 
 def next_playlist_name(user_id):
@@ -1596,12 +1666,23 @@ class Handler(SimpleHTTPRequestHandler):
 def keep_awake():
     """Render's free tier sleeps after 15 idle minutes; a request through the
     public URL every 10 counts as traffic and keeps the instance warm."""
+    n = 0
     while True:
-        time.sleep(600)
-        try:
-            urllib.request.urlopen(f"{PUBLIC_URL}/api/version", timeout=30).read()
-        except Exception as e:
-            print(f"keep-awake ping failed: {e}", flush=True)
+        time.sleep(120)
+        n += 1
+        if DATABASE_URL:
+            # Keeps the pooled Supabase connection open so the next real
+            # request doesn't pay for a fresh TLS + auth handshake.
+            try:
+                with db() as con:
+                    con.execute("SELECT 1").fetchone()
+            except Exception as e:
+                print(f"db keep-warm failed: {e}", flush=True)
+        if n % 5 == 0:
+            try:
+                urllib.request.urlopen(f"{PUBLIC_URL}/api/version", timeout=30).read()
+            except Exception as e:
+                print(f"keep-awake ping failed: {e}", flush=True)
 
 
 def main():
