@@ -15,7 +15,9 @@ RUN curl -fsSL -o /usr/local/bin/wgcf \
 
 WORKDIR /app
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Without yt-dlp-ejs, yt-dlp skips the JS challenge solver: it costs ~13s per
+# song on Render's free CPU, and audio-only formats resolve fine without it.
+RUN pip install --no-cache-dir -r requirements.txt && pip uninstall -y yt-dlp-ejs
 COPY . .
 
 ENV PYTHONUNBUFFERED=1
