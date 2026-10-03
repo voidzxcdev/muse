@@ -31,7 +31,7 @@ HOST = "0.0.0.0"  # localhost-only would be "127.0.0.1"; 0.0.0.0 = this LAN (pho
 ON_RENDER = bool(os.environ.get("RENDER"))
 PUBLIC_URL = (os.environ.get("RENDER_EXTERNAL_URL") or "").rstrip("/")
 DATABASE_URL = os.environ.get("DATABASE_URL") or ""  # set → Postgres (Supabase); unset → local SQLite
-BUILD = 132  # bump every release — the UI polls this and prompts reload
+BUILD = 133  # bump every release — the UI polls this and prompts reload
 
 SEARCH_TTL = 600      # seconds to cache a search
 URL_TTL = 6 * 3600    # googlevideo URLs live ~6h
@@ -879,9 +879,11 @@ def recommendations(user_id, n=12):
         if stale and _reco_claim(user_id):
             threading.Thread(target=_reco_rebuild, args=(user_id,), daemon=True).start()
         return hit[1][:n]
+    # First mix ever: build in the background and give it a short head start;
+    # the client polls (see "building") instead of hanging on a slow build.
     if _reco_claim(user_id):
-        return _reco_rebuild(user_id)[:n]
-    for _ in range(80):  # another request is building this user's first mix
+        threading.Thread(target=_reco_rebuild, args=(user_id,), daemon=True).start()
+    for _ in range(12):
         time.sleep(0.5)
         if user_id in _reco_cache:
             return _reco_cache[user_id][1][:n]
@@ -1271,7 +1273,9 @@ class Handler(SimpleHTTPRequestHandler):
                     n = max(4, min(15, int((qs.get("n") or ["12"])[0])))
                 except ValueError:
                     n = 12
-                return self._json({"tracks": recommendations(u["id"], n)})
+                tracks = recommendations(u["id"], n)
+                return self._json({"tracks": tracks,
+                                   "building": not tracks and u["id"] in _reco_busy})
             if path.startswith("/covers/"):
                 fn = path.rsplit("/", 1)[-1]
                 cm = re.fullmatch(r"(\d+)-\d+\.(jpg|jpeg|png|webp|gif)", fn or "")

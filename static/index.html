@@ -133,7 +133,7 @@
   /* Failsafe: runs with zero dependencies. If the main script ever dies,
      the intro still lifts at 3.2s and the real error gets toasted. */
   window.__museErr = [];
-  window.__museBuild = 132;
+  window.__museBuild = 133;
   window.addEventListener('error', function (e) {
     try {
       window.__museErr.push(String((e && e.message) || 'script error'));
@@ -151,7 +151,7 @@
     document.body.classList.remove('intro');
   }, 3200);
   </script>
-  <script src="ytplayer.js?v=135"></script>
-<script src="app.js?v=135"></script>
+  <script src="ytplayer.js?v=136"></script>
+<script src="app.js?v=136"></script>
 </body>
 </html>

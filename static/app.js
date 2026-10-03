@@ -96,7 +96,7 @@ async function swr(path, paint) {
   const cached = swrGet(path);
   if (cached) { try { paint(cached); } catch {} }
   const j = await api(path);
-  swrPut(path, j);
+  if (!j.building) swrPut(path, j);
   if (!cached || JSON.stringify(cached) !== JSON.stringify(j)) paint(j);
   return j;
 }
@@ -189,6 +189,12 @@ async function loadHomeFy() {
   try {
     const j = await api('/api/recommendations?n=6');
     if (currentView !== 'home' || !me || homeFyKey !== key) return;
+    if (!j.tracks.length && j.building) {
+      setTimeout(() => {
+        if (currentView === 'home' && homeFyKey === key) { homeFyKey = ''; loadHomeFy(); }
+      }, 6000);
+      return;
+    }
     if (!j.tracks.length) {
       if (!box.innerHTML) box.hidden = true;
       return;
@@ -1267,6 +1273,11 @@ async function renderForYou(v) {
   try {
     await swr('/api/recommendations?n=12', (j) => {
       if (currentView !== 'foryou') return;
+      if (!j.tracks.length && j.building) {
+        $('fyGrid').innerHTML = '<div class="vempty">Building your mix…</div>';
+        setTimeout(() => { if (currentView === 'foryou' && v.isConnected) renderForYou(v); }, 6000);
+        return;
+      }
       if (!j.tracks.length) {
         if (!v.querySelector('.vempty')) v.insertAdjacentHTML('beforeend',
           '<div class="vempty">Like a few songs or answer the taste survey — then this page reads your mind.</div>');
