@@ -42,7 +42,7 @@ CACHE_MAX = 400
 
 # The free instance has 512 MB; a full extract can spawn a ~100 MB deno
 # challenge solver, so only a couple may run at once.
-_full_gate = threading.BoundedSemaphore(2)
+_full_gate = threading.BoundedSemaphore(1)
 _flat_gate = threading.BoundedSemaphore(4)
 
 
@@ -407,10 +407,20 @@ def regular_map(query, n=24):
     return out
 
 
+def _light_meta(vid):
+    """Metadata via the anonymous visionOS client: no cookies, so never the deno solver."""
+    opts = {k: v for k, v in BASE_YDL.items() if k != "cookiefile"}
+    opts.update(skip_download=True, ignore_no_formats_error=True,
+                extractor_args={"youtube": {"player_client": ["visionos"],
+                                            "skip": ["hls", "dash"]}})
+    with _flat_gate, yt_dlp.YoutubeDL(opts) as ydl:
+        return ydl.extract_info(f"https://www.youtube.com/watch?v={vid}", download=False)
+
+
 def enrich_one(vid):
     """Full metadata for one song; falls back to a playable stub on failure."""
     try:
-        m = best_audio_url(vid)  # also pre-caches the stream URL → instant Play
+        m = _cached_audio(vid) or _light_meta(vid)
         return {"id": vid, "title": m.get("title") or vid,
                 "uploader": m.get("uploader") or "", "duration": m.get("duration"),
                 "categories": m.get("categories") or [],
