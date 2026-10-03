@@ -105,6 +105,34 @@
     // after that the element is unlocked for later programmatic plays.
     let shadow = null;      // {id, t0} while <audio> pre-rolls behind YouTube
     let syncTimer = 0;
+
+    const dbgBuf = [];
+    const dbgT0 = Date.now();
+    const dbg = (msg) => {
+      if (!handoff) return;
+      dbgBuf.push(`${((Date.now() - dbgT0) / 1000).toFixed(1)}s ${msg} | mode=${mode} hidden=${document.hidden}`
+        + ` el:${el.paused ? 'paused' : 'playing'} muted=${el.muted} t=${(el.currentTime || 0).toFixed(1)}`
+        + ` rs=${el.readyState} rate=${el.playbackRate} yt=${ytState} shadow=${!!shadow}`);
+    };
+    const dbgFlush = () => {
+      if (!dbgBuf.length) return;
+      const lines = dbgBuf.splice(0, dbgBuf.length);
+      try {
+        navigator.sendBeacon('/api/clientlog',
+          new Blob([JSON.stringify({ lines })], { type: 'application/json' }));
+      } catch {}
+    };
+    if (handoff) {
+      setInterval(dbgFlush, 3000);
+      ['play', 'playing', 'pause', 'waiting', 'stalled', 'emptied', 'ended', 'suspend'].forEach((t) =>
+        el.addEventListener(t, () => dbg(`el ${t}`)));
+      el.addEventListener('error', () => dbg(`el error ${el.error && el.error.code}`));
+      document.addEventListener('visibilitychange', () => {
+        dbg(`visibility ${document.visibilityState}`);
+        if (document.hidden) dbgFlush();
+      });
+      window.addEventListener('pagehide', () => { dbg('pagehide'); dbgFlush(); });
+    }
     const ytTime = () => { try { return yt.getCurrentTime() || 0; } catch { return 0; } };
 
     function shadowStart(id) {
@@ -114,7 +142,11 @@
       el.muted = true;
       el.playbackRate = 1;
       el.src = `/api/audio?v=${id}`;
-      el.play().catch(() => { if (shadow && shadow.id === id) shadowStop(); });
+      dbg(`shadowStart ${id}`);
+      el.play().catch((e) => {
+        dbg(`shadow play rejected ${e && e.name}`);
+        if (shadow && shadow.id === id) shadowStop();
+      });
       syncTimer = setInterval(syncShadow, 100);
     }
 
@@ -144,6 +176,7 @@
 
     function commitShadow() {
       if (!shadow) return;
+      dbg('commit');
       clearInterval(syncTimer);
       syncTimer = 0;
       shadow = null;
@@ -168,8 +201,9 @@
         el.addEventListener('playing', seek);
       }
       if (!metaSent && el.duration > 0) { metaSent = true; emit('loadedmetadata'); }
-      if (el.paused) el.play().then(() => settle(true)).catch((e) => settle(false, e));
-      else {
+      if (el.paused) {
+        el.play().then(() => settle(true)).catch((e) => { dbg(`commit play rejected ${e && e.name}`); settle(false, e); });
+      } else {
         settle(true);
         if (!wasPlaying) { emit('play'); emit('playing'); }
       }
@@ -182,6 +216,7 @@
 
     // --- html fallback ---------------------------------------------------
     function toHtml(id, startAt, autoplay) {
+      dbg(`toHtml ${id} at=${(startAt || 0).toFixed(1)} autoplay=${autoplay}`);
       shadowStop();
       clearTimeout(startTimer);
       stopTick();
@@ -197,7 +232,7 @@
         el.addEventListener('loadedmetadata', seek);
       }
       if (autoplay) {
-        el.play().then(() => settle(true)).catch((e) => settle(false, e));
+        el.play().then(() => settle(true)).catch((e) => { dbg(`toHtml play rejected ${e && e.name}`); settle(false, e); });
       }
     }
 
@@ -243,6 +278,7 @@
     function onState(e) {
       if (mode !== 'yt' || !loaded) return;
       ytState = e.data;
+      dbg(`yt state ${e.data}`);
       const S = window.YT.PlayerState;
       if (ytState === S.PLAYING) {
         clearTimeout(startTimer);
@@ -342,6 +378,7 @@
           return el.play();
         }
         const want = ytId || (pendingLoad && pendingLoad.id);
+        dbg(`play() ${want}`);
         // A locked phone can't start the embed at all: go straight to <audio>.
         if (handoff && document.hidden && want) {
           const at = loaded ? ytTime() : cueStart;
@@ -367,6 +404,7 @@
         });
       },
       pause() {
+        dbg('pause()');
         if (mode === 'html') return el.pause();
         shadowStop();
         clearTimeout(startTimer);

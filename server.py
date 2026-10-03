@@ -1430,6 +1430,11 @@ class Handler(SimpleHTTPRequestHandler):
                          (body.get("thumbnail") or "")[:500],
                          body.get("duration"), mx + 1))
                 return self._json({"ok": True, "item_id": cur.lastrowid})
+            if path == "/api/clientlog":
+                ua = (self.headers.get("User-Agent") or "")[:70]
+                for line in (body.get("lines") or [])[:40]:
+                    print(f"clientlog [{ua}] {str(line)[:200]}", flush=True)
+                return self._json({"ok": True})
             if path == "/api/event":
                 # Listening telemetry: play | complete | skip. Guests are ignored.
                 u = self._me()
