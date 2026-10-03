@@ -38,6 +38,19 @@ URL_TTL = 6 * 3600    # googlevideo URLs live ~6h
 
 _search_cache = {}    # "query|n" -> (ts, results)
 _url_cache = {}       # video_id -> (ts, payload)
+CACHE_MAX = 400
+
+# The free instance has 512 MB; a full extract can spawn a ~100 MB deno
+# challenge solver, so only a couple may run at once.
+_full_gate = threading.BoundedSemaphore(2)
+_flat_gate = threading.BoundedSemaphore(4)
+
+
+def _cache_put(cache, key, value):
+    if len(cache) >= CACHE_MAX:
+        for k in sorted(cache, key=lambda k: cache[k][0])[:CACHE_MAX // 4]:
+            cache.pop(k, None)
+    cache[key] = value
 
 MUSIC_DIR = os.path.join(HERE, "music")
 _mp3_lock = threading.Lock()
@@ -352,7 +365,7 @@ def _thumb(entry, vid):
 def ytm_tracks(query, n=12):
     """(id, title) pairs from YouTube *Music* search — music only, no vlogs/trailers."""
     opts = dict(BASE_YDL, extract_flat=True)
-    with yt_dlp.YoutubeDL(opts) as ydl:
+    with _flat_gate, yt_dlp.YoutubeDL(opts) as ydl:
         info = ydl.extract_info(
             "https://music.youtube.com/search?q=" + urllib.parse.quote_plus(query),
             download=False)
@@ -376,7 +389,7 @@ def regular_map(query, n=24):
     """Fast flat metadata map: id -> {title, uploader, duration, thumbnail}."""
     try:
         opts = dict(BASE_YDL, extract_flat=True)
-        with yt_dlp.YoutubeDL(opts) as ydl:
+        with _flat_gate, yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(f"ytsearch{n}:{query}", download=False)
     except Exception:
         return {}
@@ -419,7 +432,7 @@ def _looks_like_music(e):
 def regular_topup(query, have, need):
     """Plain YouTube search as last-resort filler, music-looking only."""
     opts = dict(BASE_YDL, extract_flat=True)
-    with yt_dlp.YoutubeDL(opts) as ydl:
+    with _flat_gate, yt_dlp.YoutubeDL(opts) as ydl:
         info = ydl.extract_info(f"ytsearch{need * 3}:{query}", download=False)
     out = []
     for e in (info.get("entries") or []):
@@ -498,7 +511,7 @@ def search_songs(query, n=10):
             out += regular_topup(query, {m["id"] for m in out}, n - len(out))
         except Exception:
             pass
-    _search_cache[key] = (now, out)
+    _cache_put(_search_cache, key, (now, out))
     return out
 
 
@@ -509,7 +522,7 @@ def enrich_ids(ids):
     if not ids:
         return out, drop
     done = {}
-    ex = ThreadPoolExecutor(max_workers=10)
+    ex = ThreadPoolExecutor(max_workers=2)
     try:
         futs = {ex.submit(enrich_one, vid): vid for vid in ids}
         try:
@@ -620,6 +633,12 @@ def best_audio_url(video_id):
 
 
 def _resolve_audio(video_id):
+    with _full_gate:
+        hit = _cached_audio(video_id)
+        return hit or _resolve_audio_locked(video_id)
+
+
+def _resolve_audio_locked(video_id):
     now = time.time()
     url = f"https://www.youtube.com/watch?v={video_id}"
     info = None
@@ -670,7 +689,7 @@ def _resolve_audio(video_id):
         "ext": ext,
         "abr": abr,
     }
-    _url_cache[video_id] = (now, payload)
+    _cache_put(_url_cache, video_id, (now, payload))
     return payload
 
 
@@ -760,7 +779,7 @@ def _ytm_many(queries, per=5):
         except Exception:
             return []
 
-    ex = ThreadPoolExecutor(max_workers=6)
+    ex = ThreadPoolExecutor(max_workers=3)
     rank = {q: i for i, q in enumerate(queries)}
     by_id = {}
     try:
@@ -800,7 +819,7 @@ def mix_orbit(seeds, per=12):
             # it to the 15 most relevant orbit tracks (~1s, not ~22s).
             opts = dict(BASE_YDL, extract_flat=True, noplaylist=False,
                         playlist_items="1:15")
-            with yt_dlp.YoutubeDL(opts) as ydl:
+            with _flat_gate, yt_dlp.YoutubeDL(opts) as ydl:
                 info = ydl.extract_info(
                     f"https://www.youtube.com/watch?v={vid}&list=RD{vid}", download=False)
             return [(e.get("id"), e.get("title") or "", vid, title)
