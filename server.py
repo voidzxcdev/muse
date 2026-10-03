@@ -306,8 +306,11 @@ BASE_YDL = {
     "quiet": True,
     "no_warnings": not ON_RENDER,
     "noplaylist": True,
-    "socket_timeout": 20,
+    "socket_timeout": 10,
     "retries": 2,
+    # Audio comes from direct https formats; the HLS/DASH manifests are extra
+    # round-trips to googlevideo that sometimes hang for the full timeout.
+    "extractor_args": {"youtube": {"skip": ["hls", "dash"]}},
 }
 # YouTube sometimes demands sign-in from datacenter IPs; a Netscape cookies.txt
 # (Render secret file) gets past it.
@@ -620,7 +623,8 @@ def _resolve_audio(video_id):
         # first and only fall back when its stream won't actually play.
         fast = {k: v for k, v in BASE_YDL.items() if k != "cookiefile"}
         fast.update(format="bestaudio/best", skip_download=True,
-                    extractor_args={"youtube": {"player_client": ["visionos"]}})
+                    extractor_args={"youtube": {"player_client": ["visionos"],
+                                                "skip": ["hls", "dash"]}})
         try:
             with yt_dlp.YoutubeDL(fast) as ydl:
                 info = ydl.extract_info(url, download=False)
