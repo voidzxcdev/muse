@@ -146,6 +146,7 @@ CREATE TABLE IF NOT EXISTS survey(
   user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
   genres TEXT DEFAULT '[]', moods TEXT DEFAULT '[]',
   artists TEXT DEFAULT '[]', created DOUBLE PRECISION);
+CREATE TABLE IF NOT EXISTS secrets(name TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS covers(
   playlist_id INTEGER PRIMARY KEY REFERENCES playlists(id) ON DELETE CASCADE,
   data BYTEA NOT NULL, ctype TEXT NOT NULL);
@@ -161,6 +162,12 @@ def init_db():
                                   kwargs={"prepare_threshold": None})
         with _pg_pool.connection() as con:
             con.execute(PG_SCHEMA)
+            row = con.execute("SELECT value FROM secrets WHERE name='ytdlp_cookies'").fetchone()
+        if row and "cookiefile" not in BASE_YDL:
+            path = os.path.join(HERE, ".cookies.txt")
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(row[0])
+            BASE_YDL["cookiefile"] = path
         return
     with _db_lock, db() as con:
         con.executescript("""
