@@ -5,7 +5,11 @@ const __nullEl = new Proxy(function () {}, {
   set: () => true,
   apply: () => undefined,
 });
-const audio = window.MusePlayer ? window.MusePlayer($('audio')) : $('audio');
+// Mobile browsers pause the YouTube embed when the screen locks; a plain
+// <audio> keeps playing in the background with lock-screen controls.
+const mobileOS = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
+  || (navigator.maxTouchPoints > 1 && /Mac/.test(navigator.platform));
+const audio = window.MusePlayer && !mobileOS ? window.MusePlayer($('audio')) : $('audio');
 const SPRING = 'cubic-bezier(0.22,1,0.36,1)';
 
 let queue = [];      // last search results (prev/next walks this)
