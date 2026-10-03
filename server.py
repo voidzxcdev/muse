@@ -31,7 +31,7 @@ HOST = "0.0.0.0"  # localhost-only would be "127.0.0.1"; 0.0.0.0 = this LAN (pho
 ON_RENDER = bool(os.environ.get("RENDER"))
 PUBLIC_URL = (os.environ.get("RENDER_EXTERNAL_URL") or "").rstrip("/")
 DATABASE_URL = os.environ.get("DATABASE_URL") or ""  # set → Postgres (Supabase); unset → local SQLite
-BUILD = 130  # bump every release — the UI polls this and prompts reload
+BUILD = 131  # bump every release — the UI polls this and prompts reload
 
 SEARCH_TTL = 600      # seconds to cache a search
 URL_TTL = 6 * 3600    # googlevideo URLs live ~6h

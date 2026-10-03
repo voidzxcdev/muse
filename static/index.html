@@ -16,16 +16,16 @@
   <link rel="dns-prefetch" href="https://www.youtube.com" />
   <link rel="dns-prefetch" href="https://music.youtube.com" />
   <link href="https://api.fontshare.com/v2/css?f[]=clash-display@500,600,700&f[]=satoshi@400,500,700,900&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />
-  <link rel="stylesheet" href="style.css?v=130" />
+  <link rel="stylesheet" href="style.css?v=131" />
   <link rel="icon" href="/favicon.ico" sizes="32x32" />
 </head>
 <body class="home intro">
   <div id="intro" aria-hidden="true">
-    <div class="intro-pill"><img class="blogo" src="/muselogo.png?v=130" alt="" /><span>Muse</span></div>
+    <div class="intro-pill"><img class="blogo" src="/muselogo.png?v=131" alt="" /><span>Muse</span></div>
   </div>
 
   <aside id="side">
-    <button id="sideBrand" title="Home"><img class="blogo" src="/muselogo.png?v=130" alt="" /><span id="sideBrandText">Muse</span><span id="acctLink" title="Account">Account</span></button>
+    <button id="sideBrand" title="Home"><img class="blogo" src="/muselogo.png?v=131" alt="" /><span id="sideBrandText">Muse</span><span id="acctLink" title="Account">Account</span></button>
     <nav class="snav">
       <button data-view="home">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
@@ -133,7 +133,7 @@
   /* Failsafe: runs with zero dependencies. If the main script ever dies,
      the intro still lifts at 3.2s and the real error gets toasted. */
   window.__museErr = [];
-  window.__museBuild = 130;
+  window.__museBuild = 131;
   window.addEventListener('error', function (e) {
     try {
       window.__museErr.push(String((e && e.message) || 'script error'));
@@ -151,6 +151,7 @@
     document.body.classList.remove('intro');
   }, 3200);
   </script>
-  <script src="app.js?v=130"></script>
+  <script src="ytplayer.js?v=134"></script>
+<script src="app.js?v=134"></script>
 </body>
 </html>

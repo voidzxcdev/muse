@@ -5,7 +5,7 @@ const __nullEl = new Proxy(function () {}, {
   set: () => true,
   apply: () => undefined,
 });
-const audio = $('audio');
+const audio = window.MusePlayer ? window.MusePlayer($('audio')) : $('audio');
 const SPRING = 'cubic-bezier(0.22,1,0.36,1)';
 
 let queue = [];      // last search results (prev/next walks this)
@@ -94,11 +94,8 @@ function cardHTML(r, i) {
 
 function prewarm(results) {
   // Thumbnails: force the first rows into cache instantly.
-  // Top song: touch its stream so the CDN edge + server cache are hot.
   try {
     results.slice(0, 6).forEach((r) => { const im = new Image(); im.decoding = 'async'; im.src = r.thumbnail; });
-    if (results[0]) fetch(`/api/play?v=${results[0].id}`).catch(() => {});
-    if (results[0]) prefetchStream(results[0].id); // top hit streams warm
   } catch { /* best-effort */ }
 }
 
@@ -247,36 +244,6 @@ async function enrichInBackground(ids, token) {
   } catch { /* fast cards stay as-is — still playable */ }
 }
 
-/* ---------- instant playback: preload on hover-intent, play before metadata ---------- */
-const prefetched = new Set();
-function prefetchStream(id) {
-  if (!id || prefetched.has(id)) return;
-  if (prefetched.size > 200) prefetched.clear();
-  prefetched.add(id);
-  const l = document.createElement('link');
-  l.rel = 'preload';
-  l.as = 'audio';
-  l.href = `/api/audio?v=${id}`;
-  const done = () => {
-    l.remove();
-    setTimeout(() => prefetched.delete(id), 60000);
-  };
-  l.onload = done;
-  l.onerror = done;
-  document.head.appendChild(l);
-}
-
-let preT = 0;
-document.addEventListener('pointerover', (e) => {
-  const card = e.target.closest('[data-play]');
-  const row = e.target.closest('.trow');
-  const id = card?.dataset.play || row?.querySelector('[data-playrow]')?.dataset.playrow;
-  if (!id) return;
-  clearTimeout(preT);
-  preT = setTimeout(() => prefetchStream(id), 220); // hover intent, not passing-by
-});
-document.addEventListener('pointerout', () => clearTimeout(preT));
-
 /* ---------- playback (proxy first, direct URL as fallback) ---------- */
 let userVol = 0.85;
 let fadeRAF = 0;
@@ -361,6 +328,25 @@ function finalizePrev(completed) {
 
 let playToken = 0; // superseded plays bail out instead of fighting
 
+/* Card data already carries title/art/duration, so the YouTube engine never
+ * needs the server for a play; only bare ids (or the server-stream engine)
+ * ask /api/play. */
+async function trackMeta(id, item) {
+  const thumb = item.thumbnail || item.thumb || `https://i.ytimg.com/vi/${id}/hqdefault.jpg`;
+  if (item.title) return { ...item, id, thumbnail: thumb };
+  if (audio.engine === 'yt') {
+    for (let i = 0; i < 20; i++) {
+      const d = audio.videoData && audio.videoData();
+      if (d && d.video_id === id && d.title) {
+        return { ...item, id, title: d.title, uploader: d.author || '', thumbnail: thumb,
+          duration: audio.duration > 0 ? audio.duration : item.duration };
+      }
+      await new Promise((r) => setTimeout(r, 250));
+    }
+  }
+  return api(`/api/play?v=${id}`);
+}
+
 async function playId(id, meta = {}, list = null, source = 'search') {
   const myToken = ++playToken;
   finalizePrev(false);
@@ -403,18 +389,18 @@ async function playId(id, meta = {}, list = null, source = 'search') {
       } catch {}
     } catch {}
   })();
-  api(`/api/play?v=${id}`).then((m) => {
+  trackMeta(id, item).then((m) => {
     if (myToken !== playToken) return; // a newer tap won — stand down
-    current = { ...m };
+    current = { ...current, ...m };
     const titleEl = $('ptitle');
     titleEl.textContent = m.title;
     swapArt(m.thumbnail, firstShow);
-    $('dur').textContent = fmt(m.duration);
-    // Instant heart: the state rides along with the stream resolve,
-    // no second round-trip, no late fill-in.
-    if (m.liked) likedSet.add(id);
-    else likedSet.delete(id);
-    paintLikedSet();
+    if (m.duration) $('dur').textContent = fmt(m.duration);
+    if ('liked' in m) {
+      if (m.liked) likedSet.add(id);
+      else likedSet.delete(id);
+      paintLikedSet();
+    } else markLiked([id]);
     mediaSession(m);
   }).catch((e) => {
     if (myToken !== playToken) return;
@@ -467,15 +453,15 @@ function pushPositionState() {
 }
 
 /* Warm the NEXT stream while the current one still plays, so `ended`
- * fires into a hot server cache instead of a cold yt-dlp resolve. */
+ * fires into a hot server cache instead of a cold yt-dlp resolve.
+ * Only the server-stream engine has a cache to warm. */
 let warmedNextId = null;
 function warmNext() {
   try {
-    if (shuffle) return; // unpredictable — skip
+    if (shuffle || audio.engine === 'yt') return;
     const nxt = queue[qi + 1];
     if (!nxt || !nxt.id || nxt.id === warmedNextId) return;
     warmedNextId = nxt.id;
-    // Fire-and-forget: resolves + caches best_audio_url server-side.
     fetch(`/api/play?v=${nxt.id}`).catch(() => {});
   } catch {}
 }
@@ -512,8 +498,10 @@ async function restartLoop() {
   } catch (e) {
   }
   try {
-    const m = await api(`/api/play?v=${current.id}`);
-    current = { ...current, ...m };
+    if (audio.engine !== 'yt') {
+      const m = await api(`/api/play?v=${current.id}`);
+      current = { ...current, ...m };
+    }
     audio.volume = 0;
     audio.src = `/api/audio?v=${current.id}`;
     await audio.play();
@@ -807,6 +795,8 @@ function init() {
   audio.addEventListener('play', () => setPlaying(true));
   audio.addEventListener('pause', () => setPlaying(false));
   audio.addEventListener('ended', async () => {
+    // The position watchdog below may already have advanced for this track.
+    if (timeAdvAt && Date.now() - timeAdvAt < 5000) return;
     try { advanceFromPlayback('ended'); } catch {}
   });
   audio.addEventListener('error', () => {
@@ -919,6 +909,12 @@ function init() {
           lastRecoverAt = Date.now();
           stallSince = 0;
           const pos = Number.isFinite(t) ? t : 0;
+          if (audio.engine === 'yt') {
+            audio.src = `/api/audio?v=${current.id}`;
+            audio.currentTime = pos;
+            audio.play().catch(() => { try { audio.pause(); } catch {} });
+            return;
+          }
           try {
             const m = await api(`/api/play?v=${current.id}`);
             current = { ...current, ...m };
