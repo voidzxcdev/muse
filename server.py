@@ -305,6 +305,10 @@ BASE_YDL = {
 # YouTube sometimes demands sign-in from datacenter IPs; a Netscape cookies.txt
 # (Render secret file) gets past it.
 _COOKIES = os.environ.get("YTDLP_COOKIES") or "/etc/secrets/cookies.txt"
+if os.environ.get("YTDLP_COOKIES_TXT"):  # cookies.txt contents pasted into an env var
+    _COOKIES = os.path.join(HERE, ".cookies.txt")
+    with open(_COOKIES, "w", encoding="utf-8") as f:
+        f.write(os.environ["YTDLP_COOKIES_TXT"].replace("\\n", "\n"))
 if os.path.isfile(_COOKIES):
     BASE_YDL["cookiefile"] = _COOKIES
 
