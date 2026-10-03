@@ -30,7 +30,11 @@
     });
   }
 
-  window.MusePlayer = function (el) {
+  // opts.handoff (phones): YouTube starts the song instantly while the server
+  // stream pre-rolls muted on <audio>; once aligned, <audio> takes over so
+  // playback survives a locked screen, which pauses the embed.
+  window.MusePlayer = function (el, opts = {}) {
+    const handoff = !!opts.handoff;
     let blocked;
     try { blocked = new Set(JSON.parse(localStorage.getItem(BLOCKED_KEY) || '[]')); }
     catch { blocked = new Set(); }
@@ -96,8 +100,89 @@
       }, 250);
     };
 
+    // --- handoff shadow ----------------------------------------------------
+    // The shadow must be started inside play() so it inherits the user's tap;
+    // after that the element is unlocked for later programmatic plays.
+    let shadow = null;      // {id, t0} while <audio> pre-rolls behind YouTube
+    let syncTimer = 0;
+    const ytTime = () => { try { return yt.getCurrentTime() || 0; } catch { return 0; } };
+
+    function shadowStart(id) {
+      shadowStop();
+      shadow = { id, t0: Date.now() };
+      el.loop = loop;
+      el.muted = true;
+      el.playbackRate = 1;
+      el.src = `/api/audio?v=${id}`;
+      el.play().catch(() => { if (shadow && shadow.id === id) shadowStop(); });
+      syncTimer = setInterval(syncShadow, 100);
+    }
+
+    function shadowStop() {
+      clearInterval(syncTimer);
+      syncTimer = 0;
+      if (!shadow) return;
+      shadow = null;
+      try { el.pause(); el.playbackRate = 1; el.removeAttribute('src'); el.load(); } catch {}
+    }
+
+    // Muted, so speed can be bent freely to line <audio> up with YouTube.
+    function syncShadow() {
+      const s = shadow;
+      const cur = ytId || (pendingLoad && pendingLoad.id);
+      if (!s || mode !== 'yt' || cur !== s.id) return shadowStop();
+      if (el.paused || el.readyState < 3 || el.seeking || ytState !== 1) return;
+      const diff = el.currentTime - ytTime();
+      if (Math.abs(diff) <= 0.08 || Date.now() - s.t0 > 25000) return commitShadow();
+      if (diff < -2 || diff > 3) {
+        el.playbackRate = 1;
+        try { el.currentTime = ytTime() + 1; } catch {}
+        return;
+      }
+      el.playbackRate = diff > 0 ? 0.5 : 1.5;
+    }
+
+    function commitShadow() {
+      if (!shadow) return;
+      clearInterval(syncTimer);
+      syncTimer = 0;
+      shadow = null;
+      const wasPlaying = ytState === 1;
+      const at = loaded ? ytTime() : cueStart;
+      clearTimeout(startTimer);
+      stopTick();
+      try { yt && ytReady && yt.pauseVideo(); } catch {}
+      mode = 'html';
+      ytId = null;
+      loaded = false;
+      el.playbackRate = 1;
+      el.volume = volume;
+      el.muted = muted;
+      if (el.readyState >= 3 && !el.paused) {
+        if (at > 0 && Math.abs(el.currentTime - at) > 0.5) { try { el.currentTime = at; } catch {} }
+      } else if (at > 1) {
+        const seek = () => {
+          el.removeEventListener('playing', seek);
+          try { if (Math.abs(el.currentTime - at) > 0.5) el.currentTime = at; } catch {}
+        };
+        el.addEventListener('playing', seek);
+      }
+      if (!metaSent && el.duration > 0) { metaSent = true; emit('loadedmetadata'); }
+      if (el.paused) el.play().then(() => settle(true)).catch((e) => settle(false, e));
+      else {
+        settle(true);
+        if (!wasPlaying) { emit('play'); emit('playing'); }
+      }
+    }
+
+    el.addEventListener('error', () => { if (shadow) shadowStop(); });
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden && shadow && !paused) commitShadow();
+    });
+
     // --- html fallback ---------------------------------------------------
     function toHtml(id, startAt, autoplay) {
+      shadowStop();
       clearTimeout(startTimer);
       stopTick();
       try { yt && ytReady && yt.stopVideo(); } catch {}
@@ -120,6 +205,7 @@
       if (!id || mode !== 'yt' || ytId !== id) return;
       console.debug('[muse] server stream for', id, why);
       if (why.startsWith('error')) rememberBlocked(id);
+      if (shadow && shadow.id === id) return commitShadow();
       const at = (() => { try { return yt.getCurrentTime() || 0; } catch { return 0; } })();
       toHtml(id, at, !paused);
     }
@@ -168,6 +254,8 @@
         emit('playing');
         settle(true);
       } else if (ytState === S.PAUSED) {
+        // The OS pausing the embed for a locked screen: <audio> carries on.
+        if (shadow && document.hidden && !paused) return commitShadow();
         stopTick();
         if (!paused) { paused = true; emit('pause'); }
       } else if (ytState === S.ENDED) {
@@ -225,6 +313,7 @@
       get src() { return src; },
       set src(v) {
         src = String(v || '');
+        shadowStop();
         clearTimeout(startTimer);
         settle(false, new DOMException('superseded', 'AbortError'));
         const proxied = src.includes('/api/audio');
@@ -252,9 +341,21 @@
         if (mode === 'html') {
           return el.play();
         }
+        const want = ytId || (pendingLoad && pendingLoad.id);
+        // A locked phone can't start the embed at all: go straight to <audio>.
+        if (handoff && document.hidden && want) {
+          const at = loaded ? ytTime() : cueStart;
+          paused = false;
+          return new Promise((resolve, reject) => {
+            playWaiters.push({ resolve, reject });
+            pendingLoad = null;
+            toHtml(want, at, true);
+          });
+        }
         paused = false;
         return new Promise((resolve, reject) => {
           playWaiters.push({ resolve, reject });
+          if (handoff && want && (!shadow || shadow.id !== want)) shadowStart(want);
           if (!ytReady) {
             if (pendingLoad) pendingLoad.autoplay = true;
             return;
@@ -267,6 +368,7 @@
       },
       pause() {
         if (mode === 'html') return el.pause();
+        shadowStop();
         clearTimeout(startTimer);
         try { yt && ytReady && yt.pauseVideo(); } catch {}
         if (!paused) { paused = true; stopTick(); emit('pause'); }
@@ -321,6 +423,7 @@
       get seeking() { return mode === 'html' ? el.seeking : false; },
       get playbackRate() { return mode === 'html' ? el.playbackRate : 1; },
       get engine() { return mode; },
+      get handoffPending() { return !!shadow; },
       videoData() {
         try { return mode === 'yt' && ytReady ? yt.getVideoData() : null; } catch { return null; }
       },

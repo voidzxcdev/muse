@@ -5,11 +5,9 @@ const __nullEl = new Proxy(function () {}, {
   set: () => true,
   apply: () => undefined,
 });
-// Mobile browsers pause the YouTube embed when the screen locks; a plain
-// <audio> keeps playing in the background with lock-screen controls.
 const mobileOS = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
   || (navigator.maxTouchPoints > 1 && /Mac/.test(navigator.platform));
-const audio = window.MusePlayer && !mobileOS ? window.MusePlayer($('audio')) : $('audio');
+const audio = window.MusePlayer ? window.MusePlayer($('audio'), { handoff: mobileOS }) : $('audio');
 const SPRING = 'cubic-bezier(0.22,1,0.36,1)';
 
 let queue = [];      // last search results (prev/next walks this)
@@ -473,7 +471,12 @@ function mediaSession(m) {
     try { navigator.mediaSession.playbackState = 'playing'; } catch {}
     try {
       navigator.mediaSession.setActionHandler('play', () => doPlay());
-      navigator.mediaSession.setActionHandler('pause', () => doPause());
+      // The embed grabbing audio focus sends the page a 'pause' that would
+      // kill the muted handoff stream; real lock-screen pauses come while hidden.
+      navigator.mediaSession.setActionHandler('pause', () => {
+        if (audio.handoffPending && !document.hidden) return;
+        doPause();
+      });
       navigator.mediaSession.setActionHandler('previoustrack', step(-1));
       navigator.mediaSession.setActionHandler('nexttrack', step(1));
       try { navigator.mediaSession.setActionHandler('seekto', (d) => { if (d && isFinite(d.seekTime) && audio.duration) { try { audio.currentTime = d.seekTime; } catch {} } }); } catch {}
