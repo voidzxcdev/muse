@@ -565,14 +565,72 @@ def ensure_mp3(video_id):
     return target, meta
 
 
+_inflight = {}        # video_id -> Event, so concurrent requests share one resolve
+_inflight_lock = threading.Lock()
+
+
+def _cached_audio(video_id):
+    hit = _url_cache.get(video_id)
+    if hit and time.time() - hit[0] < URL_TTL - 300:
+        return hit[1]
+    return None
+
+
+def _stream_works(stream):
+    try:
+        req = urllib.request.Request(stream, headers={"User-Agent": "Mozilla/5.0",
+                                                      "Range": "bytes=0-1"})
+        with _yt_open(req, timeout=8) as r:
+            return r.status in (200, 206)
+    except Exception:
+        return False
+
+
 def best_audio_url(video_id):
+    hit = _cached_audio(video_id)
+    if hit:
+        return hit
+    with _inflight_lock:
+        ev = _inflight.get(video_id)
+        owner = ev is None
+        if owner:
+            ev = _inflight[video_id] = threading.Event()
+    if not owner:
+        ev.wait(120)
+        hit = _cached_audio(video_id)
+        if hit:
+            return hit
+    try:
+        return _resolve_audio(video_id)
+    finally:
+        if owner:
+            with _inflight_lock:
+                _inflight.pop(video_id, None)
+            ev.set()
+
+
+def _resolve_audio(video_id):
     now = time.time()
-    if video_id in _url_cache and now - _url_cache[video_id][0] < URL_TTL - 300:
-        return _url_cache[video_id][1]
     url = f"https://www.youtube.com/watch?v={video_id}"
-    opts = dict(BASE_YDL, format="bestaudio/best", skip_download=True)
-    with yt_dlp.YoutubeDL(opts) as ydl:
-        info = ydl.extract_info(url, download=False)
+    info = None
+    if "cookiefile" in BASE_YDL:
+        # Cookies make yt-dlp use logged-in clients that need the slow JS
+        # challenge solver. The anonymous visionOS client needs none, so try it
+        # first and only fall back when its stream won't actually play.
+        fast = {k: v for k, v in BASE_YDL.items() if k != "cookiefile"}
+        fast.update(format="bestaudio/best", skip_download=True,
+                    extractor_args={"youtube": {"player_client": ["visionos"]}})
+        try:
+            with yt_dlp.YoutubeDL(fast) as ydl:
+                info = ydl.extract_info(url, download=False)
+            if not _stream_works(info.get("url") or ""):
+                info = None
+        except yt_dlp.utils.DownloadError:
+            info = None
+    if info is None:
+        opts = dict(BASE_YDL, format="bestaudio/best", skip_download=True)
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            info = ydl.extract_info(url, download=False)
     audio_only = [f for f in (info.get("formats") or [])
                   if f.get("url") and f.get("acodec") not in (None, "none")
                   and f.get("vcodec") in (None, "none")]
