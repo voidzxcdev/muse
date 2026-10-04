@@ -415,6 +415,7 @@ async function playId(id, meta = {}, list = null, source = 'search') {
   playerShownAt = Date.now();
   $('ptitle').textContent = item.title || 'Loading…';
   swapArt(item.thumbnail, firstShow);
+  $('bLike').classList.toggle('loved', likedSet.has(id));
   setPlaying(false);
   // INSTANT: fire the stream now — metadata enriches in parallel, not in series.
   (async () => {
