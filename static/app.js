@@ -160,29 +160,72 @@ let homeFyKey = '';
 function vibe(ms = 8) {
   try { navigator.vibrate?.(ms); } catch {}
 }
-function renderHomeTracks(tracks) {
+function renderHomeTracks(tracks, mode = 'popular') {
   const box = $('homeFy');
   homeQueue = tracks.map((t) => ({ ...t }));
-  box.innerHTML = `<div class="fyhead"><div><h2>Popular</h2><p>Most played on Muse</p></div></div>
+  const title = mode === 'fy' ? 'For You' : 'Popular';
+  const sub = mode === 'fy' ? 'Picked from what you play' : 'Most played on Muse';
+  box.innerHTML = `<div class="fyhead"><div><h2>${title}</h2><p>${sub}</p></div></div>
       <div class="grid">${tracks.map(recoCardHTML).join('')}</div>`;
   box.hidden = false;
   markLiked(tracks.map((t) => t.id));
   prewarm(tracks);
 }
+function localHeardIds() {
+  if (!me) return [];
+  try { return JSON.parse(localStorage.getItem(`muse:heard:${me.id}`) || '[]'); } catch { return []; }
+}
+function rememberHeard(id) {
+  if (!me || !id) return 0;
+  const ids = new Set(localHeardIds());
+  ids.add(id);
+  const arr = [...ids].slice(-40);
+  try { localStorage.setItem(`muse:heard:${me.id}`, JSON.stringify(arr)); } catch {}
+  return arr.length;
+}
+function recoIsPersonal(tracks) {
+  return (tracks || []).some((t) => t.reason && t.reason !== 'Fresh for you');
+}
+function maybeRefreshHomeMix() {
+  if (currentView !== 'home') return;
+  if (homeFyKey.startsWith('fy|')) return;
+  homeFyKey = '';
+  loadHomeFy();
+}
+async function loadPopularTracks() {
+  let tracks = [];
+  try {
+    const j = await api('/api/popular?n=18');
+    tracks = j.tracks || [];
+  } catch {}
+  if (tracks.length < 6) {
+    try {
+      const j = await api('/api/search?q=popular%20songs&n=15');
+      const seen = new Set(tracks.map((t) => t.id));
+      for (const t of (j.results || [])) {
+        if (!seen.has(t.id)) { tracks.push(t); seen.add(t.id); }
+        if (tracks.length >= 18) break;
+      }
+    } catch {}
+  }
+  return tracks;
+}
 async function loadHomeFy() {
   const box = $('homeFy');
   if (!box) return;
   const day = Math.floor(Date.now() / 86400000);
-  const key = `popular|${day}`;
+  const wantFy = !!(me && localHeardIds().length >= 3);
+  const key = wantFy ? `fy|${me.id}|${day}` : `popular|${day}`;
   if (homeFyKey === key && box.innerHTML) {
     box.hidden = false;
     return;
   }
   homeFyKey = key;
   try {
-    const saved = JSON.parse(localStorage.getItem('muse:popular') || 'null');
+    const cacheName = wantFy ? `muse:fy:${me.id}` : 'muse:popular';
+    const saved = JSON.parse(localStorage.getItem(cacheName) || 'null');
     if (saved && saved.day === day && saved.tracks?.length) {
-      renderHomeTracks(saved.tracks);
+      renderHomeTracks(saved.tracks, wantFy ? 'fy' : 'popular');
     }
   } catch {}
   if (!box.innerHTML) {
@@ -190,28 +233,37 @@ async function loadHomeFy() {
     skel(8);
   }
   try {
+    let mode = 'popular';
     let tracks = [];
-    try {
-      const j = await api('/api/popular?n=18');
-      tracks = j.tracks || [];
-    } catch {}
-    if (tracks.length < 6) {
-      const j = await api('/api/search?q=popular%20songs&n=15');
-      const seen = new Set(tracks.map((t) => t.id));
-      for (const t of (j.results || [])) {
-        if (!seen.has(t.id)) { tracks.push(t); seen.add(t.id); }
-        if (tracks.length >= 18) break;
-      }
+    if (me) {
+      try {
+        const j = await api('/api/recommendations?n=18');
+        const recos = j.tracks || [];
+        if (recos.length >= 4 && (recoIsPersonal(recos) || localHeardIds().length >= 3)) {
+          tracks = recos;
+          mode = 'fy';
+          loadHomeFy.fyTries = 0;
+        } else if (j.building && (loadHomeFy.fyTries = (loadHomeFy.fyTries || 0) + 1) < 3) {
+          setTimeout(() => {
+            if (currentView === 'home') { homeFyKey = ''; loadHomeFy(); }
+          }, 7000);
+        }
+      } catch {}
     }
+    if (mode === 'popular') tracks = await loadPopularTracks();
     $('loading').hidden = true;
-    if (currentView !== 'home' || homeFyKey !== key) return;
+    if (currentView !== 'home') return;
+    homeFyKey = mode === 'fy' ? `fy|${me.id}|${day}` : `popular|${day}`;
     if (!tracks.length) {
       if (!box.innerHTML) box.hidden = true;
       return;
     }
-    renderHomeTracks(tracks);
-    try { localStorage.setItem('muse:popular', JSON.stringify({ day, tracks })); } catch {}
-    paintOnboardArts(tracks);
+    renderHomeTracks(tracks, mode);
+    try {
+      localStorage.setItem(mode === 'fy' ? `muse:fy:${me.id}` : 'muse:popular',
+        JSON.stringify({ day, tracks }));
+    } catch {}
+    if (mode === 'popular') paintOnboardArts(tracks);
   } catch {
     $('loading').hidden = true;
     if (!box.innerHTML) box.hidden = true;
@@ -377,6 +429,10 @@ function finalizePrev(completed) {
   if (completed) noteEvent('complete', p, p.duration || el);
   else if (el < 30) noteEvent('skip', p, el);
   else noteEvent('play', p, el);
+  if (me && (completed || el >= 30)) {
+    const n = rememberHeard(p.id);
+    if (n >= 3) maybeRefreshHomeMix();
+  }
 }
 
 let playToken = 0; // superseded plays bail out instead of fighting
@@ -1419,6 +1475,7 @@ function recoCardHTML(t, i) {
       ${t.duration ? `<span class="dur">${fmt(t.duration)}</span>` : ''}
     </div>
     <h3>${escapeHtml(t.title)}</h3>
+    ${t.reason ? `<div class="reason">${escapeHtml(t.reason)}</div>` : ''}
   </div>`;
 }
 
@@ -2189,6 +2246,7 @@ function openAuth(tab = 'signin') {
       await refreshCounts();
       toast(`Welcome, ${me.display}`, true);
       hideOnboard();
+      homeFyKey = '';
       if (currentView === 'home') loadHomeFy();
       if (['foryou', 'liked', 'playlist'].includes(currentView)) showView(currentView, viewArg);
     } catch (e) { err.textContent = e.message; }
@@ -2273,6 +2331,7 @@ async function submitOnboard() {
     await refreshMe();
     await refreshCounts();
     toast(`Welcome, ${me.display}`, true);
+    homeFyKey = '';
     if (currentView === 'home') loadHomeFy();
   } catch (e) { err.textContent = e.message; }
   finally {

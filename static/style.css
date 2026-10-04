@@ -138,9 +138,13 @@ body.intro #sideBrand { opacity: 0; }
 #onboard {
   position: fixed; inset: 0; z-index: 90;
   display: flex; flex-direction: column; justify-content: flex-end;
-  padding: calc(18px + env(safe-area-inset-top, 0px)) 22px calc(22px + env(safe-area-inset-bottom, 0px));
+  width: 100%; max-width: 100%;
+  padding: calc(18px + env(safe-area-inset-top, 0px))
+    max(24px, env(safe-area-inset-right, 0px))
+    calc(22px + env(safe-area-inset-bottom, 0px))
+    max(24px, env(safe-area-inset-left, 0px));
   background: #0a0a0b;
-  overflow-x: hidden; overflow-y: auto;
+  overflow-x: clip; overflow-y: auto;
   animation: fadein 560ms ease both;
 }
 #onboard.out { animation: fadeout 380ms ease both; }
@@ -154,11 +158,12 @@ body.intro #sideBrand { opacity: 0; }
   pointer-events: none;
 }
 .ob-hero {
-  position: relative; flex: 1 1 auto; min-height: 168px;
+  position: relative; flex: 1 1 auto; min-height: 168px; min-width: 0;
+  width: 100%; max-width: 100%; overflow: hidden;
   display: flex; align-items: center; justify-content: center;
 }
 .ob-arts {
-  position: relative; width: min(320px, 86vw); height: 150px;
+  position: relative; width: min(280px, 100%); height: 150px;
 }
 .ob-arts img {
   position: absolute; top: 18px; left: 50%;
@@ -183,8 +188,8 @@ body.intro #sideBrand { opacity: 0; }
   }
 }
 .ob-card {
-  position: relative; width: min(430px, 100%);
-  margin: 0 auto; animation: rise 800ms var(--spring) both;
+  position: relative; width: 100%; max-width: 430px; min-width: 0;
+  margin: 0 auto; overflow: visible; animation: rise 800ms var(--spring) both;
 }
 .ob-brand {
   display: flex; align-items: center; gap: 10px; margin: 0 0 18px;
@@ -202,11 +207,13 @@ body.intro #sideBrand { opacity: 0; }
 #onboard #obSub { margin: 0 0 20px; color: var(--dim); font-size: 15px; line-height: 1.45; max-width: 28ch; }
 #onboard .fl { display: block; font-size: 11px; font-weight: 900; letter-spacing: 0.1em; text-transform: uppercase; color: var(--faint); margin: 14px 0 7px; }
 #onboard input[type="text"], #onboard input[type="password"] {
-  width: 100%; background: rgba(255, 255, 255, 0.06); border: none; border-radius: 16px;
+  display: block; width: 100%; max-width: 100%; min-width: 0;
+  box-sizing: border-box; -webkit-appearance: none; appearance: none; margin: 0;
+  background: rgba(255, 255, 255, 0.06); border: none; border-radius: 16px;
   color: var(--ink); font: inherit; font-size: 16px; font-weight: 500; padding: 15px 16px;
   transition: background 280ms ease, box-shadow 280ms ease;
 }
-#onboard input:focus { background: rgba(255, 255, 255, 0.1); box-shadow: 0 0 0 2px rgba(30, 215, 96, 0.38); }
+#onboard input:focus { background: rgba(255, 255, 255, 0.1); box-shadow: inset 0 0 0 2px rgba(30, 215, 96, 0.38); }
 #onboard .merr { color: #ff7d9c; font-size: 13px; font-weight: 700; margin: 10px 0 0; min-height: 18px; }
 .ob-go {
   width: 100%; margin-top: 18px; cursor: pointer; border: none; border-radius: 999px;
