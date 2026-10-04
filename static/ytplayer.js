@@ -384,7 +384,11 @@
           return;
         }
         if (id && ytAvailable && !blocked.has(id)) {
-          if (mode === 'html') { try { el.pause(); el.removeAttribute('src'); el.load(); } catch {} }
+          // Hidden: leave <audio> untouched so play() can swap its src without
+          // a gap; stopping it would end the session iOS won't let us restart.
+          if (mode === 'html' && !(handoff && document.hidden)) {
+            try { el.pause(); el.removeAttribute('src'); el.load(); } catch {}
+          }
           mode = 'yt';
           paused = true;
           stopTick();

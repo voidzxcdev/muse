@@ -422,7 +422,9 @@ async function playId(id, meta = {}, list = null, source = 'search') {
   // INSTANT: fire the stream now — metadata enriches in parallel, not in series.
   (async () => {
     try {
-      if (audio.src && !audio.paused) {
+      // Locked screen: swap straight to the next song. Pausing first ends the
+      // iOS audio session, and a hidden page isn't allowed to start a new one.
+      if (audio.src && !audio.paused && !document.hidden) {
         await Promise.race([rampTo(0, 220), new Promise((r) => setTimeout(r, 260))]);
         try { audio.pause(); } catch {}
       }
@@ -475,9 +477,29 @@ function mediaSession(m) {
     try {
       navigator.mediaSession.setActionHandler('play', () => doPlay());
       navigator.mediaSession.setActionHandler('pause', () => doPause());
-      navigator.mediaSession.setActionHandler('previoustrack', step(-1));
+      // Like Apple Music: past 3s, "previous" restarts the song.
+      navigator.mediaSession.setActionHandler('previoustrack', () => {
+        if ((audio.currentTime || 0) > 3) {
+          try { audio.currentTime = 0; } catch {}
+          lastPosState = 0;
+          pushPositionState();
+        } else step(-1)();
+      });
       navigator.mediaSession.setActionHandler('nexttrack', step(1));
-      try { navigator.mediaSession.setActionHandler('seekto', (d) => { if (d && isFinite(d.seekTime) && audio.duration) { try { audio.currentTime = d.seekTime; } catch {} } }); } catch {}
+      // iOS shows ±10s buttons instead of previous/next unless these are cleared.
+      for (const a of ['seekbackward', 'seekforward']) {
+        try { navigator.mediaSession.setActionHandler(a, null); } catch {}
+      }
+      try {
+        navigator.mediaSession.setActionHandler('seekto', (d) => {
+          if (!d || !isFinite(d.seekTime) || !audio.duration) return;
+          // Dragging to the very end shouldn't count as finishing the song.
+          const t = Math.max(0, Math.min(d.seekTime, audio.duration - 1));
+          try { audio.currentTime = t; } catch {}
+          lastPosState = 0;
+          pushPositionState();
+        });
+      } catch {}
     } catch {}
   } catch { /* older browsers */ }
 }
