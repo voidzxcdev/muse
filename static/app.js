@@ -357,10 +357,9 @@ let volumeTarget = 0.85; // the volume EVERYTHING must converge to — asserted 
 function rampTo(target, ms = 350) {
   volumeTarget = target;
   cancelAnimationFrame(fadeRAF);
-  // Background tabs get no animation frames: a frozen mid-fade would leave
-  // the player permanently near-silent while icons claim playback.
+  // Never mute while the phone is locked — iOS treats volume=0 as "session over".
   if (document.hidden) {
-    try { audio.volume = target; } catch {}
+    try { audio.volume = target > 0 ? target : userVol; } catch {}
     return Promise.resolve();
   }
   const from = audio.volume;
@@ -398,7 +397,17 @@ async function doPlay() {
 }
 
 async function doPause() {
+  // iOS lock-screen next/prev fires pause ~1s after the new track starts.
+  // Honoring that kills the only audio session a hidden page is allowed to keep.
+  if (document.hidden && Date.now() - lastPlayAt < 3000) {
+    try { navigator.mediaSession.playbackState = 'playing'; } catch {}
+    return;
+  }
   userPaused = true;
+  if (document.hidden) {
+    try { audio.pause(); } catch {}
+    return;
+  }
   await Promise.race([rampTo(0, 300), new Promise((r) => setTimeout(r, 350))]);
   try { audio.pause(); } catch {}
   audio.volume = userVol; // reset so the next play starts clean
@@ -436,6 +445,7 @@ function finalizePrev(completed) {
 }
 
 let playToken = 0; // superseded plays bail out instead of fighting
+let lastPlayAt = 0; // playId timestamp — lock-screen "pause" right after next is ignored
 
 /* Card data already carries title/art/duration, so the YouTube engine never
  * needs the server for a play; only bare ids (or the server-stream engine)
@@ -469,6 +479,7 @@ async function playId(id, meta = {}, list = null, source = 'search') {
   if (!list) qi = queue.findIndex((r) => r.id === id);
   current = { id, ...item };
   lastPlay = { ...current, t0: Date.now() };
+  lastPlayAt = Date.now();
   errTries = 0;
   warmedNextId = null;
   try { audio.muted = false; } catch {} // a scrub mute must never survive a track change
@@ -710,10 +721,12 @@ async function restartLoop() {
       const m = await api(`/api/play?v=${current.id}`);
       current = { ...current, ...m };
     }
-    audio.volume = 0;
+    if (!document.hidden) audio.volume = 0;
+    else audio.volume = userVol;
     audio.src = `/api/audio?v=${current.id}`;
     await audio.play();
-    rampTo(userVol, 400);
+    if (document.hidden) audio.volume = userVol;
+    else rampTo(userVol, 400);
   } catch {
     audio.volume = userVol;
     toast('Repeat broke — press play to retry');
@@ -861,7 +874,11 @@ function setPlaying(p) {
   if (p) errTries = 0; // clean playback resets the recovery ladder
   paintHeaderPlay();
   try {
-    if ('mediaSession' in navigator) navigator.mediaSession.playbackState = p ? 'playing' : 'paused';
+    if ('mediaSession' in navigator) {
+      // A hidden page that reports "paused" loses the iOS audio session for good.
+      const keep = document.hidden && !userPaused;
+      navigator.mediaSession.playbackState = (p || keep) ? 'playing' : 'paused';
+    }
   } catch {}
   try { pushPositionState(); } catch {}
   try {
@@ -1025,7 +1042,13 @@ function init() {
   // Warm the next song early: a lock-screen "next" tap can't wait for a cold fetch.
   audio.addEventListener('playing', () => setTimeout(warmNext, 3000));
   mediaActions();
-  audio.addEventListener('pause', () => setPlaying(false));
+  audio.addEventListener('pause', () => {
+    if (document.hidden && !userPaused) {
+      setPlaying(true);
+      return;
+    }
+    setPlaying(false);
+  });
   audio.addEventListener('ended', async () => {
     // The position watchdog below may already have advanced for this track.
     if (timeAdvAt && Date.now() - timeAdvAt < 5000) return;
@@ -1070,10 +1093,12 @@ function init() {
           const m = await api(`/api/play?v=${current.id}`);
           if (!m.audio_url) throw new Error('no url');
           current = { ...current, ...m };
-          audio.volume = 0;
+          if (!document.hidden) audio.volume = 0;
+          else audio.volume = userVol;
           audio.src = `/api/audio?v=${current.id}`;
           await audio.play();
-          rampTo(userVol, 500);
+          if (document.hidden) audio.volume = userVol;
+          else rampTo(userVol, 500);
         } catch {
           toast('Still broken — this video may be gone. Try another song.');
         }
@@ -1151,7 +1176,14 @@ function init() {
           if (audio.engine === 'yt') {
             audio.src = `/api/audio?v=${current.id}`;
             audio.currentTime = pos;
-            audio.play().catch(() => { try { audio.pause(); } catch {} });
+            audio.play().catch(() => {
+              if (!document.hidden) { try { audio.pause(); } catch {} }
+            });
+            return;
+          }
+          if (document.hidden) {
+            audio.volume = userVol;
+            audio.play().catch(() => {});
             return;
           }
           try {
@@ -1182,6 +1214,18 @@ function init() {
       stallLastT = Number.isFinite(t) ? t : -1;
     } catch {}
   }, 1000);
+  // Lock-screen keep-alive: iOS sometimes pauses us after next/prev. If the
+  // user didn't pause, start the stream again before the session dies.
+  setInterval(() => {
+    try {
+      if (!document.hidden || userPaused || !current || !audio.src) return;
+      if (audio.paused && !audio.ended) {
+        audio.volume = userVol;
+        audio.play().catch(() => {});
+        setPlaying(true);
+      }
+    } catch {}
+  }, 2000);
   audio.addEventListener('loadedmetadata', () => paintProgress());
   const pline = $('pline');
   const ratioAt = (e) => {

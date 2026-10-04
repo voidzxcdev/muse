@@ -161,7 +161,8 @@
       el.src = silence();
       el.play().then(() => {
         dbg('unlocked');
-        if (mode === 'yt') { try { el.pause(); } catch {} }
+        // Don't pause after a lock swap has already taken the element.
+        if (mode === 'yt' && !document.hidden) { try { el.pause(); } catch {} }
       }).catch((e) => { unlocked = false; dbg(`unlock rejected ${e && e.name}`); });
     }
 
@@ -183,20 +184,29 @@
     }
 
     if (handoff) {
-      document.addEventListener('visibilitychange', () => {
+      const onLock = () => {
         if (document.hidden && mode === 'yt' && !paused && ytId) lockHandoff();
-      });
+      };
+      document.addEventListener('visibilitychange', onLock);
+      window.addEventListener('pagehide', onLock);
+      document.addEventListener('freeze', onLock);
     }
 
     // --- html fallback ---------------------------------------------------
     function toHtml(id, startAt, autoplay) {
+      const same = mode === 'html' && id && String(el.src || '').includes(`v=${id}`);
+      if (same && !el.paused && el.readyState >= 2) {
+        dbg(`toHtml skip ${id} already playing`);
+        if (autoplay) el.play().catch(() => {});
+        return;
+      }
       dbg(`toHtml ${id} at=${(startAt || 0).toFixed(1)} autoplay=${autoplay}`);
       clearTimeout(osPauseTimer);
       clearTimeout(startTimer);
       stopTick();
       try { yt && ytReady && yt.stopVideo(); } catch {}
       mode = 'html';
-      ytId = null;
+      ytId = id || null;
       el.volume = volume;
       el.muted = muted;
       el.loop = loop;
@@ -378,10 +388,15 @@
           paused = true;
           return;
         }
+        if (handoff && document.hidden && id) {
+          // Stay on <audio> while locked. Flipping to YouTube here pauses the
+          // only session iOS will let us keep, and a hidden page can't start another.
+          paused = false;
+          toHtml(id, 0, false);
+          return;
+        }
         if (id && ytAvailable && !blocked.has(id)) {
-          // Hidden: leave <audio> untouched so play() can swap its src without
-          // a gap; stopping it would end the session iOS won't let us restart.
-          if (mode === 'html' && !(handoff && document.hidden)) {
+          if (mode === 'html') {
             try { el.pause(); el.removeAttribute('src'); el.load(); } catch {}
           }
           mode = 'yt';
