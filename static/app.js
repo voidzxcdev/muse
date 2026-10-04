@@ -1184,6 +1184,7 @@ const ICO = {
   up: ic('<polyline points="18 15 12 9 6 15"/>'),
   down: ic('<polyline points="6 9 12 15 18 9"/>'),
   x: ic('<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>'),
+  check: ic('<polyline points="20 6 9 17 4 12"/>'),
   play: ic('<polygon points="5 3 19 12 5 21 5 3"/>'),
   pencil: ic('<path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>'),
   trash: ic('<polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>'),
@@ -1524,6 +1525,14 @@ async function openTrackMenuAt(x, y, track) {
     <div class="sep"></div>
     <div class="mpl"><div class="mhead">…</div></div>
     <button data-m="newpl">${ICO.plus}New playlist…</button>`;
+  const inList = (currentView === 'playlist' || currentView === 'liked')
+    && document.querySelectorAll('#view .trow').length > 1
+    && [...document.querySelectorAll('#view .trow [data-playrow]')].some((b) => b.dataset.playrow === track.id);
+  if (inList) {
+    m.insertAdjacentHTML('beforeend', `<div class="sep"></div>
+      <button data-m="totop">${ICO.up}Move to top</button>
+      <button data-m="tobottom">${ICO.down}Move to bottom</button>`);
+  }
   if (track.item_id && currentView === 'playlist') {
     m.insertAdjacentHTML('beforeend',
       `<div class="sep"></div><button data-m="unpl">${ICO.x}Remove from playlist</button>`);
@@ -1547,19 +1556,28 @@ async function openTrackMenuAt(x, y, track) {
     return;
   }
   try {
-    const j = await api('/api/playlists');
+    const j = await api(`/api/playlists?has=${encodeURIComponent(track.id)}`);
     if (menuTrack !== track) return; // menu moved on
     box.innerHTML = j.playlists.length ? '' : plEmptyHTML();
     j.playlists.forEach((p) => {
       const b = document.createElement('button');
-      b.innerHTML = `${(p.custom_cover || p.cover) ? `<img src="${p.custom_cover || p.cover}" alt="" />` : ICO.music}<span style="overflow:hidden;text-overflow:ellipsis">${escapeHtml(p.name)}</span>`;
+      b.className = p.has_item ? 'inpl' : '';
+      b.title = p.has_item ? 'In this playlist — click to remove' : 'Add to playlist';
+      b.innerHTML = `${(p.custom_cover || p.cover) ? `<img src="${p.custom_cover || p.cover}" alt="" />` : ICO.music}<span class="nm">${escapeHtml(p.name)}</span>${p.has_item ? `<span class="ck">${ICO.check}</span>` : ''}`;
       b.addEventListener('click', async () => {
-        try {
-          await post(`/api/playlists/${p.id}/tracks`, { video_id: track.id, title: track.title || '',
-            thumbnail: track.thumbnail || '', duration: track.duration ?? null });
-          toast(`Added to ${p.name}`, true);
-        } catch (e) { toast('Add failed: ' + e.message); }
         closeMenu();
+        try {
+          if (p.has_item) {
+            await req('DELETE', `/api/playlist-items/${p.has_item}`);
+            toast(`Removed from ${p.name}`);
+            if (currentView === 'playlist' && String(viewArg) === String(p.id)) renderPlaylist($('view'), viewArg);
+          } else {
+            await post(`/api/playlists/${p.id}/tracks`, { video_id: track.id, title: track.title || '',
+              thumbnail: track.thumbnail || '', duration: track.duration ?? null });
+            toast(`Added to ${p.name}`, true);
+            if (currentView === 'playlist' && String(viewArg) === String(p.id)) renderPlaylist($('view'), viewArg);
+          }
+        } catch (e) { toast((p.has_item ? 'Remove' : 'Add') + ' failed: ' + e.message); }
         refreshCounts();
       });
       box.appendChild(b);
@@ -1580,6 +1598,11 @@ async function menuAction(kind) {
   if (kind === 'mp3') {
     window.open(`/api/mp3?v=${t.id}`, '_blank');
     return;
+  }
+  else if (kind === 'totop' || kind === 'tobottom') {
+    const row = [...document.querySelectorAll('#view .trow')]
+      .find((r) => r.querySelector('[data-playrow]')?.dataset.playrow === t.id);
+    moveRowTo(row, kind === 'totop' ? 'top' : 'bottom');
   }
   else if (kind === 'next') playNext(t);
   else if (kind === 'copy') {
@@ -1781,7 +1804,7 @@ document.addEventListener('touchstart', (e) => {
 document.addEventListener('touchmove', () => clearTimeout(lpTimer), { passive: true });
 // Once a touch reorder is flying, keep the page from stealing the gesture.
 document.addEventListener('touchmove', (e) => {
-  if (drag && drag.active) e.preventDefault();
+  if (drag && (drag.active || (drag.touch && drag.armed))) e.preventDefault();
 }, { passive: false });
 document.addEventListener('touchend', () => clearTimeout(lpTimer));
 
@@ -2378,76 +2401,154 @@ let orderSave = Promise.resolve(); // reorder PATCHes run one at a time, in orde
 let lastDropAt = 0; // drops fire a ghost click — swallow it, don't start playback
 const justDropped = () => Date.now() - lastDropAt < 400;
 
+const SLIDE = 'transform 240ms cubic-bezier(0.22,1,0.36,1)';
+
 document.addEventListener('pointerdown', (e) => {
+  if (e.button > 0) return;
   const row = e.target.closest('#view .trow');
-  if (!row || (currentView !== 'playlist' && currentView !== 'liked')) return;
+  if (!row || e.target.closest('button') || (currentView !== 'playlist' && currentView !== 'liked')) return;
   const isTouch = e.pointerType === 'touch';
-  drag = { item: row.dataset.row, row, y0: e.clientY, active: false,
-           before: null, line: null, ghost: null,
-           armed: !isTouch, touch: isTouch };
+  drag = { row, y0: e.clientY, lastY: e.clientY, active: false, ghost: null,
+           armed: !isTouch, touch: isTouch, slot: -1 };
   clearTimeout(armTimer);
   if (isTouch) {
     armTimer = setTimeout(() => {
       if (!drag) return;
       drag.armed = true;
       try { navigator.vibrate?.(20); } catch {}
+      drag.row.classList.add('armed');
     }, 320);
   }
 });
 
+/* Rows never move in the DOM mid-drag: positions are measured once, the
+ * others slide with transforms to open a gap, and the DOM changes on drop. */
+function startDrag() {
+  const d = drag;
+  d.active = true;
+  closeMenu();
+  const rows = [...document.querySelectorAll('#view .trow')];
+  const sy = window.scrollY;
+  d.from = rows.indexOf(d.row);
+  d.others = rows.filter((r) => r !== d.row);
+  d.mids = d.others.map((r) => { const b = r.getBoundingClientRect(); return b.top + sy + b.height / 2; });
+  const rect = d.row.getBoundingClientRect();
+  const next = rows[d.from + 1] || rows[d.from - 1];
+  const gap = next ? Math.abs(next.getBoundingClientRect().top - rect.top) - rect.height : 0;
+  d.step = rect.height + Math.max(0, gap);
+  d.top0 = rect.top;
+  d.h = rect.height;
+  d.ghost = d.row.cloneNode(true);
+  d.ghost.classList.add('drag-ghost');
+  Object.assign(d.ghost.style, { width: `${rect.width}px`, left: `${rect.left}px`, top: `${rect.top}px` });
+  document.body.appendChild(d.ghost);
+  d.row.classList.add('dragging');
+  d.others.forEach((r) => { r.style.transition = SLIDE; });
+  document.body.classList.add('reordering');
+  try { navigator.vibrate?.(10); } catch {}
+  d.raf = requestAnimationFrame(dragTick);
+}
+
+function placeGhost() {
+  const d = drag;
+  d.ghost.style.transform = `translateY(${d.lastY - d.y0}px) scale(1.025)`;
+  const center = d.top0 + (d.lastY - d.y0) + window.scrollY + d.h / 2;
+  let slot = 0;
+  while (slot < d.mids.length && d.mids[slot] < center) slot++;
+  if (slot === d.slot) return;
+  d.slot = slot;
+  d.others.forEach((r, k) => {
+    const was = k < d.from ? k : k + 1;
+    const now = k < slot ? k : k + 1;
+    r.style.transform = was === now ? '' : `translateY(${(now - was) * d.step}px)`;
+  });
+}
+
+// Edge auto-scroll: faster the closer the finger is to the edge.
+function dragTick() {
+  const d = drag;
+  if (!d || !d.active) return;
+  const edge = 90;
+  const bottom = window.innerHeight - (document.body.classList.contains('has-player') ? 130 : 0);
+  let v = 0;
+  if (d.lastY < edge) v = -Math.ceil(((edge - d.lastY) / edge) * 18);
+  else if (d.lastY > bottom - edge) v = Math.ceil(((d.lastY - (bottom - edge)) / edge) * 18);
+  if (v) window.scrollBy(0, v);
+  placeGhost();
+  d.raf = requestAnimationFrame(dragTick);
+}
+
 document.addEventListener('pointermove', (e) => {
   if (!drag) return;
   if (drag.touch && !drag.armed) return; // finger: still a maybe-scroll, hands off
+  drag.lastY = e.clientY;
   if (!drag.active) {
-    if (Math.abs(e.clientY - drag.y0) < 8) return;
-    drag.active = true;
-    closeMenu(); // a drag wins over any open menu
-    const rect = drag.row.getBoundingClientRect();
-    drag.ghost = drag.row.cloneNode(true);
-    drag.ghost.classList.add('drag-ghost');
-    drag.ghost.style.width = `${rect.width}px`;
-    drag.ghost.style.left = `${rect.left}px`;
-    drag.ghost.style.top = `${rect.top}px`;
-    document.body.appendChild(drag.ghost);
-    drag.row.classList.add('dragging');
-    document.body.style.cursor = 'grabbing';
-    drag.line = document.createElement('div');
-    drag.line.className = 'drop-line';
+    if (Math.abs(e.clientY - drag.y0) < 6) return;
+    startDrag();
   }
   if (e.cancelable) e.preventDefault();
-  drag.ghost.style.transform = `translateY(${e.clientY - drag.y0}px)`;
-  const rows = [...document.querySelectorAll('#view .trow')].filter((r) => r !== drag.row);
-  drag.before = null;
-  for (const r of rows) {
-    const rect = r.getBoundingClientRect();
-    if (e.clientY < rect.top + rect.height / 2) {
-      drag.before = r;
-      break;
-    }
-  }
-  if (drag.before) drag.before.before(drag.line);
-  else $('view').appendChild(drag.line);
 });
 
-async function endDragCommit(e) {
+function finishDrag(commit) {
   clearTimeout(armTimer);
-  if (!drag) return;
   const d = drag;
   drag = null;
-  d.ghost?.remove();
-  d.line?.remove();
-  d.row.classList.remove('dragging');
-  document.body.style.cursor = '';
-  if (!d.active) return; // plain click on the grip
+  if (!d) return null;
+  d.row.classList.remove('armed');
+  if (!d.active) return null; // plain click on the row
+  cancelAnimationFrame(d.raf);
   lastDropAt = Date.now();
-  // Settle instantly in the DOM the eye is already looking at — no rebuild flash.
-  if (d.before && d.before.isConnected) d.before.before(d.row);
-  else $('view').appendChild(d.row);
+  document.body.classList.remove('reordering');
+  const ghostTop = d.ghost.getBoundingClientRect().top;
+  d.ghost.remove();
+  d.others.forEach((r) => { r.style.transition = 'none'; r.style.transform = ''; });
+  const moved = commit && d.slot >= 0 && d.slot !== d.from;
+  if (moved) {
+    if (d.slot < d.others.length) d.others[d.slot].before(d.row);
+    else d.others[d.others.length - 1].after(d.row);
+  }
+  void d.row.offsetHeight;
+  d.others.forEach((r) => { r.style.transition = ''; });
+  d.row.classList.remove('dragging');
   try {
-    d.row.animate(
-      [{ boxShadow: '0 0 0 2px rgba(255,255,255,0.25)', background: 'rgba(255,255,255,0.06)' }, {}],
-      { duration: 700, easing: 'cubic-bezier(0.22,1,0.36,1)' });
+    const dy = ghostTop - d.row.getBoundingClientRect().top;
+    d.row.animate([
+      { transform: `translateY(${dy}px) scale(1.025)`, background: 'rgba(255,255,255,0.08)' },
+      { transform: 'none', background: 'rgba(255,255,255,0.05)', offset: 0.7 },
+      { transform: 'none', background: 'transparent' },
+    ], { duration: 420, easing: 'cubic-bezier(0.22,1,0.36,1)' });
   } catch {}
+  return moved;
+}
+
+/* Move a row to the top/bottom with every row gliding to its new place. */
+function moveRowTo(row, where) {
+  const rows = [...document.querySelectorAll('#view .trow')];
+  if (!row || rows.length < 2) return;
+  if ((where === 'top' && rows[0] === row) || (where === 'bottom' && rows[rows.length - 1] === row)) return;
+  const before = new Map(rows.map((r) => [r, r.getBoundingClientRect().top]));
+  if (where === 'top') rows[0].before(row);
+  else rows[rows.length - 1].after(row);
+  for (const r of rows) {
+    const dy = before.get(r) - r.getBoundingClientRect().top;
+    if (!dy) continue;
+    try {
+      r.animate([{ transform: `translateY(${dy}px)` }, { transform: 'none' }],
+        { duration: r === row ? 520 : 380, easing: 'cubic-bezier(0.22,1,0.36,1)' });
+    } catch {}
+  }
+  try {
+    row.animate([{ background: 'rgba(255,255,255,0.08)' }, { background: 'transparent' }],
+      { duration: 900, easing: 'ease-out' });
+  } catch {}
+  saveOrder();
+}
+
+async function endDragCommit() {
+  if (finishDrag(true)) saveOrder();
+}
+
+function saveOrder() {
   const ids = [...document.querySelectorAll('#view .trow')].map((r) => r.dataset.row);
   const byItem = new Map(viewQueue.map((t) => [String(t.item_id ?? t.id), t]));
   viewQueue = ids.map((id) => byItem.get(String(id))).filter(Boolean);
@@ -2459,6 +2560,10 @@ async function endDragCommit(e) {
   // racing (last-writer-wins with a stale order scrambled lists on reload).
   const view = currentView;
   const arg = viewArg;
+  if (queueSource === view && (view !== 'playlist' || String(queuePid) === String(arg))) {
+    queue = viewQueue.slice();
+    qi = queue.findIndex((t) => t.id === current?.id);
+  }
   orderSave = orderSave.then(async () => {
     try {
       await req('PATCH', url, payload);
@@ -2471,15 +2576,8 @@ async function endDragCommit(e) {
   });
 }
 document.addEventListener('pointerup', endDragCommit);
-document.addEventListener('pointercancel', () => {
-  clearTimeout(armTimer);
-  if (!drag) return;
-  drag.ghost?.remove();
-  drag.line?.remove();
-  drag.row.classList.remove('dragging');
-  document.body.style.cursor = '';
-  drag = null;
-});
+document.addEventListener('pointercancel', () => finishDrag(false));
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && drag?.active) finishDrag(false); });
 
 /* ---------- self-update notice ---------- */
 async function checkUpdate() {

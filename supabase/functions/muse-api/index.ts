@@ -122,14 +122,17 @@ async function handle(req: Request): Promise<Response> {
     if (path === "/api/playlists") {
       const u = await needUser();
       if (!u) return unauth();
+      const has = url.searchParams.get("has") || "";
       const rows = await sql`
         SELECT p.id, p.name, p.cover,
           (SELECT COUNT(*)::int FROM muse.playlist_items i WHERE i.playlist_id=p.id) AS count,
-          (SELECT thumb FROM muse.playlist_items i WHERE i.playlist_id=p.id ORDER BY pos LIMIT 1) AS first
+          (SELECT thumb FROM muse.playlist_items i WHERE i.playlist_id=p.id ORDER BY pos LIMIT 1) AS first,
+          (SELECT id FROM muse.playlist_items i WHERE i.playlist_id=p.id AND i.video_id=${VID.test(has) ? has : ""} LIMIT 1) AS has_item
         FROM muse.playlists p WHERE p.user_id=${u.id} ORDER BY p.id`;
       return json({
         playlists: rows.map((p) => ({
           id: p.id, name: p.name, count: p.count, cover: p.first || "", custom_cover: coverUrl(p.cover || ""),
+          has_item: p.has_item,
         })),
       });
     }
