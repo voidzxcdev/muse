@@ -816,6 +816,23 @@ def _bust_reco(uid):
     _reco_stale.add(uid)
 
 
+def _last_activity(uid):
+    """Newest like/play/survey time. Those writes happen in the Supabase
+    function, so this replaces the in-process _bust_reco signal."""
+    with _db_lock, db() as con:
+        row = con.execute(
+            "SELECT GREATEST("
+            "(SELECT MAX(created) FROM likes WHERE user_id=?),"
+            "(SELECT MAX(played_at) FROM plays WHERE user_id=?),"
+            "(SELECT MAX(created) FROM survey WHERE user_id=?)) t"
+            if DATABASE_URL else
+            "SELECT MAX(COALESCE((SELECT MAX(created) FROM likes WHERE user_id=?),0),"
+            "COALESCE((SELECT MAX(played_at) FROM plays WHERE user_id=?),0),"
+            "COALESCE((SELECT MAX(created) FROM survey WHERE user_id=?),0)) t",
+            (uid, uid, uid)).fetchone()
+    return (row["t"] if row else None) or 0
+
+
 def mix_orbit(seeds, per=12):
     """YouTube's own similarity graph: the auto-generated RD mix for a seed
     video — co-watch + audio similarity, not names. Returns (id, title, seed)."""
@@ -904,7 +921,8 @@ def recommendations(user_id, n=12):
     if hit:
         now = time.time()
         stale = (now - hit[0] > RECO_TTL or user_id in _reco_stale
-                 or int(hit[0] // 86400) != int(now // 86400))
+                 or int(hit[0] // 86400) != int(now // 86400)
+                 or _last_activity(user_id) > hit[0])
         if stale and _reco_claim(user_id):
             threading.Thread(target=_reco_rebuild, args=(user_id,), daemon=True).start()
         return hit[1][:n]

@@ -4,6 +4,10 @@
   "pages_build_output_dir": "../static",
   "compatibility_date": "2026-10-03",
   "vars": {
-    "BACKEND_ORIGIN": "https://muse-xbrh.onrender.com"
+    "BACKEND_ORIGIN": "https://muse-xbrh.onrender.com",
+    "SUPABASE_FN": "https://ewfrnuevdhgspulgazvc.supabase.co/functions/v1/muse-api",
+    // Public anon key (same one any Supabase browser client ships); the
+    // function only trusts the muse_session token, not this key.
+    "SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV3ZnJudWV2ZGhnc3B1bGdhenZjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTEwNTI5NjIsImV4cCI6MjEwNjYyODk2Mn0.yJ-9loDQK_cihfertj2UZoIV5VnfsbQblxGupeGrpaQ"
   }
 }
