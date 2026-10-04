@@ -474,12 +474,7 @@ function mediaSession(m) {
     try { navigator.mediaSession.playbackState = 'playing'; } catch {}
     try {
       navigator.mediaSession.setActionHandler('play', () => doPlay());
-      // The embed grabbing audio focus sends the page a 'pause' that would
-      // kill the muted handoff stream; real lock-screen pauses come while hidden.
-      navigator.mediaSession.setActionHandler('pause', () => {
-        if (audio.handoffPending && !document.hidden) return;
-        doPause();
-      });
+      navigator.mediaSession.setActionHandler('pause', () => doPause());
       navigator.mediaSession.setActionHandler('previoustrack', step(-1));
       navigator.mediaSession.setActionHandler('nexttrack', step(1));
       try { navigator.mediaSession.setActionHandler('seekto', (d) => { if (d && isFinite(d.seekTime) && audio.duration) { try { audio.currentTime = d.seekTime; } catch {} } }); } catch {}
@@ -505,18 +500,18 @@ function pushPositionState() {
 }
 
 /* Warm the NEXT stream while the current one still plays, so `ended`
- * fires into a hot server cache instead of a cold yt-dlp resolve.
- * Only the server-stream engine has a cache to warm. */
+ * fires into a hot cache instead of a cold yt-dlp resolve. On phones the
+ * edge copy is what a locked screen plays next. */
 let warmedNextId = null;
 function warmNext() {
   try {
     if (shuffle) return;
     if (qi >= queue.length - 1) { extendQueue(); return; }
-    if (audio.engine === 'yt') return;
+    if (audio.engine === 'yt' && !mobileOS) return;
     const nxt = queue[qi + 1];
     if (!nxt || !nxt.id || nxt.id === warmedNextId) return;
     warmedNextId = nxt.id;
-    fetch(`/api/play?v=${nxt.id}`).catch(() => {});
+    fetch(audio.engine === 'yt' ? `/api/audio?v=${nxt.id}&warm=1` : `/api/play?v=${nxt.id}`).catch(() => {});
   } catch {}
 }
 

@@ -36,9 +36,52 @@ async function library({ request, env }, url) {
   return out;
 }
 
+const VID = /^[\w-]{11}$/;
+const AUDIO_TTL = 14 * 86400;
+
+// Whole songs live in the edge cache so a locked phone can switch from the
+// YouTube embed to <audio> instantly; Range reads are served from the copy.
+async function audio({ request, env, waitUntil }, url) {
+  const v = url.searchParams.get("v");
+  const key = `${url.origin}/__audio/${v}`;
+  const cache = caches.default;
+  const range = request.headers.get("range");
+  const hit = await cache.match(new Request(key, { headers: range ? { range } : {} }));
+  if (hit) return hit;
+
+  const origin = env.BACKEND_ORIGIN || DEFAULT_ORIGIN;
+  const store = async () => {
+    const up = await fetch(`${origin}/api/audio?v=${v}`, { headers: { "user-agent": "muse-edge" } });
+    if (up.status !== 200 || !up.headers.get("content-length")) return false;
+    const out = new Response(up.body, {
+      headers: {
+        "content-type": up.headers.get("content-type") || "audio/mp4",
+        "content-length": up.headers.get("content-length"),
+        "accept-ranges": "bytes",
+        "cache-control": `public, max-age=${AUDIO_TTL}`,
+      },
+    });
+    await cache.put(key, out);
+    return true;
+  };
+
+  if (url.searchParams.has("warm")) {
+    let ok = false;
+    try { ok = await store(); } catch {}
+    return new Response(null, { status: ok ? 204 : 502 });
+  }
+  if (!range || /^bytes=0-/.test(range)) waitUntil(store().catch(() => {}));
+  const headers = new Headers(request.headers);
+  headers.delete("host");
+  return fetch(`${origin}/api/audio?v=${v}`, { headers });
+}
+
 export async function proxy(ctx) {
   const { request, env, waitUntil } = ctx;
   const url = new URL(request.url);
+  if (request.method === "GET" && url.pathname === "/api/audio" && VID.test(url.searchParams.get("v") || "")) {
+    return audio(ctx, url);
+  }
   const cacheable = request.method === "GET" && (url.pathname === "/api/search" || url.pathname.startsWith("/covers/"));
   const cache = caches.default;
 

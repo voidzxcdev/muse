@@ -30,9 +30,10 @@
     });
   }
 
-  // opts.handoff (phones): YouTube starts the song instantly while the server
-  // stream pre-rolls muted on <audio>; once aligned, <audio> takes over so
-  // playback survives a locked screen, which pauses the embed.
+  // opts.handoff (phones): YouTube plays while the app is open; the song is
+  // copied to the edge cache meanwhile, and when the screen locks (which
+  // pauses the embed) <audio> resumes from that copy at the same position.
+  // iOS plays one media element at a time, so nothing pre-rolls alongside.
   window.MusePlayer = function (el, opts = {}) {
     const handoff = !!opts.handoff;
     let blocked;
@@ -100,11 +101,12 @@
       }, 250);
     };
 
-    // --- handoff shadow ----------------------------------------------------
-    // The shadow must be started inside play() so it inherits the user's tap;
-    // after that the element is unlocked for later programmatic plays.
-    let shadow = null;      // {id, t0} while <audio> pre-rolls behind YouTube
-    let syncTimer = 0;
+    // --- lock-screen handoff ------------------------------------------------
+    // <audio> must play once inside a tap so iOS lets it start later while
+    // the page is hidden; a blip of silence does that without fighting the embed.
+    let unlocked = false;
+    let warmed = '';
+    let osPauseTimer = 0;
 
     const dbgBuf = [];
     const dbgT0 = Date.now();
@@ -112,7 +114,7 @@
       if (!handoff) return;
       dbgBuf.push(`${((Date.now() - dbgT0) / 1000).toFixed(1)}s ${msg} | mode=${mode} hidden=${document.hidden}`
         + ` el:${el.paused ? 'paused' : 'playing'} muted=${el.muted} t=${(el.currentTime || 0).toFixed(1)}`
-        + ` rs=${el.readyState} rate=${el.playbackRate} yt=${ytState} shadow=${!!shadow}`);
+        + ` rs=${el.readyState} yt=${ytState} unlocked=${unlocked}`);
     };
     const dbgFlush = () => {
       if (!dbgBuf.length) return;
@@ -135,89 +137,60 @@
     }
     const ytTime = () => { try { return yt.getCurrentTime() || 0; } catch { return 0; } };
 
-    function shadowStart(id) {
-      shadowStop();
-      shadow = { id, t0: Date.now() };
-      el.loop = loop;
+    let silentUrl = '';
+    function silence() {
+      if (silentUrl) return silentUrl;
+      const n = 800;
+      const v = new DataView(new ArrayBuffer(44 + n));
+      const w = (o, s) => [...s].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));
+      w(0, 'RIFF'); v.setUint32(4, 36 + n, true); w(8, 'WAVE'); w(12, 'fmt ');
+      v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+      v.setUint32(24, 8000, true); v.setUint32(28, 8000, true);
+      v.setUint16(32, 1, true); v.setUint16(34, 8, true);
+      w(36, 'data'); v.setUint32(40, n, true);
+      for (let i = 0; i < n; i++) v.setUint8(44 + i, 128);
+      silentUrl = URL.createObjectURL(new Blob([v.buffer], { type: 'audio/wav' }));
+      return silentUrl;
+    }
+
+    function unlock() {
+      if (unlocked || mode !== 'yt') return;
+      unlocked = true;
       el.muted = true;
-      el.playbackRate = 1;
-      el.src = `/api/audio?v=${id}`;
-      dbg(`shadowStart ${id}`);
-      el.play().catch((e) => {
-        dbg(`shadow play rejected ${e && e.name}`);
-        if (shadow && shadow.id === id) shadowStop();
-      });
-      syncTimer = setInterval(syncShadow, 100);
+      el.src = silence();
+      el.play().then(() => {
+        dbg('unlocked');
+        if (mode === 'yt') { try { el.pause(); } catch {} }
+      }).catch((e) => { unlocked = false; dbg(`unlock rejected ${e && e.name}`); });
     }
 
-    function shadowStop() {
-      clearInterval(syncTimer);
-      syncTimer = 0;
-      if (!shadow) return;
-      shadow = null;
-      try { el.pause(); el.playbackRate = 1; el.removeAttribute('src'); el.load(); } catch {}
+    function warm(id) {
+      if (!id || warmed === id) return;
+      warmed = id;
+      fetch(`/api/audio?v=${id}&warm=1`).catch(() => {});
     }
 
-    // Muted, so speed can be bent freely to line <audio> up with YouTube.
-    function syncShadow() {
-      const s = shadow;
-      const cur = ytId || (pendingLoad && pendingLoad.id);
-      if (!s || mode !== 'yt' || cur !== s.id) return shadowStop();
-      if (el.paused || el.readyState < 3 || el.seeking || ytState !== 1) return;
-      const diff = el.currentTime - ytTime();
-      if (Math.abs(diff) <= 0.08 || Date.now() - s.t0 > 25000) return commitShadow();
-      if (diff < -2 || diff > 3) {
-        el.playbackRate = 1;
-        try { el.currentTime = ytTime() + 1; } catch {}
-        return;
-      }
-      el.playbackRate = diff > 0 ? 0.5 : 1.5;
-    }
-
-    function commitShadow() {
-      if (!shadow) return;
-      dbg('commit');
-      clearInterval(syncTimer);
-      syncTimer = 0;
-      shadow = null;
-      const wasPlaying = ytState === 1;
+    // The screen locked mid-song: carry on from the cached copy.
+    function lockHandoff() {
+      clearTimeout(osPauseTimer);
+      osPauseTimer = 0;
+      if (mode !== 'yt' || paused || !ytId) return;
+      const id = ytId;
       const at = loaded ? ytTime() : cueStart;
-      clearTimeout(startTimer);
-      stopTick();
-      try { yt && ytReady && yt.pauseVideo(); } catch {}
-      mode = 'html';
-      ytId = null;
-      loaded = false;
-      el.playbackRate = 1;
-      el.volume = volume;
-      el.muted = muted;
-      if (el.readyState >= 3 && !el.paused) {
-        if (at > 0 && Math.abs(el.currentTime - at) > 0.5) { try { el.currentTime = at; } catch {} }
-      } else if (at > 1) {
-        const seek = () => {
-          el.removeEventListener('playing', seek);
-          try { if (Math.abs(el.currentTime - at) > 0.5) el.currentTime = at; } catch {}
-        };
-        el.addEventListener('playing', seek);
-      }
-      if (!metaSent && el.duration > 0) { metaSent = true; emit('loadedmetadata'); }
-      if (el.paused) {
-        el.play().then(() => settle(true)).catch((e) => { dbg(`commit play rejected ${e && e.name}`); settle(false, e); });
-      } else {
-        settle(true);
-        if (!wasPlaying) { emit('play'); emit('playing'); }
-      }
+      dbg(`lockHandoff ${id} at=${at.toFixed(1)}`);
+      toHtml(id, at, true);
     }
 
-    el.addEventListener('error', () => { if (shadow) shadowStop(); });
-    document.addEventListener('visibilitychange', () => {
-      if (document.hidden && shadow && !paused) commitShadow();
-    });
+    if (handoff) {
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden && mode === 'yt' && !paused && ytId) lockHandoff();
+      });
+    }
 
     // --- html fallback ---------------------------------------------------
     function toHtml(id, startAt, autoplay) {
       dbg(`toHtml ${id} at=${(startAt || 0).toFixed(1)} autoplay=${autoplay}`);
-      shadowStop();
+      clearTimeout(osPauseTimer);
       clearTimeout(startTimer);
       stopTick();
       try { yt && ytReady && yt.stopVideo(); } catch {}
@@ -240,7 +213,6 @@
       if (!id || mode !== 'yt' || ytId !== id) return;
       console.debug('[muse] server stream for', id, why);
       if (why.startsWith('error')) rememberBlocked(id);
-      if (shadow && shadow.id === id) return commitShadow();
       const at = (() => { try { return yt.getCurrentTime() || 0; } catch { return 0; } })();
       toHtml(id, at, !paused);
     }
@@ -282,16 +254,30 @@
       const S = window.YT.PlayerState;
       if (ytState === S.PLAYING) {
         clearTimeout(startTimer);
+        clearTimeout(osPauseTimer);
         applyVolume();
         paused = false;
+        if (handoff) warm(ytId);
         startTick();
         if (!metaSent && api.duration > 0) { metaSent = true; emit('loadedmetadata'); }
         emit('play');
         emit('playing');
         settle(true);
       } else if (ytState === S.PAUSED) {
-        // The OS pausing the embed for a locked screen: <audio> carries on.
-        if (shadow && document.hidden && !paused) return commitShadow();
+        // Paused without pause(): the OS locking the screen. visibilitychange
+        // can land a moment after this, so wait before calling it a pause.
+        if (handoff && !paused) {
+          if (document.hidden) return lockHandoff();
+          clearTimeout(osPauseTimer);
+          osPauseTimer = setTimeout(() => {
+            osPauseTimer = 0;
+            if (mode !== 'yt' || paused || ytState !== S.PAUSED) return;
+            stopTick();
+            paused = true;
+            emit('pause');
+          }, 1200);
+          return;
+        }
         stopTick();
         if (!paused) { paused = true; emit('pause'); }
       } else if (ytState === S.ENDED) {
@@ -349,7 +335,7 @@
       get src() { return src; },
       set src(v) {
         src = String(v || '');
-        shadowStop();
+        clearTimeout(osPauseTimer);
         clearTimeout(startTimer);
         settle(false, new DOMException('superseded', 'AbortError'));
         const proxied = src.includes('/api/audio');
@@ -392,7 +378,7 @@
         paused = false;
         return new Promise((resolve, reject) => {
           playWaiters.push({ resolve, reject });
-          if (handoff && want && (!shadow || shadow.id !== want)) shadowStart(want);
+          if (handoff) unlock();
           if (!ytReady) {
             if (pendingLoad) pendingLoad.autoplay = true;
             return;
@@ -406,7 +392,7 @@
       pause() {
         dbg('pause()');
         if (mode === 'html') return el.pause();
-        shadowStop();
+        clearTimeout(osPauseTimer);
         clearTimeout(startTimer);
         try { yt && ytReady && yt.pauseVideo(); } catch {}
         if (!paused) { paused = true; stopTick(); emit('pause'); }
@@ -461,7 +447,6 @@
       get seeking() { return mode === 'html' ? el.seeking : false; },
       get playbackRate() { return mode === 'html' ? el.playbackRate : 1; },
       get engine() { return mode; },
-      get handoffPending() { return !!shadow; },
       videoData() {
         try { return mode === 'yt' && ytReady ? yt.getVideoData() : null; } catch { return null; }
       },

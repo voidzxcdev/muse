@@ -1,7 +1,7 @@
 FROM python:3.13-slim
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ffmpeg ca-certificates curl \
+    && apt-get install -y --no-install-recommends ffmpeg ca-certificates curl git \
     && rm -rf /var/lib/apt/lists/*
 # yt-dlp needs a JavaScript runtime to solve YouTube's player challenges.
 COPY --from=denoland/deno:bin /deno /usr/local/bin/deno-real
@@ -15,6 +15,14 @@ RUN curl -fsSL -o /usr/local/bin/wgcf \
     && chmod +x /usr/local/bin/wgcf \
     && curl -fsSL https://github.com/pufferffish/wireproxy/releases/download/v1.1.3/wireproxy_linux_amd64.tar.gz \
         | tar -xz -C /usr/local/bin wireproxy
+
+# PO token provider: YouTube answers "Video unavailable" to requests without
+# a BotGuard proof-of-origin token. Version must match the pip plugin.
+ARG BGUTIL=2.0.1
+RUN git clone --depth 1 --single-branch --branch ${BGUTIL} \
+        https://github.com/Brainicism/bgutil-ytdlp-pot-provider.git /opt/bgutil \
+    && cd /opt/bgutil/server \
+    && deno-real install --allow-scripts=npm:canvas --frozen
 
 WORKDIR /app
 COPY requirements.txt .
