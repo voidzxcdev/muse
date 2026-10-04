@@ -223,12 +223,11 @@ body.intro #sideBrand { opacity: 0; }
 }
 .ob-go:active { transform: scale(0.97); }
 .ob-go:disabled { opacity: 0.45; }
-.ob-alt, .ob-skip {
+.ob-alt {
   display: block; width: 100%; margin-top: 8px; cursor: pointer;
   background: none; border: none; font: inherit; font-weight: 700;
+  color: var(--ink); font-size: 14px; padding: 12px 0 4px;
 }
-.ob-alt { color: var(--ink); font-size: 14px; padding: 12px 0 4px; }
-.ob-skip { color: var(--faint); font-size: 13px; padding: 6px 0 0; }
 body.onboarding #tabbar, body.onboarding .top, body.onboarding .wrap,
 body.onboarding #side { visibility: hidden; }
 

@@ -2346,7 +2346,6 @@ function bindOnboard() {
   el.dataset.bound = '1';
   $('obGo').addEventListener('click', submitOnboard);
   $('obSwitch').addEventListener('click', () => paintOnboard(onboardMode === 'signup' ? 'signin' : 'signup'));
-  $('obSkip').addEventListener('click', hideOnboard);
   $('obPass').addEventListener('keydown', (e) => { if (e.key === 'Enter') submitOnboard(); });
   $('obUser').addEventListener('keydown', (e) => { if (e.key === 'Enter') submitOnboard(); });
 }
