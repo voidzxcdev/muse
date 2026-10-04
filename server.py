@@ -329,7 +329,8 @@ BASE_YDL = {
     "retries": 2,
     # Audio comes from direct https formats; the HLS/DASH manifests are extra
     # round-trips to googlevideo that sometimes hang for the full timeout.
-    "extractor_args": {"youtube": {"skip": ["hls", "dash"]}},
+    "extractor_args": {"youtube": {"skip": ["hls", "dash"]},
+                       "youtubepot-bgutilscript": {"server_home": ["/opt/bgutil/server"]}},
 }
 # YouTube sometimes demands sign-in from datacenter IPs; a Netscape cookies.txt
 # (Render secret file) gets past it.
