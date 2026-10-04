@@ -1,4 +1,4 @@
-﻿/* Muse service worker вЂ” app shell offline, API always live. */
+/* Muse service worker — app shell offline, API always live. */
 const CACHE = 'muse-v142';
 const CORE = ['/', '/index.html', '/manifest.webmanifest'];
 
