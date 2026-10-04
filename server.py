@@ -681,8 +681,8 @@ def _resolve_audio_locked(video_id):
                   if f.get("url") and f.get("acodec") not in (None, "none")
                   and f.get("vcodec") in (None, "none")]
     if audio_only:
-        # Highest bitrate first; prefer opus/m4a containers browsers play well.
-        audio_only.sort(key=lambda f: (f.get("abr") or 0), reverse=True)
+        # AAC first: iOS Safari can't be relied on for Opus/WebM.
+        audio_only.sort(key=lambda f: (f.get("ext") == "m4a", f.get("abr") or 0), reverse=True)
         fmt = audio_only[0]
         stream, ext, abr = fmt["url"], fmt.get("ext", ""), fmt.get("abr")
     else:

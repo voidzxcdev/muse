@@ -7,7 +7,9 @@ const __nullEl = new Proxy(function () {}, {
 });
 const mobileOS = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
   || (navigator.maxTouchPoints > 1 && /Mac/.test(navigator.platform));
-const audio = window.MusePlayer ? window.MusePlayer($('audio'), { handoff: mobileOS }) : $('audio');
+// Phones stream from the server on a plain <audio>: iOS lets only one media
+// element play at a time and pauses the YouTube embed when the screen locks.
+const audio = window.MusePlayer && !mobileOS ? window.MusePlayer($('audio')) : $('audio');
 const SPRING = 'cubic-bezier(0.22,1,0.36,1)';
 
 let queue = [];      // what's playing (prev/next walks this)
