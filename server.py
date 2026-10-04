@@ -703,6 +703,86 @@ def _resolve_audio_locked(video_id):
     return payload
 
 
+# Whole songs on local disk, so a phone switching to <audio> when its screen
+# locks starts instantly and seeks without another trip to YouTube. Lost on
+# restart, which is fine: it only holds what is playing now or next.
+AUDIO_DIR = os.path.join("/tmp" if os.name != "nt" else os.environ.get("TEMP", "."), "muse-audio")
+AUDIO_DIR_MAX = 400 * 1024 * 1024
+# googlevideo throttles one big request to real-time speed; sub-10 MB ranges aren't.
+AUDIO_CHUNK = 4 * 1024 * 1024
+_audio_jobs = set()
+_audio_jobs_lock = threading.Lock()
+
+
+def _audio_file(video_id):
+    for ext in ("m4a", "webm"):
+        p = os.path.join(AUDIO_DIR, f"{video_id}.{ext}")
+        if os.path.exists(p):
+            return p
+    return None
+
+
+def _prune_audio():
+    try:
+        files = [os.path.join(AUDIO_DIR, n) for n in os.listdir(AUDIO_DIR) if not n.endswith(".part")]
+        files.sort(key=os.path.getmtime)
+        total = sum(os.path.getsize(p) for p in files)
+        while files and total > AUDIO_DIR_MAX:
+            p = files.pop(0)
+            total -= os.path.getsize(p)
+            os.remove(p)
+    except OSError:
+        pass
+
+
+def _download_audio(video_id):
+    tmp = None
+    try:
+        info = best_audio_url(video_id)
+        ext = "webm" if info.get("ext") == "webm" else "m4a"
+        os.makedirs(AUDIO_DIR, exist_ok=True)
+        final = os.path.join(AUDIO_DIR, f"{video_id}.{ext}")
+        tmp = final + ".part"
+        t0, pos, total = time.time(), 0, None
+        with open(tmp, "wb") as f:
+            while total is None or pos < total:
+                req = urllib.request.Request(info["audio_url"], headers={
+                    "User-Agent": "Mozilla/5.0", "Range": f"bytes={pos}-{pos + AUDIO_CHUNK - 1}"})
+                with _yt_open(req, timeout=30) as r:
+                    if total is None:
+                        m = re.search(r"/(\d+)\s*$", r.headers.get("Content-Range") or "")
+                        total = int(m.group(1)) if m else -1
+                    data = r.read()
+                if not data:
+                    break
+                f.write(data)
+                pos += len(data)
+                if total < 0:
+                    break
+        os.replace(tmp, final)
+        tmp = None
+        print(f"cached audio {video_id}: {pos // 1024} KB in {time.time() - t0:.1f}s", flush=True)
+        _prune_audio()
+    except Exception as e:
+        print(f"audio cache {video_id} failed: {str(e)[:150]}", flush=True)
+    finally:
+        if tmp:
+            with contextlib.suppress(OSError):
+                os.remove(tmp)
+        with _audio_jobs_lock:
+            _audio_jobs.discard(video_id)
+
+
+def _warm_audio(video_id):
+    if _audio_file(video_id):
+        return
+    with _audio_jobs_lock:
+        if video_id in _audio_jobs:
+            return
+        _audio_jobs.add(video_id)
+    threading.Thread(target=_download_audio, args=(video_id,), daemon=True).start()
+
+
 _reco_cache = {}     # user_id -> (ts, tracks); mirrored in the reco table
 _reco_stale = set()  # taste changed since the cached mix was built
 _reco_busy = set()   # users with a rebuild in flight
@@ -1125,7 +1205,53 @@ class Handler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _serve_audio_file(self, path):
+        size = os.path.getsize(path)
+        start, end = 0, size - 1
+        m = re.fullmatch(r"bytes=(\d*)-(\d*)", (self.headers.get("Range") or "").strip())
+        if m and (m.group(1) or m.group(2)):
+            if m.group(1):
+                start = int(m.group(1))
+                end = min(int(m.group(2)), size - 1) if m.group(2) else size - 1
+            else:
+                start = max(0, size - int(m.group(2)))
+            if start >= size or start > end:
+                self.send_response(416)
+                self.send_header("Content-Range", f"bytes */{size}")
+                self.end_headers()
+                return
+        try:
+            os.utime(path)
+        except OSError:
+            pass
+        self.send_response(206 if m and (m.group(1) or m.group(2)) else 200)
+        self.send_header("Content-Type", "audio/webm" if path.endswith(".webm") else "audio/mp4")
+        self.send_header("Accept-Ranges", "bytes")
+        self.send_header("Content-Length", str(end - start + 1))
+        if m and (m.group(1) or m.group(2)):
+            self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        if self.command == "HEAD":
+            return
+        try:
+            with open(path, "rb") as f:
+                f.seek(start)
+                left = end - start + 1
+                while left > 0:
+                    chunk = f.read(min(64 * 1024, left))
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
+                    left -= len(chunk)
+        except (BrokenPipeError, ConnectionResetError):
+            pass
+
     def _proxy_audio(self, video_id):
+        cached = _audio_file(video_id)
+        if cached:
+            return self._serve_audio_file(cached)
+        _warm_audio(video_id)
         try:
             stream = best_audio_url(video_id)["audio_url"]
         except Exception as e:
@@ -1203,6 +1329,9 @@ class Handler(SimpleHTTPRequestHandler):
                 v = (qs.get("v") or [""])[0]
                 if not re.fullmatch(r"[\w-]{11}", v or ""):
                     return self._json({"error": "bad video id"}, 400)
+                if "warm" in qs:
+                    _warm_audio(v)
+                    return self._json({"cached": bool(_audio_file(v))}, 202)
                 return self._proxy_audio(v)
             if path == "/api/mp3":
                 v = (qs.get("v") or [""])[0]
