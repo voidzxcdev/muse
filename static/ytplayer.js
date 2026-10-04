@@ -94,12 +94,10 @@
     const stopTick = () => { clearInterval(tick); tick = 0; };
     const startTick = () => {
       if (tick) return;
-      let n = 0;
       tick = setInterval(() => {
         if (mode !== 'yt') return stopTick();
         if (!metaSent && api.duration > 0) { metaSent = true; emit('loadedmetadata'); }
         emit('timeupdate');
-        if (handoff && ++n % 8 === 0) parkPreload();
       }, 250);
     };
 
@@ -107,8 +105,6 @@
     // <audio> must play once inside a tap so iOS lets it start later while
     // the page is hidden; a blip of silence does that without fighting the embed.
     let unlocked = false;
-    let unlockDone = false;
-    let preloaded = '';
     let warmed = '';
     let osPauseTimer = 0;
 
@@ -164,30 +160,8 @@
       el.src = silence();
       el.play().then(() => {
         dbg('unlocked');
-        unlockDone = true;
         if (mode === 'yt') { try { el.pause(); } catch {} }
-        if (ytState === 1) preload(ytId);
       }).catch((e) => { unlocked = false; dbg(`unlock rejected ${e && e.name}`); });
-    }
-
-    // Load (never play: iOS would pause the embed) the song into <audio> so
-    // the lock handoff is just a play() on data that is already there.
-    function preload(id) {
-      if (!unlockDone || !id || preloaded === id || mode !== 'yt') return;
-      preloaded = id;
-      el.muted = true;
-      el.preload = 'auto';
-      el.src = `/api/audio?v=${id}`;
-      el.load();
-    }
-
-    // Keep the paused copy parked where YouTube is, so the bytes around the
-    // handoff point are buffered before the screen ever locks.
-    function parkPreload() {
-      if (!handoff || mode !== 'yt' || !ytId || preloaded !== ytId || document.hidden) return;
-      if (el.readyState < 1 || !el.paused) return;
-      const t = ytTime();
-      if (Math.abs(el.currentTime - t) > 1.5) { try { el.currentTime = t; } catch {} }
     }
 
     function warm(id) {
@@ -225,18 +199,14 @@
       el.volume = volume;
       el.muted = muted;
       el.loop = loop;
-      const want = id ? `/api/audio?v=${id}` : src;
-      if (id && preloaded === id && el.readyState >= 1 && el.src.endsWith(want)) {
-        if (startAt > 0 && Math.abs(el.currentTime - startAt) > 0.3) { try { el.currentTime = startAt; } catch {} }
-        dbg(`toHtml preloaded rs=${el.readyState}`);
-        if (autoplay) {
-          el.play().then(() => settle(true)).catch((e) => { dbg(`toHtml play rejected ${e && e.name}`); settle(false, e); });
-        }
-        return;
-      }
-      el.src = want;
+      // #t= lets Safari fetch the bytes at the resume point first instead of
+      // loading from 0:00 and seeking afterwards.
+      el.src = id ? `/api/audio?v=${id}${startAt > 0 ? `#t=${startAt.toFixed(2)}` : ''}` : src;
       if (startAt > 0) {
-        const seek = () => { el.removeEventListener('loadedmetadata', seek); try { el.currentTime = startAt; } catch {} };
+        const seek = () => {
+          el.removeEventListener('loadedmetadata', seek);
+          try { if (Math.abs(el.currentTime - startAt) > 0.5) el.currentTime = startAt; } catch {}
+        };
         el.addEventListener('loadedmetadata', seek);
       }
       if (autoplay) {
@@ -292,7 +262,7 @@
         clearTimeout(osPauseTimer);
         applyVolume();
         paused = false;
-        if (handoff) { warm(ytId); preload(ytId); }
+        if (handoff) warm(ytId);
         startTick();
         if (!metaSent && api.duration > 0) { metaSent = true; emit('loadedmetadata'); }
         emit('play');
