@@ -200,6 +200,7 @@
         if (autoplay) el.play().catch(() => {});
         return;
       }
+      const gen = ++htmlGen;
       dbg(`toHtml ${id} at=${(startAt || 0).toFixed(1)} autoplay=${autoplay}`);
       clearTimeout(osPauseTimer);
       clearTimeout(startTimer);
@@ -216,6 +217,7 @@
       if (startAt > 0) {
         const seek = () => {
           el.removeEventListener('loadedmetadata', seek);
+          if (gen !== htmlGen) return;
           try { if (Math.abs(el.currentTime - startAt) > 0.5) el.currentTime = startAt; } catch {}
         };
         el.addEventListener('loadedmetadata', seek);
@@ -230,6 +232,7 @@
     // A cold server fetch can outlast Safari's patience: the element stalls
     // and never asks again even once the server has the file. Re-request it.
     let stallTimer = 0;
+    let htmlGen = 0;
     function watchStall(id, startAt) {
       let tries = 0;
       stallTimer = setInterval(() => {

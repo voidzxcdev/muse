@@ -498,6 +498,7 @@ async function playId(id, meta = {}, list = null, source = 'search') {
   try { mediaSession(current); } catch {}
   try { warmNext(); } catch {}
   // INSTANT: fire the stream now — metadata enriches in parallel, not in series.
+  cancelAnimationFrame(fadeRAF);
   (async () => {
     try {
       const locked = document.hidden;
@@ -505,6 +506,8 @@ async function playId(id, meta = {}, list = null, source = 'search') {
       // ends the iOS audio session, and a hidden page isn't allowed to restart it.
       if (audio.src && !audio.paused && !locked) {
         await Promise.race([rampTo(0, 220), new Promise((r) => setTimeout(r, 260))]);
+        // Spam next: older taps must not pause the song that won.
+        if (myToken !== playToken) return;
         try { audio.pause(); } catch {}
       }
       if (myToken !== playToken) return;
@@ -514,11 +517,10 @@ async function playId(id, meta = {}, list = null, source = 'search') {
       userPaused = false;
       try {
         await audio.play();
-        if (myToken === playToken) {
-          if (locked) { try { audio.volume = userVol; } catch {} }
-          else rampTo(userVol, 500);
-          setPlaying(true);
-        }
+        if (myToken !== playToken) return;
+        if (locked) { try { audio.volume = userVol; } catch {} }
+        else rampTo(userVol, 500);
+        setPlaying(true);
       } catch {}
     } catch {}
   })();
@@ -1084,23 +1086,28 @@ function init() {
     recoverLater();
     // Stage 2: wait a breath (throttles pass), re-resolve fresh, resume.
     function recoverLater() {
+      const recoverId = current?.id;
+      const token = playToken;
       setTimeout(async () => {
+        if (token !== playToken || current?.id !== recoverId) return;
         if (errTries > 2) {
           toast('Still broken — this video may be gone. Try another song.');
           return;
         }
         try {
-          const m = await api(`/api/play?v=${current.id}`);
+          const m = await api(`/api/play?v=${recoverId}`);
+          if (token !== playToken || current?.id !== recoverId) return;
           if (!m.audio_url) throw new Error('no url');
           current = { ...current, ...m };
           if (!document.hidden) audio.volume = 0;
           else audio.volume = userVol;
-          audio.src = `/api/audio?v=${current.id}`;
+          audio.src = `/api/audio?v=${recoverId}`;
           await audio.play();
+          if (token !== playToken) return;
           if (document.hidden) audio.volume = userVol;
           else rampTo(userVol, 500);
         } catch {
-          toast('Still broken — this video may be gone. Try another song.');
+          if (token === playToken) toast('Still broken — this video may be gone. Try another song.');
         }
       }, 2500);
     }
