@@ -151,7 +151,7 @@ function showHome() {
   $('grid').hidden = true;
   $('grid').innerHTML = '';
   $('loading').hidden = true;
-  $('empty').hidden = false;
+  $('empty').hidden = true;
   setHome(true);
   loadHomeFy();
 }
@@ -163,51 +163,57 @@ function vibe(ms = 8) {
 function renderHomeTracks(tracks) {
   const box = $('homeFy');
   homeQueue = tracks.map((t) => ({ ...t }));
-  box.innerHTML = `<div class="fyhead"><div data-fyopen style="cursor:pointer"><h2>For You</h2></div></div>
+  box.innerHTML = `<div class="fyhead"><div><h2>Popular</h2><p>Most played on Muse</p></div></div>
       <div class="grid">${tracks.map(recoCardHTML).join('')}</div>`;
   box.hidden = false;
-  box.querySelector('[data-fyopen]').addEventListener('click', () => showView('foryou'));
   markLiked(tracks.map((t) => t.id));
   prewarm(tracks);
 }
 async function loadHomeFy() {
   const box = $('homeFy');
-  if (!box || !me) {
-    if (box) box.hidden = true;
-    return;
-  }
+  if (!box) return;
   const day = Math.floor(Date.now() / 86400000);
-  const key = `${me.id}|${day}`;
+  const key = `popular|${day}`;
   if (homeFyKey === key && box.innerHTML) {
     box.hidden = false;
     return;
   }
   homeFyKey = key;
-  // Instant: paint today's saved mix now, refresh quietly behind it.
   try {
-    const saved = JSON.parse(localStorage.getItem('muse:homefy') || 'null');
-    if (saved && saved.day === day && saved.uid === me.id && saved.tracks?.length) {
+    const saved = JSON.parse(localStorage.getItem('muse:popular') || 'null');
+    if (saved && saved.day === day && saved.tracks?.length) {
       renderHomeTracks(saved.tracks);
     }
   } catch {}
+  if (!box.innerHTML) {
+    box.hidden = true;
+    skel(8);
+  }
   try {
-    const j = await api('/api/recommendations?n=6');
-    if (currentView !== 'home' || !me || homeFyKey !== key) return;
-    if (!j.tracks.length && j.building) {
-      setTimeout(() => {
-        if (currentView === 'home' && homeFyKey === key) { homeFyKey = ''; loadHomeFy(); }
-      }, 6000);
-      return;
+    let tracks = [];
+    try {
+      const j = await api('/api/popular?n=18');
+      tracks = j.tracks || [];
+    } catch {}
+    if (tracks.length < 6) {
+      const j = await api('/api/search?q=popular%20songs&n=15');
+      const seen = new Set(tracks.map((t) => t.id));
+      for (const t of (j.results || [])) {
+        if (!seen.has(t.id)) { tracks.push(t); seen.add(t.id); }
+        if (tracks.length >= 18) break;
+      }
     }
-    if (!j.tracks.length) {
+    $('loading').hidden = true;
+    if (currentView !== 'home' || homeFyKey !== key) return;
+    if (!tracks.length) {
       if (!box.innerHTML) box.hidden = true;
       return;
     }
-    renderHomeTracks(j.tracks);
-    try {
-      localStorage.setItem('muse:homefy', JSON.stringify({ day, uid: me.id, tracks: j.tracks }));
-    } catch {}
+    renderHomeTracks(tracks);
+    try { localStorage.setItem('muse:popular', JSON.stringify({ day, tracks })); } catch {}
+    paintOnboardArts(tracks);
   } catch {
+    $('loading').hidden = true;
     if (!box.innerHTML) box.hidden = true;
   }
 }
@@ -817,7 +823,7 @@ function hardCutIntro() {
   introDone = true;
   $('intro')?.remove();
   document.body.classList.remove('intro');
-  if (isPhone()) return; // mobile: no keyboard pop-up, no flight
+  if (isPhone()) { maybeOnboard(); return; }
   try { $('q').focus({ preventScroll: true }); } catch { try { $('q').focus(); } catch {} }
 }
 
@@ -833,6 +839,7 @@ async function endIntro() {
     setTimeout(() => {
       try { intro.remove(); } catch {}
       document.body.classList.remove('intro');
+      maybeOnboard();
     }, 750);
     return;
   }
@@ -1434,7 +1441,7 @@ async function renderForYou(v) {
       }
       if (!j.tracks.length) {
         if (!v.querySelector('.vempty')) v.insertAdjacentHTML('beforeend',
-          '<div class="vempty">Like a few songs or answer the taste survey — then this page reads your mind.</div>');
+          '<div class="vempty">Like a few songs. This page learns what you play.</div>');
         return;
       }
       v.querySelector('.vempty')?.remove();
@@ -2156,7 +2163,7 @@ function openAuth(tab = 'signin') {
       <button data-atab="signup" class="${tab === 'signup' ? 'on' : ''}">Create account</button>
     </div>
     <h2 id="authTitle">${tab === 'signin' ? 'Welcome back' : 'Join Muse'}</h2>
-    <p class="msub">Playlists, likes and a For You page that learns your ears.</p>
+    <p class="msub">Likes, playlists, and the songs you come back to.</p>
     <label class="fl">Username</label>
     <input type="text" id="aUser" maxlength="24" autocomplete="username" />
     <label class="fl">Password</label>
@@ -2181,7 +2188,7 @@ function openAuth(tab = 'signin') {
       await refreshMe();
       await refreshCounts();
       toast(`Welcome, ${me.display}`, true);
-      maybeSurvey();
+      hideOnboard();
       if (currentView === 'home') loadHomeFy();
       if (['foryou', 'liked', 'playlist'].includes(currentView)) showView(currentView, viewArg);
     } catch (e) { err.textContent = e.message; }
@@ -2193,48 +2200,102 @@ function openAuth(tab = 'signin') {
   setTimeout(() => $('aUser').focus(), 60);
 }
 
-const GENRES = ['Phonk', 'Slowed', 'Lo-fi', 'Hip-hop', 'Pop', 'Rock', 'EDM', 'Jazz', 'R&B', 'Metal', 'Indie', 'Latin', 'K-pop', 'Classical', 'Ambient', 'Soul'];
-const MOODS = ['Workout', 'Chill', 'Focus', 'Party', 'Night drive', 'Rainy day'];
-
-function openSurvey() {
-  openModal(`
-    <h2>What moves you?</h2>
-    <p class="msub">Pick what you love — Muse builds your first For You mix instantly. Skip anytime.</p>
-    <label class="fl">Genres</label>
-    <div class="pickchips" id="svG">${GENRES.map((g) => `<button data-v="${g}">${g}</button>`).join('')}</div>
-    <label class="fl">Moments</label>
-    <div class="pickchips" id="svM">${MOODS.map((g) => `<button data-v="${g}">${g}</button>`).join('')}</div>
-    <label class="fl">Artists (comma separated)</label>
-    <input type="text" id="svA" placeholder="e.g. DJ Javi26, Lofi Girl" />
-    <div class="mrow">
-      <button class="mbtn ghost" id="svSkip">Skip</button>
-      <button class="mbtn primary" id="svSave">Tune my mix</button>
-    </div>`);
-  document.querySelectorAll('.pickchips button').forEach((b) =>
-    b.addEventListener('click', () => b.classList.toggle('on')));
-  $('svSkip').addEventListener('click', () => {
-    try { sessionStorage.museSurveySkip = '1'; } catch {}
-    closeModal();
-  });
-  $('svSave').addEventListener('click', async () => {
-    const pick = (id) => [...document.querySelectorAll(`#${id} button.on`)].map((b) => b.dataset.v);
-    const artists = $('svA').value.split(',').map((s) => s.trim()).filter(Boolean);
-    try {
-      await post('/api/survey', { genres: pick('svG'), moods: pick('svM'), artists });
-      closeModal();
-      toast('Taste saved — For You is tuned', true);
-      if (currentView === 'foryou') showView('foryou');
-    } catch (e) { toast('Survey failed: ' + e.message); }
-  });
+function onboarded() {
+  try { return localStorage.getItem('muse:onboarded') === '1'; } catch { return false; }
+}
+function markOnboarded() {
+  try { localStorage.setItem('muse:onboarded', '1'); } catch {}
 }
 
-async function maybeSurvey() {
-  if (!me) return;
-  try { if (sessionStorage.museSurveySkip) return; } catch {}
+let onboardMode = 'signup';
+function paintOnboard(mode) {
+  onboardMode = mode;
+  const signup = mode === 'signup';
+  $('obTitle').textContent = signup ? 'Your music starts here' : 'Welcome back';
+  $('obSub').textContent = signup
+    ? 'Create an account to save likes and playlists. Then press play.'
+    : 'Sign in to pick up your likes and playlists.';
+  $('obGo').textContent = signup ? 'Create account' : 'Sign in';
+  $('obSwitch').textContent = signup ? 'I already have one' : 'Create an account';
+  $('obPass').autocomplete = signup ? 'new-password' : 'current-password';
+  $('obErr').textContent = '';
+}
+
+function paintOnboardArts(tracks) {
+  const box = $('obArts');
+  if (!box || box.dataset.ready === '1') return;
+  const list = (tracks || []).filter((t) => t && t.thumbnail).slice(0, 5);
+  if (list.length < 3) return;
+  box.innerHTML = list.map((t, i) =>
+    `<img src="${t.thumbnail}" alt="" style="--i:${i}"
+      onerror="this.onerror=null;this.src='https://i.ytimg.com/vi/${t.id}/hqdefault.jpg'" />`).join('');
+  box.dataset.ready = '1';
+}
+
+function showOnboard() {
+  const el = $('onboard');
+  if (!el) return;
+  if (el.hidden) paintOnboard('signup');
+  el.hidden = false;
+  document.body.classList.add('onboarding');
   try {
-    const s = await api('/api/survey');
-    if (!s.survey) openSurvey();
-  } catch { /* offline-ish */ }
+    const saved = JSON.parse(localStorage.getItem('muse:popular') || 'null');
+    if (saved?.tracks) paintOnboardArts(saved.tracks);
+  } catch {}
+  setTimeout(() => { try { $('obUser').focus(); } catch {} }, 420);
+}
+
+function hideOnboard() {
+  const el = $('onboard');
+  markOnboarded();
+  if (!el || el.hidden) return;
+  el.classList.add('out');
+  setTimeout(() => {
+    el.hidden = true;
+    el.classList.remove('out');
+    document.body.classList.remove('onboarding');
+  }, 420);
+}
+
+async function submitOnboard() {
+  if (submitOnboard.busy) return;
+  const err = $('obErr');
+  const go = $('obGo');
+  err.textContent = '';
+  submitOnboard.busy = true;
+  go.disabled = true;
+  try {
+    const j = await post(onboardMode === 'signin' ? '/api/login' : '/api/signup',
+      { username: $('obUser').value.trim(), password: $('obPass').value });
+    me = j.user;
+    applyTheme();
+    hideOnboard();
+    await refreshMe();
+    await refreshCounts();
+    toast(`Welcome, ${me.display}`, true);
+    if (currentView === 'home') loadHomeFy();
+  } catch (e) { err.textContent = e.message; }
+  finally {
+    submitOnboard.busy = false;
+    go.disabled = false;
+  }
+}
+
+function bindOnboard() {
+  const el = $('onboard');
+  if (!el || el.dataset.bound) return;
+  el.dataset.bound = '1';
+  $('obGo').addEventListener('click', submitOnboard);
+  $('obSwitch').addEventListener('click', () => paintOnboard(onboardMode === 'signup' ? 'signin' : 'signup'));
+  $('obSkip').addEventListener('click', hideOnboard);
+  $('obPass').addEventListener('keydown', (e) => { if (e.key === 'Enter') submitOnboard(); });
+  $('obUser').addEventListener('keydown', (e) => { if (e.key === 'Enter') submitOnboard(); });
+}
+
+function maybeOnboard() {
+  if (me || !isPhone() || onboarded()) return;
+  bindOnboard();
+  showOnboard();
 }
 
 function openPlModal(pending = null) {
@@ -2894,8 +2955,14 @@ function bootAccountUI() {
       paintLikedSet();
       if (!me && ['foryou', 'liked', 'playlist'].includes(currentView)) showView('home');
     }
-    maybeSurvey();
+    if (me) {
+      const ob = $('onboard');
+      if (ob && !ob.hidden) hideOnboard();
+    } else {
+      maybeOnboard();
+    }
   });
+  if (isPhone() && !bootMe && !onboarded()) maybeOnboard();
   // Measured header offset: the docked list header (.vhead) pins exactly
   // under the sticky search bar, whatever its height actually is.
   const fitTop = () => {

@@ -16,7 +16,7 @@
   <link rel="dns-prefetch" href="https://www.youtube.com" />
   <link rel="dns-prefetch" href="https://music.youtube.com" />
   <link href="https://api.fontshare.com/v2/css?f[]=clash-display@500,600,700&f[]=satoshi@400,500,700,900&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />
-  <link rel="stylesheet" href="style.css?v=156" />
+  <link rel="stylesheet" href="style.css?v=157" />
   <link rel="icon" href="/favicon.ico" sizes="32x32" />
 </head>
 <body class="home intro">
@@ -128,6 +128,28 @@
     <div id="bpStage"></div>
   </div>
 
+  <div id="onboard" hidden>
+    <div class="ob-glow" aria-hidden="true"></div>
+    <div class="ob-hero" aria-hidden="true">
+      <div class="ob-arts" id="obArts"></div>
+    </div>
+    <div class="ob-card">
+      <div class="ob-brand">
+        <img class="ob-logo" src="/muselogo.png?v=131" alt="" />
+        <span>Muse</span>
+      </div>
+      <h1 id="obTitle">Your music starts here</h1>
+      <p id="obSub">Create an account to save likes and playlists. Then press play.</p>
+      <label class="fl" for="obUser">Username</label>
+      <input type="text" id="obUser" maxlength="24" autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="next" />
+      <label class="fl" for="obPass">Password</label>
+      <input type="password" id="obPass" autocomplete="new-password" enterkeyhint="go" />
+      <div class="merr" id="obErr"></div>
+      <button class="ob-go" id="obGo">Create account</button>
+      <button class="ob-alt" id="obSwitch" type="button">I already have one</button>
+      <button class="ob-skip" id="obSkip" type="button">Skip for now</button>
+    </div>
+  </div>
   <div id="toast" class="toast" hidden></div>
   <script>
   /* Failsafe: runs with zero dependencies. If the main script ever dies,
@@ -151,7 +173,7 @@
     document.body.classList.remove('intro');
   }, 3200);
   </script>
-  <script src="ytplayer.js?v=156"></script>
-<script src="app.js?v=156"></script>
+  <script src="ytplayer.js?v=157"></script>
+<script src="app.js?v=157"></script>
 </body>
 </html>

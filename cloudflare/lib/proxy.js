@@ -5,7 +5,7 @@ const DEFAULT_ORIGIN = "https://muse-xbrh.onrender.com";
 const SEARCH_TTL = 600; // matches the backend's own search cache
 const SESSION_TTL = 30 * 86400;
 
-const LIBRARY = /^\/(covers\/|api\/(me|signup|login|logout|playlists|playlist-items|likes|liked_ids|like|survey|event)(\/|$))/;
+const LIBRARY = /^\/(covers\/|api\/(me|signup|login|logout|playlists|playlist-items|likes|liked_ids|like|survey|event|popular)(\/|$))/;
 
 function sessionCookie(req) {
   const m = /(?:^|;\s*)muse_session=([^;]+)/.exec(req.headers.get("cookie") || "");

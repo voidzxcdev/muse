@@ -166,6 +166,26 @@ async function handle(req: Request): Promise<Response> {
       return json({ liked: rows.map((r) => r.video_id) });
     }
 
+    if (path === "/api/popular") {
+      let n = 18;
+      try { n = Math.max(6, Math.min(24, parseInt(url.searchParams.get("n") || "18", 10) || 18)); } catch { n = 18; }
+      const rows = await sql`
+        SELECT video_id, MAX(title) AS title, MAX(thumb) AS thumb, MAX(duration) AS duration, COUNT(*)::int AS c
+        FROM muse.plays
+        WHERE COALESCE(title, '') <> ''
+        GROUP BY video_id
+        ORDER BY c DESC, MAX(played_at) DESC
+        LIMIT ${n}`;
+      return json({
+        tracks: rows.map((r) => ({
+          id: r.video_id,
+          title: r.title || r.video_id,
+          thumbnail: r.thumb || `https://i.ytimg.com/vi/${r.video_id}/hqdefault.jpg`,
+          duration: r.duration,
+        })),
+      });
+    }
+
     if (path === "/api/survey") {
       const u = await needUser();
       if (!u) return unauth();
