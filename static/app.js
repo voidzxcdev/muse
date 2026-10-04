@@ -419,23 +419,33 @@ async function playId(id, meta = {}, list = null, source = 'search') {
   $('ptitle').textContent = item.title || 'Loading…';
   swapArt(item.thumbnail, firstShow);
   $('bLike').classList.toggle('loved', likedSet.has(id));
-  setPlaying(false);
+  // Locked: keep Media Session as "playing". Telling iOS we paused makes it
+  // stop the audio session, and a hidden page can't start a new one.
+  setPlaying(document.hidden);
+  try { mediaSession(current); } catch {}
+  try { warmNext(); } catch {}
   // INSTANT: fire the stream now — metadata enriches in parallel, not in series.
   (async () => {
     try {
-      // Locked screen: swap straight to the next song. Pausing first ends the
-      // iOS audio session, and a hidden page isn't allowed to start a new one.
-      if (audio.src && !audio.paused && !document.hidden) {
+      const locked = document.hidden;
+      // Locked screen: swap straight to the next song. Pausing or fading first
+      // ends the iOS audio session, and a hidden page isn't allowed to restart it.
+      if (audio.src && !audio.paused && !locked) {
         await Promise.race([rampTo(0, 220), new Promise((r) => setTimeout(r, 260))]);
         try { audio.pause(); } catch {}
       }
       if (myToken !== playToken) return;
-      audio.volume = 0;
+      if (locked) audio.volume = userVol;
+      else audio.volume = 0;
       audio.src = `/api/audio?v=${id}`;
       userPaused = false;
       try {
         await audio.play();
-        if (myToken === playToken) rampTo(userVol, 500);
+        if (myToken === playToken) {
+          if (locked) { try { audio.volume = userVol; } catch {} }
+          else rampTo(userVol, 500);
+          setPlaying(true);
+        }
       } catch {}
     } catch {}
   })();
@@ -493,7 +503,10 @@ function mediaActions() {
           pushPositionState();
         } else step(-1)();
       });
-      navigator.mediaSession.setActionHandler('nexttrack', step(1));
+      navigator.mediaSession.setActionHandler('nexttrack', () => {
+        try { navigator.mediaSession.playbackState = 'playing'; } catch {}
+        step(1)();
+      });
       // iOS shows ±10s buttons instead of previous/next unless these are cleared.
       for (const a of ['seekbackward', 'seekforward']) {
         try { navigator.mediaSession.setActionHandler(a, null); } catch {}
