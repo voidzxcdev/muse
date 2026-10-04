@@ -669,13 +669,14 @@ function playIdAndConfirm(t) {
 }
 
 /* thin-line progress */
-function paintProgress() {
-  const r = audio.duration ? audio.currentTime / audio.duration : 0;
+function paintProgress(ratio) {
+  const d = audio.duration;
+  const r = ratio ?? (d ? audio.currentTime / d : 0);
   const pct = (Math.min(1, Math.max(0, r)) * 100).toFixed(2) + '%';
   $('pfill').style.width = pct;
   $('pknob').style.left = pct;
-  $('pos').textContent = fmt(audio.currentTime);
-  $('dur').textContent = fmt(audio.duration);
+  $('pos').textContent = fmt(ratio == null ? audio.currentTime : r * d);
+  $('dur').textContent = fmt(d);
 }
 
 function seekRatio(ratio) {
@@ -999,22 +1000,40 @@ function init() {
     const r = pline.getBoundingClientRect();
     return Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
   };
+  // Each seek is a fresh ranged request to the backend, so dragging only
+  // moves the bar; the one real seek happens on release.
+  let scrubRatio = null;
+  let scrubFrame = 0;
+  const scrubTo = (e) => {
+    scrubRatio = ratioAt(e);
+    if (!scrubFrame) {
+      scrubFrame = requestAnimationFrame(() => {
+        scrubFrame = 0;
+        if (dragging) paintProgress(scrubRatio);
+      });
+    }
+  };
   pline.addEventListener('pointerdown', (e) => {
+    if (!audio.duration) return;
     dragging = true;
     pline.classList.add('drag');
     try { pline.setPointerCapture(e.pointerId); } catch {}
-    audio.muted = true; // silence the scrub — no more cursed sounds
-    seekRatio(ratioAt(e));
+    scrubTo(e);
   });
-  pline.addEventListener('pointermove', (e) => { if (dragging) seekRatio(ratioAt(e)); });
-  const endScrub = () => {
+  pline.addEventListener('pointermove', (e) => { if (dragging) scrubTo(e); });
+  const endScrub = (e, commit) => {
     if (!dragging) return;
     dragging = false;
     pline.classList.remove('drag');
-    audio.muted = false;
+    if (commit && e.clientX != null) scrubRatio = ratioAt(e);
+    if (commit && scrubRatio != null) {
+      seekRatio(scrubRatio);
+      if (!userPaused && audio.paused) audio.play().catch(() => {});
+    } else paintProgress();
+    scrubRatio = null;
   };
-  pline.addEventListener('pointerup', endScrub);
-  pline.addEventListener('pointercancel', endScrub);
+  pline.addEventListener('pointerup', (e) => endScrub(e, true));
+  pline.addEventListener('pointercancel', (e) => endScrub(e, false));
   const setVolFill = (el) => el.style.setProperty('--v', `${el.value}%`);
   try {
     const sv = parseFloat(localStorage.getItem('muse:vol'));
