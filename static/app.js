@@ -26,6 +26,7 @@ let lastLoopAt = 0;
 let searchTimer = null;
 let searchToken = 0;
 let errTries = 0; // stream-error recovery stage, reset on every clean play
+let hiddenSkips = 0; // unplayable songs skipped in a row while locked
 
 const fmt = (s) => {
   if (s == null || isNaN(s) || !isFinite(s)) return s ? String(s) : '';
@@ -909,6 +910,7 @@ function init() {
   });
 
   audio.addEventListener('play', () => setPlaying(true));
+  audio.addEventListener('timeupdate', () => { if (audio.currentTime > 1) hiddenSkips = 0; });
   audio.addEventListener('pause', () => setPlaying(false));
   audio.addEventListener('ended', async () => {
     // The position watchdog below may already have advanced for this track.
@@ -920,6 +922,14 @@ function init() {
     // Mix tape rule: a track that never produced a single frame is dead —
     // skip it, don't mourn it with recovery ladders.
     if (queueSource === 'mix' && audio.readyState === 0 && qi < queue.length - 1) {
+      step(1)();
+      return;
+    }
+    // Locked phone and the server can't fetch this song: keep the music going
+    // with the next one rather than retrying something that won't load.
+    if (document.hidden && audio.readyState === 0 && hiddenSkips < 3
+        && (shuffle || qi < queue.length - 1)) {
+      hiddenSkips++;
       step(1)();
       return;
     }

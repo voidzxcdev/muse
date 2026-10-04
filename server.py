@@ -619,10 +619,20 @@ def _stream_works(stream):
         return False
 
 
+_resolve_fail = {}   # video_id -> (ts, message)
+RESOLVE_FAIL_TTL = 600
+
+
 def best_audio_url(video_id):
     hit = _cached_audio(video_id)
     if hit:
         return hit
+    # A video YouTube refuses us (region claim, removed) stays refused for a
+    # while; re-running yt-dlp on every client retry got the IP rate-limited
+    # and pushed the instance out of memory.
+    fail = _resolve_fail.get(video_id)
+    if fail and time.time() - fail[0] < RESOLVE_FAIL_TTL:
+        raise RuntimeError(fail[1])
     with _inflight_lock:
         ev = _inflight.get(video_id)
         owner = ev is None
@@ -633,8 +643,14 @@ def best_audio_url(video_id):
         hit = _cached_audio(video_id)
         if hit:
             return hit
+        fail = _resolve_fail.get(video_id)
+        if fail and time.time() - fail[0] < RESOLVE_FAIL_TTL:
+            raise RuntimeError(fail[1])
     try:
         return _resolve_audio(video_id)
+    except Exception as e:
+        _cache_put(_resolve_fail, video_id, (time.time(), str(e)[:200]))
+        raise
     finally:
         if owner:
             with _inflight_lock:

@@ -52,12 +52,5 @@ EOF
   fi
 fi
 
-if [ -d /opt/bgutil/server ]; then
-  (cd /opt/bgutil/server/node_modules && exec deno-real run --v8-flags=--max-old-space-size=128 \
-    --allow-env --allow-net --allow-ffi=. --allow-read=. ../src/main.ts \
-    >/tmp/bgutil.log 2>&1) &
-  echo "PO token provider starting on 127.0.0.1:4416"
-fi
-
 cd /app
 exec python server.py
