@@ -213,6 +213,30 @@
       if (autoplay) {
         el.play().then(() => settle(true)).catch((e) => { dbg(`toHtml play rejected ${e && e.name}`); settle(false, e); });
       }
+      clearInterval(stallTimer);
+      if (id && autoplay) watchStall(id, startAt);
+    }
+
+    // A cold server fetch can outlast Safari's patience: the element stalls
+    // and never asks again even once the server has the file. Re-request it.
+    let stallTimer = 0;
+    function watchStall(id, startAt) {
+      let tries = 0;
+      stallTimer = setInterval(() => {
+        if (mode !== 'html' || !String(el.src).includes(`v=${id}`) || paused || el.readyState >= 3) {
+          clearInterval(stallTimer);
+          return;
+        }
+        if (++tries > 4) {
+          clearInterval(stallTimer);
+          dbg(`stall gave up ${id}`);
+          emit('error');
+          return;
+        }
+        dbg(`stall retry ${id} #${tries}`);
+        el.src = `/api/audio?v=${id}&r=${tries}${startAt > 0 ? `#t=${startAt.toFixed(2)}` : ''}`;
+        el.play().catch(() => {});
+      }, 7000);
     }
 
     function fallback(id, why) {

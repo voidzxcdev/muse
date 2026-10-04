@@ -946,6 +946,8 @@ function init() {
   audio.addEventListener('play', () => setPlaying(true));
   audio.addEventListener('timeupdate', () => { if (audio.currentTime > 1) hiddenSkips = 0; });
   audio.addEventListener('playing', mediaActions);
+  // Warm the next song early: a lock-screen "next" tap can't wait for a cold fetch.
+  audio.addEventListener('playing', () => setTimeout(warmNext, 3000));
   mediaActions();
   audio.addEventListener('pause', () => setPlaying(false));
   audio.addEventListener('ended', async () => {
@@ -963,7 +965,7 @@ function init() {
     }
     // Locked phone and the server can't fetch this song: keep the music going
     // with the next one rather than retrying something that won't load.
-    if (document.hidden && audio.readyState === 0 && hiddenSkips < 3
+    if (document.hidden && audio.readyState < 2 && hiddenSkips < 3
         && (shuffle || qi < queue.length - 1)) {
       hiddenSkips++;
       step(1)();
