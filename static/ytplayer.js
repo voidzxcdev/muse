@@ -4,6 +4,7 @@
  * server hop, no datacenter-IP blocking). Videos that refuse embedding fall
  * back to the server stream on the real <audio> element. */
 (function () {
+  const BUILD = ((document.currentScript && document.currentScript.src) || '').match(/v=(\d+)/)?.[1] || '?';
   const YT_ERR_FALLBACK = new Set([2, 5, 100, 101, 150]);
   const START_TIMEOUT = 6000;
   const BLOCKED_KEY = 'muse-noembed';
@@ -112,7 +113,7 @@
     const dbgT0 = Date.now();
     const dbg = (msg) => {
       if (!handoff) return;
-      dbgBuf.push(`${((Date.now() - dbgT0) / 1000).toFixed(1)}s ${msg} | mode=${mode} hidden=${document.hidden}`
+      dbgBuf.push(`v${BUILD} ${((Date.now() - dbgT0) / 1000).toFixed(1)}s ${msg} | mode=${mode} hidden=${document.hidden}`
         + ` el:${el.paused ? 'paused' : 'playing'} muted=${el.muted} t=${(el.currentTime || 0).toFixed(1)}`
         + ` rs=${el.readyState} yt=${ytState} unlocked=${unlocked}`);
     };

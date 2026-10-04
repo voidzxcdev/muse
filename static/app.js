@@ -475,6 +475,13 @@ function mediaSession(m) {
       ] : []
     });
     try { navigator.mediaSession.playbackState = 'playing'; } catch {}
+    mediaActions();
+  } catch { /* older browsers */ }
+}
+
+function mediaActions() {
+  try {
+    if (!('mediaSession' in navigator)) return;
     try {
       navigator.mediaSession.setActionHandler('play', () => doPlay());
       navigator.mediaSession.setActionHandler('pause', () => doPause());
@@ -493,10 +500,13 @@ function mediaSession(m) {
       }
       try {
         navigator.mediaSession.setActionHandler('seekto', (d) => {
-          if (!d || !isFinite(d.seekTime) || !audio.duration) return;
+          const dur = trackDuration();
+          if (!d || !isFinite(d.seekTime) || !dur) return;
           // Dragging to the very end shouldn't count as finishing the song.
-          const t = Math.max(0, Math.min(d.seekTime, audio.duration - 1));
+          const t = Math.max(0, Math.min(d.seekTime, dur - 2));
+          const wasPlaying = !audio.paused;
           try { audio.currentTime = t; } catch {}
+          if (wasPlaying) audio.play().catch(() => {});
           lastPosState = 0;
           pushPositionState();
         });
@@ -505,19 +515,27 @@ function mediaSession(m) {
   } catch { /* older browsers */ }
 }
 
+/* iOS overestimates the length of streamed m4a files, so prefer YouTube's figure. */
+function trackDuration() {
+  const el = isFinite(audio.duration) && audio.duration > 0 ? audio.duration : 0;
+  const yt = current && current.duration > 0 ? current.duration : 0;
+  return el && yt ? Math.min(el, yt) : el || yt;
+}
+
 /* Keep the lockscreen progress alive — iOS kills sessions with stale position. */
 let lastPosState = 0;
 function pushPositionState() {
   try {
     if (!('mediaSession' in navigator) || !navigator.mediaSession.setPositionState) return;
-    if (!audio.duration || !isFinite(audio.duration)) return;
+    const dur = trackDuration();
+    if (!dur) return;
     const now = Date.now();
     if (now - lastPosState < 4000 && !audio.paused) return;
     lastPosState = now;
     navigator.mediaSession.setPositionState({
-      duration: audio.duration,
+      duration: dur,
       playbackRate: audio.playbackRate || 1,
-      position: Math.min(audio.currentTime || 0, audio.duration)
+      position: Math.min(audio.currentTime || 0, dur)
     });
   } catch {}
 }
@@ -911,6 +929,8 @@ function init() {
 
   audio.addEventListener('play', () => setPlaying(true));
   audio.addEventListener('timeupdate', () => { if (audio.currentTime > 1) hiddenSkips = 0; });
+  audio.addEventListener('playing', mediaActions);
+  mediaActions();
   audio.addEventListener('pause', () => setPlaying(false));
   audio.addEventListener('ended', async () => {
     // The position watchdog below may already have advanced for this track.
@@ -984,8 +1004,8 @@ function init() {
     // Background watchdog: if the track ended but `ended` was swallowed
     // (iOS suspending the page), advance from here instead of stalling.
     try {
-      if (!audio.paused && audio.duration && isFinite(audio.duration)
-          && audio.duration - (audio.currentTime || 0) < 0.35
+      const dur = trackDuration();
+      if (!audio.paused && dur && dur - (audio.currentTime || 0) < 0.35
           && audio.currentTime > 1 && repeat !== 'one') {
         if (!timeAdvAt || Date.now() - timeAdvAt > 5000) {
           timeAdvAt = Date.now();

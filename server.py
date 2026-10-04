@@ -12,6 +12,7 @@ import re
 import secrets
 import shutil
 import sqlite3
+import subprocess
 import threading
 import time
 import urllib.parse
@@ -776,6 +777,19 @@ def _download_audio(video_id):
                 pos += len(data)
                 if total < 0:
                     break
+        if ext == "m4a":
+            # YouTube's m4a is fragmented with no total duration up front; iOS
+            # guesses one ~5% long and seeking into the excess plays silence.
+            flat = final + ".flat"
+            try:
+                subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", tmp, "-c", "copy",
+                                "-movflags", "+faststart", "-f", "mp4", flat],
+                               check=True, timeout=60, stdin=subprocess.DEVNULL)
+                os.replace(flat, tmp)
+            except Exception as e:
+                print(f"remux {video_id} failed: {str(e)[:120]}", flush=True)
+                with contextlib.suppress(OSError):
+                    os.remove(flat)
         os.replace(tmp, final)
         tmp = None
         print(f"cached audio {video_id}: {pos // 1024} KB in {time.time() - t0:.1f}s", flush=True)
