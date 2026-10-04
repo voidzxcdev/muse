@@ -546,10 +546,9 @@ function pushPositionState() {
 let warmedNextId = null;
 function warmNext() {
   try {
-    if (shuffle) return;
-    if (qi >= queue.length - 1) { extendQueue(); return; }
+    if (!shuffle && qi >= queue.length - 1) { extendQueue(); return; }
     if (audio.engine === 'yt' && !mobileOS) return;
-    const nxt = queue[qi + 1];
+    const nxt = queue[shuffle ? shuffleNext() : qi + 1];
     if (!nxt || !nxt.id || nxt.id === warmedNextId) return;
     warmedNextId = nxt.id;
     fetch(audio.engine === 'yt' ? `/api/audio?v=${nxt.id}&warm=1` : `/api/play?v=${nxt.id}`).catch(() => {});
@@ -655,12 +654,30 @@ function step(d) {
     if (!queue.length) return;
     let n;
     if (shuffle && queue.length > 1) {
-      do { n = Math.floor(Math.random() * queue.length); } while (n === qi);
+      n = d > 0 ? shuffleNext() : randomOther();
     } else {
       n = qi < 0 ? (d > 0 ? 0 : queue.length - 1) : (qi + d + queue.length) % queue.length;
     }
     playId(queue[n].id, queue[n]);
   };
+}
+
+function randomOther() {
+  let n;
+  do { n = Math.floor(Math.random() * queue.length); } while (n === qi);
+  return n;
+}
+
+/* The shuffled "next" is chosen once per track so it can be warmed before
+ * the current song ends; a locked phone can't wait for a cold fetch. */
+let shufflePick = null; // {qi, n, id}
+function shuffleNext() {
+  const p = shufflePick;
+  if (p && p.qi === qi && queue[p.n] && queue[p.n].id === p.id) return p.n;
+  if (queue.length < 2) return 0;
+  const n = randomOther();
+  shufflePick = { qi, n, id: queue[n].id };
+  return n;
 }
 
 let playFail = null; // {id, at} — last playId rejection, so auto-advance skips corpses fast
@@ -680,10 +697,7 @@ async function advanceFromPlayback(from) {
       if (hidden) {
         // Fast path: next queued track NOW, no 10s confirm wait.
         try {
-          let n = qi + 1;
-          if (shuffle && queue.length > 1) {
-            do { n = Math.floor(Math.random() * queue.length); } while (n === qi);
-          }
+          const n = shuffle && queue.length > 1 ? shuffleNext() : qi + 1;
           const t = queue[n];
           if (t) { playId(t.id, t, queue, queueSource); return; }
         } catch {}
@@ -711,6 +725,8 @@ async function stepAuto() {
       const j = Math.floor(Math.random() * (i + 1));
       [order[i], order[j]] = [order[j], order[i]];
     }
+    const pick = shuffleNext();
+    order = [pick, ...order.filter((i) => i !== pick)];
   } else {
     order = [];
     for (let k = 1; k <= 3 && qi + k < queue.length; k++) order.push(qi + k);
@@ -991,9 +1007,8 @@ function init() {
     try { pushPositionState(); } catch {}
     // Pre-resolve the next stream while this one still plays (gapless handoff).
     try {
-      if (audio.duration && isFinite(audio.duration) && !shuffle) {
-        if (audio.duration - (audio.currentTime || 0) < 45) warmNext();
-      }
+      const dur = trackDuration();
+      if (dur && dur - (audio.currentTime || 0) < 45) warmNext();
     } catch {}
     // Watchdog: if `ended` never fires (weird durations), loop by position.
     if (repeat === 'one' && audio.duration && !audio.paused && !audio.seeking
