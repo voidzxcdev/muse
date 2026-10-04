@@ -10,7 +10,8 @@ const mobileOS = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
 const audio = window.MusePlayer ? window.MusePlayer($('audio'), { handoff: mobileOS }) : $('audio');
 const SPRING = 'cubic-bezier(0.22,1,0.36,1)';
 
-let queue = [];      // last search results (prev/next walks this)
+let queue = [];      // what's playing (prev/next walks this)
+let results = [];    // search grid — browsing must never touch the queue
 let qi = -1;
 let queueSource = 'search'; // search | home | foryou | playlist | liked | radio | mix
 let queuePid = null; // playlist id the queue came from (playlist source only)
@@ -226,18 +227,17 @@ async function doSearch(q) {
     const j = await api(`/api/search?q=${encodeURIComponent(q)}&n=12`);
     if (token !== searchToken) return; // stale keystroke — a newer search is flying
     $('loading').hidden = true;
-    queue = j.results || [];
-    qi = -1;
-    if (!queue.length) {
+    results = j.results || [];
+    if (!results.length) {
       $('empty').hidden = false;
       toast('No songs found — try different words');
       return;
     }
-    $('grid').innerHTML = queue.map(cardHTML).join('');
+    $('grid').innerHTML = results.map(cardHTML).join('');
     $('grid').hidden = false;
-    prewarm(queue);
-    markLiked(queue.map((r) => r.id));
-    enrichInBackground(queue.map((r) => r.id), token);
+    prewarm(results);
+    markLiked(results.map((r) => r.id));
+    enrichInBackground(results.map((r) => r.id), token);
   } catch (e) {
     if (token !== searchToken) return;
     $('loading').hidden = true;
@@ -272,8 +272,10 @@ async function enrichInBackground(ids, token) {
         const h = el.querySelector('h3');
         if (h && c.title) h.textContent = c.title;
       }
-      const q = queue.find((r) => r.id === c.id);
-      if (q) Object.assign(q, c);
+      for (const list of [results, queue]) {
+        const q = list.find((r) => r.id === c.id);
+        if (q) Object.assign(q, c);
+      }
     }
     for (const id of j.drop || []) {
       const el = document.querySelector(`#grid .card[data-play="${id}"]`);
@@ -283,7 +285,7 @@ async function enrichInBackground(ids, token) {
         el.style.transform = 'scale(0.92)';
         setTimeout(() => el.remove(), 360);
       }
-      queue = queue.filter((r) => r.id !== id);
+      results = results.filter((r) => r.id !== id);
     }
   } catch { /* fast cards stay as-is — still playable */ }
 }
@@ -508,7 +510,9 @@ function pushPositionState() {
 let warmedNextId = null;
 function warmNext() {
   try {
-    if (shuffle || audio.engine === 'yt') return;
+    if (shuffle) return;
+    if (qi >= queue.length - 1) { extendQueue(); return; }
+    if (audio.engine === 'yt') return;
     const nxt = queue[qi + 1];
     if (!nxt || !nxt.id || nxt.id === warmedNextId) return;
     warmedNextId = nxt.id;
@@ -516,23 +520,67 @@ function warmNext() {
   } catch {}
 }
 
-/* When a stray song (search/home/For You) ends with nowhere to go,
- * keep the music alive from your own library: liked first, else any playlist. */
-async function pickLibraryNext(excludeId) {
+/* Your own library as a last-resort pool: liked first, else any playlist. */
+async function libraryPool() {
   try {
     const [likes, pls] = await Promise.all([api('/api/likes'), api('/api/playlists')]);
-    let pool = (likes.tracks || []).map((t) => ({ ...t }));
+    let pool = likes.tracks || [];
     if (!pool.length && pls.playlists.length) {
       const p = pls.playlists[Math.floor(Math.random() * pls.playlists.length)];
-      const det = await api(`/api/playlists/${p.id}/tracks`);
-      pool = (det.tracks || []).map((t) => ({ ...t }));
+      pool = (await api(`/api/playlists/${p.id}/tracks`)).tracks || [];
     }
-    pool = pool.filter((t) => t.id !== excludeId);
-    if (!pool.length) return null;
-    return pool[Math.floor(Math.random() * pool.length)];
+    return pool.map((t) => ({ ...t })).sort(() => Math.random() - 0.5);
   } catch {
-    return null;
+    return [];
   }
+}
+
+/* Endless play: when the queue runs out, APPEND songs not already in it
+ * (recommendations, then the same artist, then your library), so prev/next
+ * keep working across the boundary and nothing loops. */
+let extending = null;
+function extendQueue() {
+  if (extending) return extending;
+  extending = (async () => {
+    const seen = new Set(queue.map((t) => t.id));
+    if (current?.id) seen.add(current.id);
+    const norm = (s) => (s || '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+    // the same song re-uploaded (lyrics / sped up / live) isn't a "next song"
+    const songNames = new Set(queue.concat(current || []).map((t) => {
+      const p = (t.title || '').split(/\s[-–—|]\s/);
+      return norm((p[1] || p[0]).replace(/\(.*?\)|\[.*?\]/g, ''));
+    }).filter((n) => n.length > 2));
+    const isRepeat = (title) => [...songNames].some((n) => norm(title).includes(n));
+    const add = [];
+    const take = (list) => {
+      for (const t of list || []) {
+        if (!t?.id || seen.has(t.id) || isRepeat(t.title)) continue;
+        seen.add(t.id);
+        add.push({ ...t });
+        const p = (t.title || '').split(/\s[-–—|]\s/);
+        const n = norm((p[1] || p[0]).replace(/\(.*?\)|\[.*?\]/g, ''));
+        if (n.length > 2) songNames.add(n);
+      }
+    };
+    if (me) {
+      try { take((await api('/api/recommendations?n=15')).tracks); } catch {}
+    }
+    // "Artist - Song" titles beat the uploader, which is often a fan channel.
+    const parts = (current?.title || '').split(/\s[-–—|]\s/);
+    const fromTitle = parts.length > 1 ? parts[0].replace(/\(.*?\)|\[.*?\]/g, '').trim() : '';
+    const fromUploader = (current?.uploader || '').replace(/\s*-\s*Topic$/i, '').replace(/VEVO$/i, '').trim();
+    const artist = fromTitle || fromUploader;
+    const queries = artist.length > 1 ? [artist, `${artist} best songs`, `songs like ${artist}`] : [];
+    for (const q of queries) {
+      if (add.length >= 4) break;
+      try { take((await api(`/api/search?q=${encodeURIComponent(q)}&n=12`)).results); } catch {}
+    }
+    if (add.length < 4 && me) take(await libraryPool());
+    if (!add.length) return false;
+    queue.push(...add.slice(0, 15));
+    return true;
+  })().finally(() => { extending = null; });
+  return extending;
 }
 
 /* Repeat-one restart with a re-entrant guard + stale-URL re-resolve. */
@@ -563,7 +611,11 @@ async function restartLoop() {
 }
 
 function step(d) {
-  return () => {
+  return async () => {
+    if (d > 0 && !shuffle && qi >= queue.length - 1) {
+      if (await extendQueue()) playId(queue[qi + 1].id, queue[qi + 1]);
+      return;
+    }
     if (!queue.length) return;
     let n;
     if (shuffle && queue.length > 1) {
@@ -587,7 +639,7 @@ async function advanceFromPlayback(from) {
   try { finalizePrev(true); } catch {}
   if (repeat === 'one') { try { restartLoop(); } catch {} return; }
   const hidden = (() => { try { return document.hidden; } catch { return false; } })();
-  if (shuffle || qi < queue.length - 1) {
+  if ((shuffle && queue.length > 1) || qi < queue.length - 1) {
     if (queue.length) {
       if (hidden) {
         // Fast path: next queued track NOW, no 10s confirm wait.
@@ -604,19 +656,11 @@ async function advanceFromPlayback(from) {
       return;
     }
   }
-  if (!me) return;
-  if (queueSource === 'playlist' || queueSource === 'liked' || queueSource === 'foryou') {
-    try {
-      const j = await api('/api/recommendations?n=10');
-      const fresh = (j.tracks || []).filter((t) => t.id !== current?.id);
-      if (fresh.length) { playId(fresh[0].id, fresh[0], fresh, 'foryou'); return; }
-    } catch {}
-    if (queueSource !== 'foryou') return;
-  }
-  if (!['search', 'home', 'foryou', 'radio'].includes(queueSource)) return;
   try {
-    const nxt = await pickLibraryNext(current?.id);
-    if (nxt) playId(nxt.id, nxt, [nxt], 'radio');
+    if (!(await extendQueue())) return;
+    const t = queue[qi + 1];
+    if (hidden && t) playId(t.id, t, queue, queueSource);
+    else await stepAuto();
   } catch {}
 }
 
@@ -809,8 +853,12 @@ function init() {
       } : {};
       const scope = play.closest('#view') ? viewQueue : (play.closest('#homeFy') ? homeQueue : null);
       const src = play.closest('#view') ? currentView : (play.closest('#homeFy') ? 'home' : 'search');
-      if (scope && scope.length) playId(play.dataset.play, meta, scope, src);
-      else playId(play.dataset.play, meta, null, src);
+      const id = play.dataset.play;
+      if (scope && scope.length) playId(id, meta, scope, src);
+      else if (src === 'search') {
+        const t = { ...(results.find((r) => r.id === id) || {}), id, ...meta };
+        playId(id, t, [t], 'search');
+      } else playId(id, meta, null, src);
     }
   });
 
@@ -1173,7 +1221,8 @@ function isOurQueue() {
 function trackMeta(id, card) {
   // View list first: it carries extra keys (item_id) the search queue lacks.
   const fromLists = viewQueue.find((r) => r.id === id)
-    || queue.find((r) => r.id === id);
+    || queue.find((r) => r.id === id)
+    || results.find((r) => r.id === id);
   if (fromLists) return fromLists;
   if (card) {
     return { id, title: card.querySelector('h3')?.textContent || '',
@@ -2219,7 +2268,7 @@ function openProfile() {
 
 /* ---------- row + misc actions (delegated) ---------- */
 function rowTrack(rowEl, id) {
-  return viewQueue.concat(queue).find((r) => r.id === id) || {
+  return viewQueue.concat(queue, results).find((r) => r.id === id) || {
     id, title: rowEl.querySelector('.tt')?.getAttribute('title') || '',
     thumbnail: rowEl.querySelector('img')?.src || '' };
 }
