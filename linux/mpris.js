@@ -13,7 +13,7 @@ function createMpris(hooks) {
       supportedInterfaces: ["player"],
     });
   } catch (err) {
-    console.warn("mpris:", err && err.message ? err.message : err);
+    console.warn("mpris:", err && err.stack ? err.stack : err);
     return { update() {}, destroy() {} };
   }
 

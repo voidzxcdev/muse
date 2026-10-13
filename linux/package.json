@@ -1,7 +1,7 @@
 {
   "name": "muse",
   "productName": "Muse",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Muse for Linux",
   "homepage": "https://getmuse.eu",
   "author": {
@@ -14,7 +14,10 @@
     "dist": "electron-builder --linux AppImage deb"
   },
   "dependencies": {
-    "mpris-service": "2.1.2"
+    "mpris-service": "2.1.2",
+    "dbus-next": "0.10.2",
+    "call-bind": "1.0.8",
+    "call-bind-apply-helpers": "1.0.2"
   },
   "devDependencies": {
     "electron": "33.4.11",
@@ -24,12 +27,16 @@
     "appId": "eu.getmuse.muse",
     "productName": "Muse",
     "asar": true,
+    "asarUnpack": [
+      "node_modules/**/*"
+    ],
     "files": [
       "main.js",
       "preload.js",
       "mpris.js",
       "updater.js",
-      "build/icon.png"
+      "build/icon.png",
+      "node_modules/**/*"
     ],
     "linux": {
       "target": ["AppImage", "deb"],

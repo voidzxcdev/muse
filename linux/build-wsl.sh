@@ -21,6 +21,11 @@ cd "$WORK"
 npm install
 npx electron-builder --linux AppImage deb
 
+UNPACK=dist/linux-unpacked/resources/app.asar.unpacked/node_modules
+test -d "$UNPACK/call-bind-apply-helpers" || { echo "missing call-bind-apply-helpers in asarUnpack"; exit 1; }
+test -d "$UNPACK/mpris-service" || { echo "missing mpris-service in asarUnpack"; exit 1; }
+NODE_PATH="$UNPACK" node -e "require('call-bind-apply-helpers'); require('dbus-next'); require('mpris-service'); console.log('mpris-ok')"
+
 mkdir -p "$SRC/dist"
 cp -f dist/*.AppImage dist/*.deb "$SRC/dist/"
 echo "BUILT"
