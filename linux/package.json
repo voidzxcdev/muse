@@ -1,7 +1,7 @@
 {
   "name": "muse",
   "productName": "Muse",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "description": "Muse for Linux",
   "homepage": "https://getmuse.eu",
   "author": {
@@ -12,6 +12,9 @@
   "scripts": {
     "start": "electron .",
     "dist": "electron-builder --linux AppImage deb"
+  },
+  "dependencies": {
+    "mpris-service": "2.1.2"
   },
   "devDependencies": {
     "electron": "33.4.11",
@@ -24,20 +27,22 @@
     "files": [
       "main.js",
       "preload.js",
+      "mpris.js",
+      "updater.js",
       "build/icon.png"
     ],
     "linux": {
       "target": ["AppImage", "deb"],
-      "category": "Audio",
+      "category": "AudioVideo",
       "maintainer": "voidzxcdev <dev@getmuse.eu>",
       "icon": "build/icon.png",
       "synopsis": "Muse",
       "executableName": "muse",
       "desktop": {
         "Name": "Muse",
-        "Comment": "Search songs, build playlists, get mixes that learn your ears.",
+        "Comment": "Search a song. Press play.",
         "StartupWMClass": "muse",
-        "Categories": "Audio;Music;"
+        "Categories": "AudioVideo;Audio;Player;Music;"
       }
     }
   }

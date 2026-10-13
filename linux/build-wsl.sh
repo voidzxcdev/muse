@@ -13,7 +13,7 @@ SRC="$(cd "$(dirname "$0")" && pwd)"
 WORK="$HOME/muse-linux-build"
 rm -rf "$WORK"
 mkdir -p "$WORK"
-cp "$SRC/package.json" "$SRC/main.js" "$SRC/preload.js" "$WORK/"
+cp "$SRC/package.json" "$SRC/main.js" "$SRC/preload.js" "$SRC/mpris.js" "$SRC/updater.js" "$WORK/"
 mkdir -p "$WORK/build"
 cp "$SRC/build/icon.png" "$WORK/build/icon.png"
 
@@ -22,7 +22,6 @@ npm install
 npx electron-builder --linux AppImage deb
 
 mkdir -p "$SRC/dist"
-rm -f "$SRC/dist"/*
-cp -a dist/. "$SRC/dist/"
+cp -f dist/*.AppImage dist/*.deb "$SRC/dist/"
 echo "BUILT"
-ls -lh "$SRC/dist"
+ls -lh "$SRC/dist"/*.AppImage "$SRC/dist"/*.deb

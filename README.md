@@ -34,19 +34,24 @@ The live product is [getmuse.eu](https://getmuse.eu). This repository is that pr
 
 ## Get the apps
 
-**Web and iPhone.** Open [https://getmuse.eu](https://getmuse.eu).
+Downloads are the live builds from [getmuse.eu](https://getmuse.eu). Windows and Linux check that host and update themselves.
 
-**Linux (x64).** One command:
+| App | Download |
+|---|---|
+| **Windows** | [Muse-Setup.exe](https://getmuse.eu/desktop/Muse-Setup.exe) |
+| **Linux AppImage** | [Muse.AppImage](https://getmuse.eu/linux/Muse.AppImage) |
+| **Android** | [Muse.apk](https://getmuse.eu/android/Muse.apk) |
+| **Web and iPhone** | [getmuse.eu](https://getmuse.eu) (Safari: Add to Home Screen) |
+
+**Linux, one command:**
 
 ```bash
-curl -fL https://getmuse.eu/Muse.AppImage -o Muse.AppImage && chmod +x Muse.AppImage && ./Muse.AppImage
+curl -fL https://getmuse.eu/linux/Muse.AppImage -o Muse.AppImage && chmod +x Muse.AppImage && ./Muse.AppImage
 ```
 
 On Arch, install `fuse2`, `gtk3`, `nss`, `libxss`, `libxtst`, `libnotify`, `xdg-utils`, `at-spi2-core`, and `libsecret` first.
 
-**Windows.** Build `winapp/` with .NET 10 (`dotnet publish -c Release`). `winsetup/` wraps the published `Muse.exe` into an installer.
-
-**Android.** Open `android/` in Android Studio and run the `app` module. Release signing reads `android/keystore.properties` on your machine. That file is not in git.
+The Linux build speaks MPRIS, so Hyprland, media keys, and status bars see Muse as a normal player.
 
 ## Run it locally
 

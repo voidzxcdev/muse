@@ -1,6 +1,8 @@
 const { app, BrowserWindow, Tray, Menu, ipcMain, shell, nativeImage } = require("electron");
 const fs = require("fs");
 const path = require("path");
+const { createMpris } = require("./mpris");
+const updater = require("./updater");
 
 const HOME = "https://getmuse.eu/pc";
 const BG = "#0a0a0b";
@@ -8,12 +10,15 @@ const BG = "#0a0a0b";
 let win = null;
 let tray = null;
 let quitting = false;
+let mpris = null;
 
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) app.quit();
 
 app.setName("Muse");
 app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
+app.commandLine.appendSwitch("disable-features", "MediaSessionService");
+app.commandLine.appendSwitch("ozone-platform-hint", "auto");
 
 function chatFile() {
   const dir = path.join(app.getPath("userData"), "musely");
@@ -56,6 +61,7 @@ function createWindow() {
     height: 820,
     minWidth: 1020,
     minHeight: 680,
+    useContentSize: true,
     title: "Muse",
     backgroundColor: BG,
     autoHideMenuBar: true,
@@ -71,7 +77,16 @@ function createWindow() {
   });
 
   win.webContents.setBackgroundThrottling(false);
+  win.setMenu(null);
   win.setMenuBarVisibility(false);
+  try { win.webContents.setVisualZoomLevelLimits(1, 1); } catch { /* */ }
+
+  const fit = () => {
+    if (!win || win.isDestroyed()) return;
+    try { win.webContents.setZoomFactor(1); } catch { /* */ }
+  };
+  win.webContents.on("did-finish-load", fit);
+  win.on("resize", fit);
 
   win.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);
@@ -125,15 +140,44 @@ function reveal() {
 
 app.on("second-instance", () => reveal());
 
+function sendMpris(type, value) {
+  if (!win || win.isDestroyed()) return;
+  win.webContents.send("mpris-cmd", { type, value });
+}
+
 app.whenReady().then(() => {
   ipcMain.on("musely-seed", (event) => { event.returnValue = readHistory(); });
   ipcMain.on("muse-host", (event, raw) => onHost(raw, event.sender));
+  ipcMain.on("mpris-state", (_event, state) => {
+    if (mpris) mpris.update(state);
+    if (tray && state && state.title && !state.stopped) {
+      const tip = state.playing ? `Muse · ${state.title}` : `Muse · paused`;
+      try { tray.setToolTip(tip.slice(0, 120)); } catch { /* */ }
+    } else if (tray) {
+      try { tray.setToolTip("Muse"); } catch { /* */ }
+    }
+  });
+
+  mpris = createMpris({
+    raise: () => reveal(),
+    quit: () => { quitting = true; app.quit(); },
+    send: sendMpris,
+  });
 
   try { createTray(); } catch { tray = null; }
   createWindow();
+  updater.arm({
+    apply: () => { quitting = true; app.quit(); },
+  });
 });
 
-app.on("before-quit", () => { quitting = true; });
+app.on("before-quit", () => {
+  quitting = true;
+  if (mpris) {
+    try { mpris.destroy(); } catch { /* */ }
+    mpris = null;
+  }
+});
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();

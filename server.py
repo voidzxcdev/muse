@@ -61,10 +61,11 @@ HOST = os.environ.get("HOST") or "0.0.0.0"
 ON_RENDER = bool(os.environ.get("RENDER"))
 PUBLIC_URL = (os.environ.get("PUBLIC_URL") or os.environ.get("RENDER_EXTERNAL_URL") or "").rstrip("/")
 DATABASE_URL = os.environ.get("DATABASE_URL") or ""  # set → Postgres (Supabase); unset → local SQLite
-BUILD = 274  # bump every release — the UI polls this and prompts reload
+BUILD = 275  # bump every release — the UI polls this and prompts reload
 DESKTOP_VERSION = os.environ.get("DESKTOP_VERSION") or "1.1.11"
 DESKTOP_DIR = os.environ.get("DESKTOP_DIR") or os.path.join(HERE, "desktop-dist")
 DESKTOP_AUTHOR = "https://github.com/voidzxcdev"
+LINUX_VERSION = os.environ.get("LINUX_VERSION") or "1.0.2"
 ANDROID_VERSION = os.environ.get("ANDROID_VERSION") or "1.0.3"
 try:
         ANDROID_CODE = int(os.environ.get("ANDROID_CODE") or "7")
@@ -875,6 +876,16 @@ def android_apk_path():
     return os.path.join(DESKTOP_DIR, "Muse.apk")
 
 
+def linux_appimage_path():
+    for p in (
+        os.path.join(DESKTOP_DIR, "Muse.AppImage"),
+        os.path.join(STATIC, "Muse.AppImage"),
+    ):
+        if os.path.isfile(p):
+            return p
+    return os.path.join(STATIC, "Muse.AppImage")
+
+
 def file_sha(path):
     st = os.stat(path)
     prev = _file_hashes.get(path)
@@ -919,6 +930,20 @@ def android_meta():
         "version": ANDROID_VERSION,
         "versionCode": ANDROID_CODE,
         "url": f"{base}/android/Muse.apk?v={ANDROID_VERSION}",
+        "sha256": digest,
+        "size": size,
+    }
+
+
+def linux_meta():
+    path = linux_appimage_path()
+    if not os.path.isfile(path):
+        return None
+    digest, size = file_sha(path)
+    base = PUBLIC_URL or ""
+    return {
+        "version": LINUX_VERSION,
+        "url": f"{base}/linux/Muse.AppImage?v={LINUX_VERSION}",
         "sha256": digest,
         "size": size,
     }
@@ -4713,6 +4738,11 @@ class Handler(SimpleHTTPRequestHandler):
                 if not meta:
                     return self._json({"error": "android build not published"}, 404)
                 return self._json(meta)
+            if path == "/api/linux":
+                meta = linux_meta()
+                if not meta:
+                    return self._json({"error": "linux build not published"}, 404)
+                return self._json(meta)
             if path == "/desktop/Muse.exe":
                 return self._send_desktop_file(desktop_exe_path(), "Muse.exe")
             if path == "/desktop/Muse-Setup.exe":
@@ -4721,6 +4751,9 @@ class Handler(SimpleHTTPRequestHandler):
                 return self._send_desktop_file(
                     android_apk_path(), "Muse.apk",
                     "application/vnd.android.package-archive")
+            if path == "/linux/Muse.AppImage":
+                return self._send_desktop_file(
+                    linux_appimage_path(), "Muse.AppImage")
             if path == "/api/search":
                 q = (qs.get("q") or [""])[0]
                 if not q.strip():

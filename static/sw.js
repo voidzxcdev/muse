@@ -1,5 +1,5 @@
 /* Muse service worker — app shell offline, API always live. */
-const CACHE = 'muse-v312';
+const CACHE = 'muse-v313';
 const CORE = ['/', '/home', '/index.html', '/manifest.webmanifest'];
 
 self.addEventListener('install', (e) => {
@@ -21,8 +21,8 @@ self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET' || u.origin !== location.origin) return;
   if (u.pathname.startsWith('/api/')) return;
   // APK / desktop installers must hit Chrome's download manager, not Cache API.
-  if (u.pathname.startsWith('/android/') || u.pathname.startsWith('/desktop/')) return;
-  if (/\.(apk|exe|msi)$/i.test(u.pathname)) return;
+  if (u.pathname.startsWith('/android/') || u.pathname.startsWith('/desktop/') || u.pathname.startsWith('/linux/')) return;
+  if (/\.(apk|exe|msi|AppImage)$/i.test(u.pathname)) return;
   // Documents go network-first: a stale cached page is worse than no page.
   if (e.request.mode === 'navigate' || e.request.destination === 'document') {
     e.respondWith(
