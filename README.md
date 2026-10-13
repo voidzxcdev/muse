@@ -16,7 +16,9 @@
   <img alt="Platforms" src="https://img.shields.io/badge/web%20·%20windows%20·%20linux%20·%20android%20·%20ios-0a0a0b?style=flat-square" />
 </p>
 
-Muse is a music player that searches YouTube Music, streams the best audio it can find, and stays out of the way. Matte black. No clutter. An account is optional. With one, you get likes, playlists, Friends, badges, and a For You page that trains on what you actually play.
+Muse is an independent music player. Search a song. Press play. Stay out of the way. Matte black. No clutter. An account is optional. With one, you get likes, playlists, Friends, badges, and a For You page that trains on what you actually play.
+
+Muse is not affiliated with YouTube, Google, or any record label. The MIT license covers this source code, not the songs you hear. See [LEGAL.md](LEGAL.md).
 
 The live product is [getmuse.eu](https://getmuse.eu). This repository is that product: the Python server, the vanilla web UI, the Windows WebView2 shell, the Linux Electron shell, and the Android WebView shell.
 
@@ -25,7 +27,7 @@ The live product is [getmuse.eu](https://getmuse.eu). This repository is that pr
 - **Search** that stays on songs. Vlogs, trailers, news, and podcasts are dropped.
 - **Playback** through a same-origin audio proxy, so the visualizer reads real FFT data.
 - **Library** with likes, playlists, covers, and profile themes.
-- **For You** mixes from your likes, finishes, skips, and YouTube's related graph.
+- **For You** mixes from your likes, finishes, and skips.
 - **Friends** to see what people around you hear.
 - **Musely**, an in-app companion. Desktop shells keep the chat on disk.
 - **Windows and Linux** desktop apps. Close hides to the tray. Audio keeps going.
@@ -87,7 +89,8 @@ Optional fronts (Cloudflare Pages, a hosted Postgres) belong in those product da
 
 | Path | Role |
 |---|---|
-| `server.py` | HTTP server, search, audio proxy, accounts, recommendations |
+| `server.py` | HTTP server, catalog adapter, accounts, recommendations |
+| `docs/CATALOG.md` | Clean-room contract: clients talk only to Muse's HTTP API |
 | `static/` | Web UI: HTML, CSS, JS, icons, badges |
 | `winapp/` | Windows desktop shell (WebView2) |
 | `linux/` | Linux desktop shell (Electron) |
@@ -101,6 +104,16 @@ Optional fronts (Cloudflare Pages, a hosted Postgres) belong in those product da
 
 `/` focuses search. Space toggles play. Left and right seek 10 seconds. OS media keys work through Media Session.
 
+## Legal
+
+Muse source is MIT. That is a software license, not a music license.
+
+The UI and desktop shells speak only Muse's own HTTP API ([docs/CATALOG.md](docs/CATALOG.md)). A second implementer can write a new catalog adapter from that spec without reading the stock server. That is clean-room structure for Muse's API. It does not license third-party media.
+
+If you self-host, you are the operator. Prefer an official player embed or a catalog you are licensed to stream. Muse does not export catalog media as MP3 files.
+
+Copyright reports for user files stored on getmuse.eu: **hello@getmuse.eu**. Full text: [LEGAL.md](LEGAL.md), [NOTICE](NOTICE).
+
 ## License
 
-MIT. See [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE). Code only, not content.

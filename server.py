@@ -61,7 +61,7 @@ HOST = os.environ.get("HOST") or "0.0.0.0"
 ON_RENDER = bool(os.environ.get("RENDER"))
 PUBLIC_URL = (os.environ.get("PUBLIC_URL") or os.environ.get("RENDER_EXTERNAL_URL") or "").rstrip("/")
 DATABASE_URL = os.environ.get("DATABASE_URL") or ""  # set → Postgres (Supabase); unset → local SQLite
-BUILD = 275  # bump every release — the UI polls this and prompts reload
+BUILD = 276  # bump every release — the UI polls this and prompts reload
 DESKTOP_VERSION = os.environ.get("DESKTOP_VERSION") or "1.1.11"
 DESKTOP_DIR = os.environ.get("DESKTOP_DIR") or os.path.join(HERE, "desktop-dist")
 DESKTOP_AUTHOR = "https://github.com/voidzxcdev"
@@ -949,7 +949,6 @@ def linux_meta():
     }
 
 MUSIC_DIR = os.path.join(HERE, "music")
-_mp3_lock = threading.Lock()
 
 DB_PATH = os.path.join(HERE, "muse.db")
 SESSION_TTL = 30 * 86400
@@ -3618,53 +3617,6 @@ def enrich_ids(ids):
     return out, drop
 
 
-def safe_name(name):
-    name = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "", name or "").strip().rstrip(".")
-    return (name[:100] or "track")
-
-
-def mp3_path(video_id, title):
-    return os.path.join(MUSIC_DIR, f"{safe_name(title)} [{video_id}].mp3")
-
-
-def ensure_mp3(video_id):
-    """MP3 from the cookie-free playback stream (never yt-dlp's web client)."""
-    meta = best_audio_url(video_id)
-    os.makedirs(MUSIC_DIR, exist_ok=True)
-    target = mp3_path(video_id, meta.get("title") or video_id)
-    if os.path.exists(target) and os.path.getsize(target) > 1024:
-        return target, meta
-    with _mp3_lock:
-        if os.path.exists(target) and os.path.getsize(target) > 1024:
-            return target, meta
-        src = _audio_file(video_id)
-        tmp_src = None
-        tmp = target + ".part"
-        try:
-            if not src:
-                audio_url = meta.get("audio_url") or ""
-                if not audio_url:
-                    raise RuntimeError("no audio url")
-                tmp_src = os.path.join(MUSIC_DIR, f"{video_id}.src")
-                _save_stream(audio_url, tmp_src)
-                src = tmp_src
-            subprocess.run(
-                ["ffmpeg", "-v", "error", "-y", "-i", src, "-vn",
-                 "-c:a", "libmp3lame", "-q:a", "0", "-f", "mp3", tmp],
-                check=True, timeout=180, stdin=subprocess.DEVNULL)
-            os.replace(tmp, target)
-        finally:
-            with contextlib.suppress(OSError):
-                if tmp_src:
-                    os.remove(tmp_src)
-            with contextlib.suppress(OSError):
-                if os.path.exists(tmp) and tmp != target:
-                    os.remove(tmp)
-        if not os.path.exists(target) or os.path.getsize(target) < 1024:
-            raise RuntimeError("conversion produced no file")
-    return target, meta
-
-
 _inflight = {}        # video_id -> Event, so concurrent requests share one resolve
 _inflight_lock = threading.Lock()
 
@@ -4821,31 +4773,14 @@ class Handler(SimpleHTTPRequestHandler):
                     self.wfile.write(data)
                 return
             if path == "/api/mp3":
-                v = (qs.get("v") or [""])[0]
-                if not re.fullmatch(r"[\w-]{11}", v or ""):
-                    return self._json({"error": "bad video id"}, 400)
-                try:
-                    target, meta = ensure_mp3(v)
-                except yt_dlp.utils.DownloadError as e:
-                    return self._json({"error": f"yt-dlp: {str(e)[:150]}"}, 502)
-                except Exception as e:
-                    return self._json({"error": f"{type(e).__name__}: {str(e)[:150]}"}, 500)
-                try:
-                    size = os.path.getsize(target)
-                    name = os.path.basename(target).encode("utf-8", "replace").decode("latin-1")
-                    self.send_response(200)
-                    self.send_header("Content-Type", "audio/mpeg")
-                    self.send_header("Content-Length", str(size))
-                    self.send_header("Content-Disposition",
-                                     f"attachment; filename*=UTF-8''{urllib.parse.quote(os.path.basename(target))}")
-                    self.send_header("Cache-Control", "no-store")
-                    self.end_headers()
-                    if self.command != "HEAD":
-                        with open(target, "rb") as f:
-                            shutil.copyfileobj(f, self.wfile, length=256 * 1024)
-                except (BrokenPipeError, ConnectionResetError):
-                    pass
-                return
+                return self._json({
+                    "error": "gone",
+                    "message": "Muse does not export catalog media as files.",
+                }, 410)
+            if path in ("/legal", "/legal.html"):
+                self.directory = STATIC
+                self.path = "/legal.html"
+                return super().do_GET()
             if path == "/api/market":
                 u = self._me()
                 return self._json(market_feed(u["id"] if u else None))

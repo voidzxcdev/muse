@@ -1,0 +1,13 @@
+Muse
+Copyright 2026 voidzxcdev
+
+This product includes software developed for Muse (https://getmuse.eu).
+The MIT license applies to Muse source code only, not to third-party media.
+
+Third-party notices:
+- yt-dlp, where used by an operator, is Unlicense. See that project for its terms.
+- Electron and Chromium licenses ship inside the Linux package.
+- Feather icons: MIT. Font Awesome Free play/pause: CC BY 4.0.
+
+YouTube, YouTube Music, and Google are trademarks of Google LLC.
+Muse is not affiliated with Google LLC.

@@ -2895,6 +2895,9 @@ html.muse-android {
   word-break: break-all;
 }
 .pf-wait { font-size: 12px; color: var(--faint); margin-top: 6px; }
+.pf-legal { margin: 16px 0 0; font-size: 12px; font-weight: 600; }
+.pf-legal a { color: var(--faint); text-decoration: none; }
+.pf-legal a:hover { color: var(--dim); }
 .pf-priv { display: flex; flex-direction: column; gap: 8px; }
 .pf-tog {
   display: flex; align-items: center; gap: 12px; cursor: pointer;

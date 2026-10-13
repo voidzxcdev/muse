@@ -2765,7 +2765,8 @@ function openSettings() {
       <button class="mbtn ghost" id="pfLogout">Выйти</button>
       <button class="mbtn primary" id="pfSave">Сохранить</button>
     </div>
-    ${isDeskApp() || isAndroidApp() ? '' : `${isAndroidWeb() ? '' : `<button class="mbtn ghost block win" id="pfDesk" type="button">${ICO.windows}Download for Windows</button>`}<button class="mbtn ghost block win" id="pfApk" type="button">${ICO.android}Download for Android</button>`}`);
+    ${isDeskApp() || isAndroidApp() ? '' : `${isAndroidWeb() ? '' : `<button class="mbtn ghost block win" id="pfDesk" type="button">${ICO.windows}Download for Windows</button>`}<button class="mbtn ghost block win" id="pfApk" type="button">${ICO.android}Download for Android</button>`}
+    <p class="pf-legal"><a href="/legal" target="_blank" rel="noopener">Legal · DMCA</a></p>`);
   $('pfAv').title = 'Change photo';
   $('pfAv').addEventListener('click', () => {
     coverKind = 'avatar';
@@ -6169,7 +6170,6 @@ async function openTrackMenuAt(x, y, track) {
   const liked = likedSet.has(track.id);
   m.innerHTML = `
     <button data-m="like" class="${liked ? 'loved' : ''}">${ICO.heart}${liked ? 'Unlike' : 'Like'}</button>
-    <button data-m="mp3">${ICO.download}Save MP3</button>
     <div class="sep"></div>
     <div class="mpl"><div class="mhead">…</div></div>
     <button data-m="newpl">${ICO.plus}New playlist…</button>`;
@@ -6260,11 +6260,7 @@ async function menuAction(kind) {
     if (liked === false && currentView === 'liked') renderLiked($('view'));
     return;
   }
-  if (kind === 'mp3') {
-    window.open(`/api/mp3?v=${t.id}`, '_blank');
-    return;
-  }
-  else if (kind === 'totop' || kind === 'tobottom') {
+  if (kind === 'totop' || kind === 'tobottom') {
     const row = [...document.querySelectorAll('#view .trow')]
       .find((r) => r.querySelector('[data-playrow]')?.dataset.playrow === t.id);
     moveRowTo(row, kind === 'totop' ? 'top' : 'bottom');
@@ -8354,6 +8350,8 @@ function bootAccountUI() {
     else if (act === 'friends') {
       if (!me) { openAuth('signin'); return; }
       showView('friends');
+    } else if (act === 'legal') {
+      window.open('/legal', '_blank', 'noopener');
     }
   });
   $('acctPop')?.addEventListener('click', (e) => {

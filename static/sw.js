@@ -1,5 +1,5 @@
 /* Muse service worker — app shell offline, API always live. */
-const CACHE = 'muse-v313';
+const CACHE = 'muse-v314';
 const CORE = ['/', '/home', '/index.html', '/manifest.webmanifest'];
 
 self.addEventListener('install', (e) => {
