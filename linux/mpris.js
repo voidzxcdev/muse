@@ -28,7 +28,9 @@ function createMpris(hooks) {
   let positionUs = 0;
   player.getPosition = () => positionUs;
 
+  let echoing = false;
   const send = (type, value) => {
+    if (echoing) return;
     try { hooks.send(type, value); } catch { /* window gone */ }
   };
 
@@ -52,16 +54,21 @@ function createMpris(hooks) {
     if (!player || !state) return;
     positionUs = Math.max(0, Math.round((Number(state.position) || 0) * 1e6));
     const status = state.stopped ? "Stopped" : (state.playing ? "Playing" : "Paused");
-    if (status !== lastStatus) {
-      lastStatus = status;
-      try { player.playbackStatus = status; } catch { /* dbus */ }
-    }
-    if (typeof state.volume === "number" && Number.isFinite(state.volume)) {
-      const v = Math.min(1, Math.max(0, state.volume));
-      if (Math.abs(lastVol - v) > 0.01) {
-        lastVol = v;
-        try { player.volume = v; } catch { /* dbus */ }
+    echoing = true;
+    try {
+      if (status !== lastStatus) {
+        lastStatus = status;
+        try { player.playbackStatus = status; } catch { /* dbus */ }
       }
+      if (typeof state.volume === "number" && Number.isFinite(state.volume)) {
+        const v = Math.min(1, Math.max(0, state.volume));
+        if (Math.abs(lastVol - v) > 0.01) {
+          lastVol = v;
+          try { player.volume = v; } catch { /* dbus */ }
+        }
+      }
+    } finally {
+      setImmediate(() => { echoing = false; });
     }
     const title = String(state.title || "").trim() || "Muse";
     const artist = String(state.artist || "").trim() || "Muse";

@@ -65,7 +65,7 @@ BUILD = 275  # bump every release — the UI polls this and prompts reload
 DESKTOP_VERSION = os.environ.get("DESKTOP_VERSION") or "1.1.11"
 DESKTOP_DIR = os.environ.get("DESKTOP_DIR") or os.path.join(HERE, "desktop-dist")
 DESKTOP_AUTHOR = "https://github.com/voidzxcdev"
-LINUX_VERSION = os.environ.get("LINUX_VERSION") or "1.0.3"
+LINUX_VERSION = os.environ.get("LINUX_VERSION") or "1.0.4"
 ANDROID_VERSION = os.environ.get("ANDROID_VERSION") or "1.0.3"
 try:
         ANDROID_CODE = int(os.environ.get("ANDROID_CODE") or "7")

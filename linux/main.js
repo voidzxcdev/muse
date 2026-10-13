@@ -6,6 +6,8 @@ const updater = require("./updater");
 
 const HOME = "https://getmuse.eu/pc";
 const BG = "#0a0a0b";
+const VER = require("./package.json").version;
+const TITLE = "Muse Desktop Version " + VER;
 
 let win = null;
 let tray = null;
@@ -62,7 +64,7 @@ function createWindow() {
     minWidth: 1020,
     minHeight: 680,
     useContentSize: true,
-    title: "Muse",
+    title: TITLE,
     backgroundColor: BG,
     autoHideMenuBar: true,
     show: false,
@@ -80,13 +82,10 @@ function createWindow() {
   win.setMenu(null);
   win.setMenuBarVisibility(false);
   try { win.webContents.setVisualZoomLevelLimits(1, 1); } catch { /* */ }
-
-  const fit = () => {
-    if (!win || win.isDestroyed()) return;
-    try { win.webContents.setZoomFactor(1); } catch { /* */ }
-  };
-  win.webContents.on("did-finish-load", fit);
-  win.on("resize", fit);
+  win.on("page-title-updated", (event) => {
+    event.preventDefault();
+    if (win && !win.isDestroyed() && win.getTitle() !== TITLE) win.setTitle(TITLE);
+  });
 
   win.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);
@@ -148,14 +147,17 @@ function sendMpris(type, value) {
 app.whenReady().then(() => {
   ipcMain.on("musely-seed", (event) => { event.returnValue = readHistory(); });
   ipcMain.on("muse-host", (event, raw) => onHost(raw, event.sender));
+  let lastTip = "";
   ipcMain.on("mpris-state", (_event, state) => {
     if (mpris) mpris.update(state);
-    if (tray && state && state.title && !state.stopped) {
-      const tip = state.playing ? `Muse · ${state.title}` : `Muse · paused`;
-      try { tray.setToolTip(tip.slice(0, 120)); } catch { /* */ }
-    } else if (tray) {
-      try { tray.setToolTip("Muse"); } catch { /* */ }
+    if (!tray) return;
+    let tip = TITLE;
+    if (state && state.title && !state.stopped) {
+      tip = (state.playing ? `${TITLE} · ${state.title}` : `${TITLE} · paused`).slice(0, 120);
     }
+    if (tip === lastTip) return;
+    lastTip = tip;
+    try { tray.setToolTip(tip); } catch { /* */ }
   });
 
   mpris = createMpris({

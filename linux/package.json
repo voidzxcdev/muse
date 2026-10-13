@@ -1,7 +1,7 @@
 {
   "name": "muse",
   "productName": "Muse",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Muse for Linux",
   "homepage": "https://getmuse.eu",
   "author": {
@@ -31,6 +31,7 @@
       "node_modules/**/*"
     ],
     "files": [
+      "package.json",
       "main.js",
       "preload.js",
       "mpris.js",

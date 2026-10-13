@@ -1,4 +1,4 @@
-const { contextBridge, ipcRenderer, webFrame } = require("electron");
+const { contextBridge, ipcRenderer } = require("electron");
 
 const listeners = new Set();
 
@@ -100,40 +100,21 @@ function snapshot() {
 }
 
 let lastJson = "";
-let ticking = false;
 function tick() {
-  if (ticking) return;
-  ticking = true;
   const state = snapshot();
-  const readMeta = `(() => {
-    try {
-      const md = navigator.mediaSession && navigator.mediaSession.metadata;
-      if (!md) return null;
-      return {
-        title: md.title || "",
-        artist: md.artist || "",
-        art: (md.artwork && md.artwork[0] && md.artwork[0].src) || ""
-      };
-    } catch (e) { return null; }
-  })()`;
-  Promise.resolve(webFrame.executeJavaScript(readMeta, true)).then((md) => {
-    ticking = false;
-    if (md && !state.stopped) {
-      if (md.title) state.title = md.title;
-      if (md.artist) state.artist = md.artist;
-      if (md.art) state.art = absUrl(md.art);
-    }
-    const json = JSON.stringify(state);
-    if (json === lastJson) return;
-    lastJson = json;
-    ipcRenderer.send("mpris-state", state);
-  }).catch(() => {
-    ticking = false;
-    const json = JSON.stringify(state);
-    if (json === lastJson) return;
-    lastJson = json;
-    ipcRenderer.send("mpris-state", state);
+  const json = JSON.stringify({
+    title: state.title,
+    artist: state.artist,
+    art: state.art,
+    playing: state.playing,
+    stopped: state.stopped,
+    duration: state.duration,
+    volume: Math.round(state.volume * 100),
+    position: Math.floor(state.position),
   });
+  if (json === lastJson) return;
+  lastJson = json;
+  ipcRenderer.send("mpris-state", state);
 }
 
 function playingNow() {
@@ -187,5 +168,5 @@ ipcRenderer.on("mpris-cmd", (_event, msg) => {
   try { applyCmd(msg.type, msg.value); } catch { /* page not ready */ }
 });
 
-setInterval(tick, 400);
+setInterval(tick, 1000);
 document.addEventListener("DOMContentLoaded", tick);
