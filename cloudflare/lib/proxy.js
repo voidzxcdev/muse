@@ -1,7 +1,6 @@
 // Routes API traffic: accounts + library go to the Supabase Edge Function
 // (muse-api), YouTube work goes to the Render backend (yt-dlp can't run on
 // Workers). Same-origin to the browser, so the session cookie just works.
-const DEFAULT_ORIGIN = "https://muse-xbrh.onrender.com";
 const SEARCH_TTL = 600; // matches the backend's own search cache
 const SESSION_TTL = 30 * 86400;
 
@@ -13,6 +12,9 @@ function sessionCookie(req) {
 }
 
 async function library({ request, env }, url) {
+  if (!env.SUPABASE_FN || !env.SUPABASE_ANON_KEY) {
+    return new Response("library backend missing", { status: 500 });
+  }
   const headers = new Headers({ authorization: `Bearer ${env.SUPABASE_ANON_KEY}` });
   for (const h of ["content-type", "content-length"]) {
     if (request.headers.get(h)) headers.set(h, request.headers.get(h));
@@ -53,7 +55,9 @@ export async function proxy(ctx) {
   } else {
     const headers = new Headers(request.headers);
     headers.delete("host");
-    resp = await fetch(new URL(url.pathname + url.search, env.BACKEND_ORIGIN || DEFAULT_ORIGIN), {
+    const origin = env.BACKEND_ORIGIN;
+    if (!origin) return new Response("BACKEND_ORIGIN missing", { status: 500 });
+    resp = await fetch(new URL(url.pathname + url.search, origin), {
       method: request.method,
       headers,
       body: request.method === "GET" || request.method === "HEAD" ? undefined : request.body,

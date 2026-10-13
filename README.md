@@ -1,87 +1,101 @@
-# Muse — minimal music search & play
+<p align="center">
+  <img src="static/muselogo.png" width="96" alt="Muse" />
+</p>
 
-Search any song, see its **title + thumbnail**, stream the **best audio quality**
-available. Matte black, no clutter, no accounts needed to listen — but with
-one you get **playlists, likes, a learning For You page, and full profile
-themes**.
+<h1 align="center">Muse</h1>
 
-## Run
+<p align="center">
+  Search a song. Press play. Keep going.
+  <br />
+  <a href="https://getmuse.eu"><strong>getmuse.eu</strong></a>
+</p>
 
-Double-click **`start.bat`**, or:
+<p align="center">
+  <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-1ed760?style=flat-square" />
+  <img alt="Python 3.13" src="https://img.shields.io/badge/python-3.13-3776ab?style=flat-square" />
+  <img alt="Platforms" src="https://img.shields.io/badge/web%20·%20windows%20·%20linux%20·%20android%20·%20ios-0a0a0b?style=flat-square" />
+</p>
 
+Muse is a music player that searches YouTube Music, streams the best audio it can find, and stays out of the way. Matte black. No clutter. An account is optional. With one, you get likes, playlists, Friends, badges, and a For You page that trains on what you actually play.
+
+The live product is [getmuse.eu](https://getmuse.eu). This repository is that product: the Python server, the vanilla web UI, the Windows WebView2 shell, the Linux Electron shell, and the Android WebView shell.
+
+## Features
+
+- **Search** that stays on songs. Vlogs, trailers, news, and podcasts are dropped.
+- **Playback** through a same-origin audio proxy, so the visualizer reads real FFT data.
+- **Library** with likes, playlists, covers, and profile themes.
+- **For You** mixes from your likes, finishes, skips, and YouTube's related graph.
+- **Friends** to see what people around you hear.
+- **Musely**, an in-app companion. Desktop shells keep the chat on disk.
+- **Windows and Linux** desktop apps. Close hides to the tray. Audio keeps going.
+- **Android** with a foreground playback service.
+- **iPhone** as a PWA. In Safari, open the site, then Add to Home Screen.
+
+## Get the apps
+
+**Web and iPhone.** Open [https://getmuse.eu](https://getmuse.eu).
+
+**Linux (x64).** One command:
+
+```bash
+curl -fL https://getmuse.eu/Muse.AppImage -o Muse.AppImage && chmod +x Muse.AppImage && ./Muse.AppImage
 ```
+
+On Arch, install `fuse2`, `gtk3`, `nss`, `libxss`, `libxtst`, `libnotify`, `xdg-utils`, `at-spi2-core`, and `libsecret` first.
+
+**Windows.** Build `winapp/` with .NET 10 (`dotnet publish -c Release`). `winsetup/` wraps the published `Muse.exe` into an installer.
+
+**Android.** Open `android/` in Android Studio and run the `app` module. Release signing reads `android/keystore.properties` on your machine. That file is not in git.
+
+## Run it locally
+
+This starts a player on `http://127.0.0.1:8090`. You need Python 3.11 or newer, and ffmpeg on your PATH.
+
+```bash
+pip install -r requirements.txt
 python server.py
 ```
 
-Opens `http://127.0.0.1:8090` automatically. Needs Python + `yt_dlp` module.
-Data lives in `muse.db` (SQLite, same folder).
+On Windows you can double-click `start.bat` instead.
 
-## How it works
+Data lives in `muse.db` in the project folder. Search and playback work with no extra config. Git ignores local databases, cookies, and secret files.
 
-- **Search** → YouTube **Music** search (songs only — no vlogs, trailers,
-  news, or podcasts: non-`Music` categories are dropped), enriched with
-  duration and maxres thumbnails. Typing searches live (debounced,
-  stale-safe).
-- **Play** → highest-bitrate **audio-only** stream, served through a
-  same-origin `/api/audio` passthrough (Range-aware), so the Web Audio
-  analyser reads **real FFT data** for the visualizer. Direct stream URL is
-  the automatic fallback.
-- Every network hop has a hard deadline (search 25s per index, enrich 14s,
-  UI aborts at 60s) — a throttled YouTube shows a toast, never an
-  eternal skeleton.
-- Shortcuts: `/` focuses search, `Space` play/pause, `←/→` seek 10s.
-- OS media keys work via MediaSession.
+## Self-host with Docker
 
-## Accounts & library (optional, local)
+```bash
+cd deploy
+cp .env.example .env
+```
 
-- **Sign up / sign in** from the bottom-left chip (scrypt-hashed passwords,
-  cookie sessions, nothing leaves your machine).
-- **Playlists** — create, rename, reorder (↑↓), delete, play-all; add any song
-  via its ⋮ menu. Covers come from the first track.
-- **Liked Songs** — heart anything (cards, rows, player); hearts sync
-  everywhere and feed recommendations.
-- **Profile themes** — display name, accent color (re-skins the whole UI),
-  avatar energy slider.
-- **Song menu (⋮)** — Like, Play next, Copy link, Add to playlist.
+Put host secrets only in `deploy/.env`. Compose reads a Postgres password and, if you want a public hostname, a Cloudflare tunnel token. Then:
 
-## For You — the recommendation engine
+```bash
+docker compose up --build
+```
 
-- New accounts get a **taste survey** (genres, moments, artists) → instant mix.
-- Every listen trains it: **likes ×3, finishes ×2, plays ×1, fast skips −1**,
-  per artist and per title-token, plus survey seeds.
-- Candidates come from your top artists, your word streaks, and your survey;
-  already-heard songs are excluded, each pick carries its **reason**
-  (“More DJ Javi26”, “For your bluff streak”, “Pairs with a liked song”).
-- **Orbit signal (the real stuff).** Beyond names, Muse pulls each seed song's
-  auto-generated YouTube mix — YouTube's own co-watch + audio-similarity
-  graph — and boosts whatever orbits your songs (“In the orbit of …”).
-- **Anti-bubble slots.** A couple of picks always come from survey genres that
-  nothing matched, so the mix keeps surprising you.
-- **For You lives on home** too — a 6-song “Today's mix” drawn from a daily
-  rotating window, so it changes every day and grows as your taste does.
+The app listens on port 8090 inside the stack. Do not commit `.env`.
 
-## Files
+Optional fronts (Cloudflare Pages, a hosted Postgres) belong in those product dashboards. This repo does not ship live hostnames, tokens, or keys.
 
-- `server.py` — stdlib HTTP server + yt-dlp (threaded, JSON API)
-- `static/` — vanilla UI (no frameworks): `index.html`, `style.css`, `app.js`
-- `start.bat` — one-click launch
+## Repository layout
 
-## API
+| Path | Role |
+|---|---|
+| `server.py` | HTTP server, search, audio proxy, accounts, recommendations |
+| `static/` | Web UI: HTML, CSS, JS, icons, badges |
+| `winapp/` | Windows desktop shell (WebView2) |
+| `linux/` | Linux desktop shell (Electron) |
+| `android/` | Android app (WebView and playback service) |
+| `winsetup/` | Windows installer |
+| `deploy/` | Docker Compose and host hardening |
+| `cloudflare/` | Optional Pages proxy in front of the API |
+| `supabase/functions/muse-api/` | Optional Edge Function for library routes |
 
-- `GET /api/search?q=...&n=12` → `{results:[{id,title,duration,thumbnail}], music_only:true}`
-- `GET /api/play?v=VIDEO_ID` → `{title,duration,thumbnail,audio_url,ext,abr,categories}`
-- `GET /api/audio?v=VIDEO_ID` → audio bytes (Range-aware passthrough, same-origin)
-- `POST /api/signup|login|logout`, `GET /api/me`, `PATCH /api/me`
-- Playlists: `GET/POST /api/playlists`, `PATCH/DELETE /api/playlists/:id`,
-  `GET/POST /api/playlists/:id/tracks`, `PATCH .../order`, `DELETE /api/playlist-items/:id`
-- `POST /api/like`, `GET /api/likes`, `GET /api/liked_ids?ids=…`
-- `POST /api/event` (play/complete/skip telemetry), `POST/GET /api/survey`,
-  `GET /api/recommendations?n=12`
+## Shortcuts
 
-## Notes
+`/` focuses search. Space toggles play. Left and right seek 10 seconds. OS media keys work through Media Session.
 
-- Icons: Feather (MIT) + Font Awesome Free 6 play/pause (CC BY 4.0).
+## License
 
-- Stream URLs are signed and expire after a few hours — replay re-resolves.
-- If a video is age-restricted or region-blocked, you'll get a clear toast
-  instead of a hang.
+MIT. See [LICENSE](LICENSE).

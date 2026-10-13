@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Muse" parent="Theme.AppCompat.NoActionBar">
+        <item name="android:windowBackground">@color/muse_bg</item>
+        <item name="android:statusBarColor">@color/muse_bg</item>
+        <item name="android:navigationBarColor">@color/muse_bg</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="colorPrimary">@color/muse_bg</item>
+    </style>
+</resources>

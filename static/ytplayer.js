@@ -375,6 +375,7 @@
     const forwarders = new Map(); // fn -> wrapper on <audio>
 
     const api = {
+      get engine() { return mode; },
       get src() { return src; },
       set src(v) {
         src = String(v || '');
@@ -394,10 +395,14 @@
         if (handoff && document.hidden && id) {
           // Stay on <audio> while locked. Flipping to YouTube here pauses the
           // only session iOS will let us keep, and a hidden page can't start another.
+          // autoplay MUST be true: after `ended`, a later play() is rejected.
           paused = false;
-          toHtml(id, 0, false);
+          toHtml(id, 0, true);
           return;
         }
+        // Queue on the iframe even before ytReady. Falling through to
+        // /api/audio while the API loads 502s when YouTube bot-checks the VPS.
+        pendingLoad = null;
         if (id && ytAvailable && !blocked.has(id)) {
           if (mode === 'html') {
             try { el.pause(); el.removeAttribute('src'); el.load(); } catch {}
@@ -406,7 +411,8 @@
           paused = true;
           stopTick();
           if (loaded) { try { yt.pauseVideo(); } catch {} }
-          ytLoad(id, 0, false);
+          if (ytReady) ytLoad(id, 0, false);
+          else pendingLoad = { id, start: 0, autoplay: false };
           return;
         }
         toHtml(id, 0, false);
@@ -497,7 +503,15 @@
           : { length: 0, start: () => 0, end: () => 0 };
       },
       get seeking() { return mode === 'html' ? el.seeking : false; },
-      get playbackRate() { return mode === 'html' ? el.playbackRate : 1; },
+      get playbackRate() {
+        if (mode === 'html') return el.playbackRate;
+        try { return (yt && yt.getPlaybackRate && yt.getPlaybackRate()) || 1; } catch { return 1; }
+      },
+      set playbackRate(v) {
+        const r = Math.min(2, Math.max(0.5, +v || 1));
+        try { el.playbackRate = r; } catch {}
+        try { if (mode === 'yt' && yt && yt.setPlaybackRate) yt.setPlaybackRate(r); } catch {}
+      },
       get engine() { return mode; },
       videoData() {
         try { return mode === 'yt' && ytReady ? yt.getVideoData() : null; } catch { return null; }

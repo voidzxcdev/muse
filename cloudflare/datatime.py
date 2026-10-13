@@ -1,8 +1,10 @@
 import http.cookiejar, json, sys, time, urllib.request
 
-BASE = sys.argv[1] if len(sys.argv) > 1 else "https://museapp.pages.dev"
-USER = sys.argv[2] if len(sys.argv) > 2 else "zz_speedtest"
-PASS = "speedtest-123"
+if len(sys.argv) < 4:
+    sys.exit("usage: datatime.py BASE USER PASS")
+BASE = sys.argv[1]
+USER = sys.argv[2]
+PASS = sys.argv[3]
 
 jar = http.cookiejar.CookieJar()
 op = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))

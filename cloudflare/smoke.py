@@ -1,6 +1,6 @@
 import json, sys, time, urllib.request, urllib.parse
 
-BASE = sys.argv[1] if len(sys.argv) > 1 else "https://muse-8he.pages.dev"
+BASE = sys.argv[1] if len(sys.argv) > 1 else "http://127.0.0.1:8090"
 
 def get(path, rng=None):
     req = urllib.request.Request(BASE + path, headers={"User-Agent": "smoke"})

@@ -9,10 +9,10 @@ import { Buffer } from "node:buffer";
 // the 60 slots, so go through Supavisor's transaction pool instead.
 const db = new URL(Deno.env.get("SUPABASE_DB_URL")!);
 const sql = postgres({
-  host: "aws-1-eu-central-1.pooler.supabase.com",
-  port: 6543,
-  database: "postgres",
-  username: "postgres.ewfrnuevdhgspulgazvc",
+  host: db.hostname,
+  port: Number(db.port) || 6543,
+  database: db.pathname.replace(/^\//, "") || "postgres",
+  username: decodeURIComponent(db.username),
   password: decodeURIComponent(db.password),
   ssl: "require",
   prepare: false,

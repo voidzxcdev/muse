@@ -1,0 +1,47 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ApplicationIcon>icon.ico</ApplicationIcon>
+    <AssemblyName>Muse-Setup</AssemblyName>
+    <RootNamespace>MuseSetup</RootNamespace>
+    <Version>1.1.11</Version>
+    <Product>Muse</Product>
+    <AssemblyTitle>Muse Setup</AssemblyTitle>
+    <Company>https://github.com/voidzxcdev</Company>
+    <Authors>voidzxcdev</Authors>
+    <Copyright>voidzxcdev</Copyright>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <InvariantGlobalization>false</InvariantGlobalization>
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>true</SelfContained>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+  </PropertyGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="icon.ico">
+      <LogicalName>MuseSetup.icon.ico</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="muselogo.png">
+      <LogicalName>MuseSetup.muselogo.png</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="fonts\ClashDisplay-Semibold.ttf">
+      <LogicalName>MuseSetup.ClashDisplay.ttf</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="fonts\Satoshi-Medium.ttf">
+      <LogicalName>MuseSetup.SatoshiMedium.ttf</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="fonts\Satoshi-Bold.ttf">
+      <LogicalName>MuseSetup.SatoshiBold.ttf</LogicalName>
+    </EmbeddedResource>
+    <None Update="icon.ico">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+</Project>

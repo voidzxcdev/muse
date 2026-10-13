@@ -14,6 +14,3 @@ services:
         - Dockerfile
         - docker-start.sh
         - requirements.txt
-    envVars:
-      - key: DATABASE_URL
-        sync: false

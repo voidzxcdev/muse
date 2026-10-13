@@ -1,0 +1,84 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: muse-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: muse
+      POSTGRES_DB: muse
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - muse-pg:/var/lib/postgresql/data
+    expose:
+      - "5432"
+    networks:
+      - muse
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U muse -d muse"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    shm_size: 128mb
+    command:
+      - postgres
+      - -c
+      - shared_buffers=256MB
+      - -c
+      - effective_cache_size=1GB
+      - -c
+      - wal_compression=on
+    security_opt:
+      - no-new-privileges:true
+
+  muse:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: muse
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      HOST: "0.0.0.0"
+      PORT: "8090"
+      WARP: "1"
+      MUSE_OPEN_BROWSER: "0"
+      PUBLIC_URL: "${PUBLIC_URL:-http://127.0.0.1:8090}"
+      DENO_HEAP: "400"
+      DATABASE_URL: postgresql://muse:${POSTGRES_PASSWORD}@postgres:5432/muse
+    expose:
+      - "8090"
+    volumes:
+      - muse-cache:/app/music
+      - muse-covers:/app/covers
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - muse
+    security_opt:
+      - no-new-privileges:true
+    read_only: false
+    tmpfs:
+      - /tmp:size=256m
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: muse-tunnel
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run --token ${TUNNEL_TOKEN}
+    depends_on:
+      - muse
+    networks:
+      - muse
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  muse-cache:
+  muse-covers:
+  muse-pg:
+
+networks:
+  muse:
+    driver: bridge

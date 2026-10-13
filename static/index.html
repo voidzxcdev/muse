@@ -2,6 +2,33 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
+  <script>
+  (function () {
+    var p = location.pathname || '/';
+    var lane = null;
+    if (/^\/pc(\/|$)/.test(p)) lane = 'pc';
+    else if (/^\/web(\/|$)/.test(p)) lane = 'web';
+    else if (/^\/mobile\/iphone(\/|$)/.test(p)) lane = 'iphone';
+    else if (/^\/mobile\/android(\/|$)/.test(p)) lane = 'android';
+    try {
+      if (window.chrome && window.chrome.webview) {
+        document.documentElement.classList.add('muse-app');
+        window.__museDesktop = 1;
+        if (!lane) lane = 'pc';
+      }
+      if (/MuseAndroid/i.test(navigator.userAgent || '')) {
+        document.documentElement.classList.add('muse-android');
+        window.__museAndroid = 1;
+        if (!lane) lane = 'android';
+      }
+    } catch (e) {}
+    if (lane) {
+      window.__museLane = lane;
+      document.documentElement.setAttribute('data-lane', lane);
+      try { sessionStorage.setItem('muse:lane', lane); } catch (e) {}
+    }
+  })();
+  </script>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#0a0a0b" />
   <meta name="mobile-web-app-capable" content="yes" />
@@ -9,23 +36,45 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Muse" />
   <link rel="manifest" href="/manifest.webmanifest" />
-  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png?v=2" />
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png?v=3" />
   <title>Muse</title>
   <link rel="preconnect" href="https://api.fontshare.com" />
   <link rel="preconnect" href="https://i.ytimg.com" crossorigin />
   <link rel="dns-prefetch" href="https://www.youtube.com" />
   <link rel="dns-prefetch" href="https://music.youtube.com" />
   <link href="https://api.fontshare.com/v2/css?f[]=clash-display@500,600,700&f[]=satoshi@400,500,700,900&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />
-  <link rel="stylesheet" href="style.css?v=161" />
-  <link rel="icon" href="/favicon.ico" sizes="32x32" />
+  <link rel="stylesheet" href="/style.css?v=310" />
+  <link rel="icon" type="image/png" href="/favicon.png?v=172" sizes="32x32" />
+  <link rel="icon" href="/favicon.ico?v=172" sizes="any" />
 </head>
 <body class="home intro">
   <div id="intro" aria-hidden="true">
-    <div class="intro-pill"><img class="blogo" src="/muselogo.png?v=131" alt="" /><span>Muse</span></div>
+    <div class="intro-stack">
+      <div class="intro-pill"><img class="blogo" src="/muselogo.png?v=172" alt="" /><span>Muse</span></div>
+      <p id="introUpdate" hidden>Updated to New Version</p>
+    </div>
   </div>
+  <script>
+  try {
+    sessionStorage.setItem('muse:fresh', '1');
+    if (sessionStorage.getItem('muse:introSeen')) {
+      document.body.classList.remove('intro');
+      var seen = document.getElementById('intro');
+      if (seen) seen.remove();
+      window.__museIntro = 'done';
+    } else {
+      sessionStorage.setItem('muse:introSeen', '1');
+    }
+    if (sessionStorage.getItem('muse:updated')) {
+      sessionStorage.removeItem('muse:updated');
+      var u = document.getElementById('introUpdate');
+      if (u) u.hidden = false;
+    }
+  } catch (e) {}
+  </script>
 
   <aside id="side">
-    <button id="sideBrand" title="Home"><img class="blogo" src="/muselogo.png?v=131" alt="" /><span id="sideBrandText">Muse</span><span id="acctLink" title="Account">Account</span></button>
+    <button id="sideBrand" title="Home"><img class="blogo" src="/muselogo.png?v=172" alt="" /><span id="sideBrandText">Muse</span></button>
     <nav class="snav">
       <button data-view="home">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
@@ -35,16 +84,60 @@
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
         <span>Liked Songs</span><b id="likeCount"></b>
       </button>
+      <button type="button" id="sideMore">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
+        <span>More</span><b id="moreCount"></b>
+      </button>
     </nav>
     <div class="side-head"><span>Playlists</span><button id="newPl" title="New playlist">+</button></div>
     <div id="plList"></div>
+    <div id="musely" class="is-closed">
+      <button type="button" class="musely-guy" id="muselyGuy" title="Musely" aria-label="Musely">
+        <span class="musely-sprite" id="muselySprite" data-mood="idle"></span>
+      </button>
+      <section class="musely-box" id="muselyBox" aria-label="Musely">
+        <header class="musely-hd">
+          <button type="button" id="muselyClose" aria-label="Close Musely">
+            <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </header>
+        <div class="musely-log" id="muselyLog">
+          <div class="musely-hi">
+            <p class="musely-hi-a">Привет, Я Musely <i class="musely-hand" aria-hidden="true"></i></p>
+            <p class="musely-hi-b">могу найти трендовую музыку.</p>
+          </div>
+        </div>
+        <form id="muselyForm" class="musely-form">
+          <input id="muselyQ" maxlength="200" placeholder="напиши…" autocomplete="off" spellcheck="false" />
+          <button type="submit" aria-label="Send">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+          </button>
+        </form>
+      </section>
+      <button type="button" class="musely-scrim" id="muselyScrim" hidden aria-label="Close chat"></button>
+    </div>
+    <div id="sideFoot">
+      <button id="sideUser" title="Sign in" type="button"><span class="avatar">?</span></button>
+      <button type="button" class="musely-call is-on is-locked" id="muselyCall" aria-label="Sign in for Musely">Sign in for Musely</button>
+    </div>
   </aside>
 
   <div class="stage">
     <header class="top">
       <form id="searchForm" class="search" role="search">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <div class="q-switch" id="qSwitch" role="tablist" aria-label="Search type">
+          <span class="q-switch-pill" aria-hidden="true"></span>
+          <button type="button" class="q-sw on" data-qmode="songs" role="tab" aria-selected="true" title="Search songs">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          </button>
+          <button type="button" class="q-sw" data-qmode="people" role="tab" aria-selected="false" title="Search people">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          </button>
+        </div>
         <input id="q" placeholder="Search a song…" autocomplete="off" spellcheck="false" />
+        <button type="button" id="qClear" class="q-clear" hidden title="Clear" aria-label="Clear search">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
       </form>
     </header>
 
@@ -72,6 +165,7 @@
           <button id="bNext" title="Next"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M5.5 6v12l9-6z"/><rect x="16" y="6" width="3" height="12" rx="1.5"/></svg></button>
           <button id="bRepeat" title="Repeat: off → all → one"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg><b class="one">1</b></button>
           <button id="bAdd" title="Add to playlist"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+          <button id="bFx" title="Эффекты" hidden><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21v-7"/><path d="M4 10V3"/><path d="M12 21v-9"/><path d="M12 8V3"/><path d="M20 21v-5"/><path d="M20 12V3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg></button>
         </div>
         <div class="p-track">
           <span id="pos">0:00</span>
@@ -89,12 +183,81 @@
   </div>
 
   <div id="menu" class="menu" hidden></div>
+  <div id="acctPop" class="acct-pop" hidden>
+    <div class="acct-card" role="menu">
+      <div class="acct-me">
+        <span class="acct-av" id="acctAv"></span>
+        <div class="acct-who">
+          <b id="acctName"></b>
+          <i id="acctHandle"></i>
+        </div>
+      </div>
+      <button type="button" data-acct="profile">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        Профиль
+      </button>
+      <button type="button" data-acct="settings">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        Параметры
+      </button>
+      <div class="acct-sep"></div>
+      <button type="button" data-acct="out" class="acct-out">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        Выйти
+      </button>
+    </div>
+  </div>
+  <div id="morePop" class="acct-pop" hidden>
+    <div class="acct-card" role="menu">
+      <button type="button" data-more="market">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+        <span><b>Маркетплейс</b><i>Плейлистов</i></span>
+      </button>
+      <button type="button" data-more="friends">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        Друзья
+      </button>
+    </div>
+  </div>
+  <div id="fxPop" class="fx-pop" hidden>
+    <div class="fx-card">
+      <p class="fx-hd">Эффекты</p>
+      <div id="fxList"></div>
+    </div>
+  </div>
+
+  <div id="deskPrompt" class="desk-wrap" hidden>
+    <div class="desk-card" role="dialog" aria-labelledby="deskTitle">
+      <button class="desk-x" id="deskClose" type="button" aria-label="Close">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+      <img class="desk-logo" src="/muselogo.png?v=172" alt="" />
+      <h2 id="deskTitle">Muse for Windows</h2>
+      <p class="desk-sub">The desktop app. One window, tray, auto-update.</p>
+      <a class="mbtn primary desk-dl" id="deskDl" href="/desktop/Muse-Setup.exe"><svg class="win-ic" xmlns="http://www.w3.org/2000/svg" shape-rendering="geometricPrecision" text-rendering="geometricPrecision" image-rendering="optimizeQuality" fill-rule="evenodd" clip-rule="evenodd" viewBox="0 0 512 512.02" aria-hidden="true"><path fill="#fff" fill-rule="nonzero" d="M0 512.02h242.686V269.335H0V512.02zm0-269.334h242.686V0H0v242.686zm269.314 0H512V0H269.314v242.686zm0 269.334H512V269.335H269.314V512.02z"/></svg>Download for Windows</a>
+      <button class="desk-skip" id="deskSkip" type="button">Not now</button>
+    </div>
+  </div>
+
+  <div id="apkPrompt" class="desk-wrap" hidden>
+    <div class="desk-card" role="dialog" aria-labelledby="apkTitle">
+      <button class="desk-x" id="apkClose" type="button" aria-label="Close">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+      <img class="desk-logo" src="/muselogo.png?v=172" alt="" />
+      <h2 id="apkTitle">Muse for Android</h2>
+      <p class="desk-sub">The Android app. Background play, auto-update.</p>
+      <a class="mbtn primary desk-dl" id="apkDl" href="/android/Muse.apk?v=1.0.3" download="Muse.apk"><svg class="win-ic" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#fff" aria-hidden="true"><path d="M17.6 11.48L19.44 8.3a.64.64 0 0 0-.25-.83.64.64 0 0 0-.83.25l-1.78 3.08a11.2 11.2 0 0 0-9.16 0L5.64 7.72a.64.64 0 0 0-.83-.25.64.64 0 0 0-.25.83l1.84 3.18A10.94 10.94 0 0 0 1 21h22a10.94 10.94 0 0 0-5.4-9.52zM7 16.25a1.25 1.25 0 1 1 0-2.5 1.25 1.25 0 0 1 0 2.5zm10 0a1.25 1.25 0 1 1 0-2.5 1.25 1.25 0 0 1 0 2.5z"/></svg>Download for Android</a>
+      <button class="desk-skip" id="apkSkip" type="button">Not now</button>
+    </div>
+  </div>
 
   <div id="modalWrap" class="modal-wrap" hidden>
     <div class="modal" id="modalBox" role="dialog" aria-modal="true"></div>
   </div>
 
-  <audio id="audio" preload="auto"></audio>
+  <audio id="audio" preload="auto" playsinline webkit-playsinline x-webkit-airplay="allow"></audio>
+  <audio id="keep" src="silence.wav?v=1" loop muted playsinline webkit-playsinline preload="auto" disableremoteplayback></audio>
   <input type="file" id="coverPick" accept="image/*" style="position:fixed;left:0;bottom:0;width:1px;height:1px;opacity:0;pointer-events:none;" />
   <nav id="tabbar" aria-label="Primary">
     <div id="tabInd"></div>
@@ -103,8 +266,12 @@
       <span>Home</span>
     </button>
     <button data-view="liked">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+      <span class="tab-ic"><svg xmlns="http://www.w3.org/2000/svg" viewBox="-3 -3 30 30" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" overflow="visible"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></span>
       <span>Liked</span>
+    </button>
+    <button type="button" id="tabMore">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
+      <span>More<b id="tabMoreCount"></b></span>
     </button>
     <button id="tabLib">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
@@ -135,7 +302,7 @@
     </div>
     <div class="ob-card">
       <div class="ob-brand">
-        <img class="ob-logo" src="/muselogo.png?v=131" alt="" />
+        <img class="ob-logo" src="/muselogo.png?v=172" alt="" />
         <span>Muse</span>
       </div>
       <h1 id="obTitle">Your music starts here</h1>
@@ -150,11 +317,27 @@
     </div>
   </div>
   <div id="toast" class="toast" hidden></div>
+  <div id="note" class="note" hidden></div>
+  <div id="mediaView" class="mv" hidden>
+    <button type="button" class="mv-x" id="mvX" aria-label="Закрыть"></button>
+    <div class="mv-zoom" id="mvZoom">
+      <button type="button" id="mvZout" aria-label="Уменьшить">−</button>
+      <button type="button" id="mvZin" aria-label="Увеличить">+</button>
+    </div>
+    <div class="mv-stage" id="mvStage"></div>
+    <div class="mv-skip" id="mvSkip"></div>
+    <div class="mv-hud" id="mvHud" hidden>
+      <button type="button" class="mv-play" id="mvPlay" aria-label="Play"></button>
+      <div class="mv-line" id="mvLine"><i class="mv-fill" id="mvFill"></i><b class="mv-knob" id="mvKnob"></b></div>
+      <span class="mv-time" id="mvTime">0:00</span>
+      <button type="button" class="mv-mute" id="mvMute" aria-label="Звук"></button>
+    </div>
+  </div>
   <script>
   /* Failsafe: runs with zero dependencies. If the main script ever dies,
      the intro still lifts at 3.2s and the real error gets toasted. */
   window.__museErr = [];
-  window.__museBuild = 133;
+  window.__museBuild = 274;
   window.addEventListener('error', function (e) {
     try {
       window.__museErr.push(String((e && e.message) || 'script error'));
@@ -163,16 +346,13 @@
   }, true);
   setTimeout(function () {
     var i = document.getElementById('intro');
-    if (i) {
-      i.style.transition = 'opacity .5s ease';
-      i.style.opacity = '0';
-      i.style.pointerEvents = 'none';
-      setTimeout(function () { var j = document.getElementById('intro'); if (j) j.remove(); }, 600);
-    }
+    if (i) i.remove();
+    document.querySelectorAll('.intro-pill').forEach(function (p) { p.remove(); });
     document.body.classList.remove('intro');
-  }, 3200);
+    window.__museIntro = 'done';
+  }, 5000);
   </script>
-  <script src="ytplayer.js?v=161"></script>
-<script src="app.js?v=161"></script>
+  <script src="/ytplayer.js?v=218"></script>
+  <script src="/app.js?v=308"></script>
 </body>
 </html>

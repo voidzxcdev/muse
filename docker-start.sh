@@ -10,6 +10,9 @@ if [ "${WARP:-1}" = "1" ]; then
     echo "WARP profile loaded from database"
   elif wgcf register --accept-tos >/dev/null 2>&1 && wgcf generate >/dev/null 2>&1; then
     echo "WARP profile freshly registered"
+    if [ -n "${DATABASE_URL:-}" ]; then
+      python /app/warp_profile.py "$PROFILE" --save || true
+    fi
   else
     echo "WARP registration failed; going direct"
     rm -f "$PROFILE"

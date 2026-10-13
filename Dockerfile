@@ -6,7 +6,13 @@ RUN apt-get update \
 # yt-dlp needs a JavaScript runtime to solve YouTube's player challenges.
 COPY --from=denoland/deno:bin /deno /usr/local/bin/deno-real
 # Cap the V8 heap so one challenge solve can't take the 512 MB instance down.
-RUN printf '#!/bin/sh\ncase "$1" in -*|"") exec /usr/local/bin/deno-real "$@";; esac\nsub="$1"; shift\nexec /usr/local/bin/deno-real "$sub" --v8-flags=--max-old-space-size=160 "$@"\n' > /usr/local/bin/deno \
+RUN printf '%s\n' \
+        '#!/bin/sh' \
+        'HEAP="${DENO_HEAP:-256}"' \
+        'case "$1" in -*|"") exec /usr/local/bin/deno-real "$@";; esac' \
+        'sub="$1"; shift' \
+        'exec /usr/local/bin/deno-real "$sub" --v8-flags=--max-old-space-size="$HEAP" "$@"' \
+        > /usr/local/bin/deno \
     && chmod +x /usr/local/bin/deno
 # PO token generator, run per request in script mode (a resident server pushed
 # the instance past 512 MB). Version must match the pip plugin.
