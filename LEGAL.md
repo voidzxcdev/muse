@@ -1,6 +1,12 @@
 # Legal
 
-Muse is independent software. It is not affiliated with, endorsed by, or sponsored by YouTube, Google, or any record label.
+The VPS is in France (Contabo). Live pages: **https://getmuse.eu/legal**
+
+Privacy, GDPR, Terms, Cookies, processor note, who else, uptime, credits, copyright.
+
+Notice: **https://getmuse.eu/gdpr**. No DPO. Mail **hello@getmuse.eu**. Accounts have no email, so there's no password reset.
+
+Muse is an independent project. It is not affiliated with, endorsed by, or sponsored by YouTube, YouTube Music, Google, or any record label.
 
 ## What the MIT license covers
 
@@ -14,11 +20,12 @@ Muse does not sell a music catalog. It does not claim to be YouTube Music.
 
 Playback depends on whatever catalog backend the operator configures. The stock server talks to public video platforms. That is an operator choice, not a content license from Muse.
 
-If you run a copy of Muse:
+If you take the source from GitHub and run your own version:
 
-- You are the operator.
+- That copy is yours. You are the operator and, where GDPR applies, the controller.
+- voidzxcdev does not operate it and is not liable for it.
 - You must have a lawful basis for any search, stream, or cache you enable.
-- You must not present Muse as an official Google or YouTube product.
+- You must not present it as getmuse.eu or as an official Google or YouTube offering.
 
 ## Clean room boundary
 
@@ -31,9 +38,11 @@ That is clean-room structure for **Muse's own API**. It is not a license for thi
 
 ## Trademarks
 
-YouTube, YouTube Music, and Google are trademarks of Google LLC. Muse, Musely, and getmuse.eu are used by this project. Do not copy third-party marks into skins, ads, or store listings.
+YouTube, YouTube Music, and Google are trademarks of Google LLC. Muse and getmuse.eu are used by this project. Do not copy third-party marks into skins, ads, or store listings.
 
-## DMCA and takedowns
+## Copyright and takedowns
+
+getmuse.eu is not a US DMCA designated agent and does not claim 17 U.S.C. § 512.
 
 Muse does not host a public song archive. Library data (likes, playlists, profile) belongs to user accounts.
 

@@ -115,9 +115,35 @@ try {
     : '/web';
   try { history.replaceState({ muse: 1 }, '', dest); } catch {}
 })();
-/* pc: YouTube iframe in WebView2 (listener IP — starts instantly).
- * web/iphone/android: native /api/audio so lock-screen & hidden tabs keep playing. */
-const useEmbedPlay = window.__museLane === 'pc' && typeof MusePlayer === 'function';
+function cookiesChoice() {
+  try { return localStorage.getItem('muse:cookies') || ''; } catch { return ''; }
+}
+function cookiesAll() {
+  return cookiesChoice() === 'all';
+}
+function setCookies(val) {
+  try { localStorage.setItem('muse:cookies', val); } catch {}
+}
+function bindCookieBanner() {
+  const el = $('cookieBar');
+  if (!el || el === __nullEl) return;
+  if (cookiesChoice()) { el.hidden = true; return; }
+  el.hidden = false;
+  $('cbAccept')?.addEventListener('click', () => {
+    setCookies('all');
+    el.hidden = true;
+    if (window.__museLane === 'pc' && typeof MusePlayer === 'function' && !useEmbedPlay) {
+      location.reload();
+    }
+  });
+  $('cbReject')?.addEventListener('click', () => {
+    setCookies('needed');
+    el.hidden = true;
+  });
+}
+/* pc + cookie consent: YouTube iframe in WebView2 (listener IP, starts instantly).
+ * Reject / unset: native /api/audio. No youtube.com cookies until Accept. */
+const useEmbedPlay = window.__museLane === 'pc' && typeof MusePlayer === 'function' && cookiesAll();
 const audio = useEmbedPlay ? MusePlayer(audioEl, { handoff: false }) : audioEl;
 
 function ytThumb(id, url) {
@@ -135,6 +161,27 @@ function streamUrl(id, extra) {
   if (isIOS || window.__museLane === 'iphone') p.set('ios', '1');
   if (extra) Object.entries(extra).forEach(([k, v]) => p.set(k, v));
   return `/api/audio?${p}`;
+}
+
+const HIDDEN_IDS = new Set(['4NRXx6U8ABQ']);
+function hiddenTrack(t, title) {
+  const id = (t && typeof t === 'object') ? (t.id || '') : String(t || '');
+  const name = (t && typeof t === 'object') ? (t.title || '') : (title || '');
+  if (HIDDEN_IDS.has(id)) return true;
+  const s = String(name).toLowerCase();
+  return /blinding\s*lights/.test(s) && /official(?:\s+music)?\s+video/.test(s);
+}
+function shownTracks(list) {
+  return (list || []).filter((t) => t && !hiddenTrack(t));
+}
+function prettyTitle(s) {
+  return String(s || '')
+    .replace(/\s*\[[^[\]]*\]/g, '')
+    .replace(/\s*［[^］]*］/g, '')
+    .replace(/\s*【[^】]*】/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .replace(/^[-–—\s]+|[-–—\s]+$/g, '')
+    .trim();
 }
 
 function hideInducedPause() {
@@ -160,6 +207,16 @@ let qi = -1;
 let queueSource = 'search'; // search | home | foryou | playlist | liked | radio | mix
 let queuePid = null; // playlist id the queue came from (playlist source only)
 let current = null;  // {id, ...}
+const lyricsCache = new Map();
+let lyricLines = [];
+let lyricIdx = -1;
+let lyricReq = 0;
+let lyricId = '';
+let lyricSynced = false;
+let lyricRaf = 0;
+let lyricLoadedDur = 0;
+let lyricViewH = 0;
+let lyricRO = null;
 let dragging = false;
 let shuffle = false;
 let repeat = 'off'; // off | all | one
@@ -360,7 +417,7 @@ function cardHTML(r, i) {
       <span class="go"><span><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512" fill="currentColor"><path d="M73 39c-14.8-9.1-33.4-9.4-48.5-.9S0 62.6 0 80V432c0 17.4 9.4 33.4 24.5 41.9s33.7 8.1 48.5-.9L361 297c14.3-8.7 23-24.2 23-41s-8.7-32.2-23-41L73 39z"/></svg></span></span>
       ${r.duration ? `<span class="dur">${fmt(r.duration)}</span>` : ''}
     </div>
-    <h3>${escapeHtml(r.title)}</h3>
+    <h3>${escapeHtml(prettyTitle(r.title))}</h3>
     ${r.uploader ? `<p class="up">${escapeHtml(r.uploader)}</p>` : ''}
   </div>`;
 }
@@ -415,6 +472,7 @@ function vibe(kind = 'select') {
 }
 function renderHomeTracks(tracks, mode = 'popular') {
   const box = $('homeFy');
+  tracks = (tracks || []).filter((t) => t && !hiddenTrack(t));
   homeQueue = tracks.map((t) => ({ ...t }));
   const title = mode === 'fy' ? 'For You' : 'Popular';
   const sub = mode === 'fy' ? '' : 'Most played on Muse';
@@ -449,14 +507,15 @@ async function loadPopularTracks() {
   let tracks = [];
   try {
     const j = await api('/api/popular?n=18');
-    tracks = j.tracks || [];
+    tracks = (j.tracks || []).filter((t) => !hiddenTrack(t));
   } catch {}
   if (tracks.length < 6) {
     try {
       const j = await api('/api/search?q=popular%20songs&n=15');
       const seen = new Set(tracks.map((t) => t.id));
       for (const t of (j.results || [])) {
-        if (!seen.has(t.id)) { tracks.push(t); seen.add(t.id); }
+        if (hiddenTrack(t) || seen.has(t.id)) continue;
+        tracks.push(t); seen.add(t.id);
         if (tracks.length >= 18) break;
       }
     } catch {}
@@ -491,7 +550,7 @@ async function loadHomeFy() {
     if (me) {
       try {
         const j = await api('/api/recommendations?n=18');
-        const recos = j.tracks || [];
+        const recos = (j.tracks || []).filter((t) => !hiddenTrack(t));
         if (recos.length >= 4 && (recoIsPersonal(recos) || localHeardIds().length >= 3)) {
           tracks = recos;
           mode = 'fy';
@@ -581,7 +640,7 @@ async function doSearch(q) {
     const j = await fetchJSON(`/api/search?q=${encodeURIComponent(q)}&n=12`, { signal: ctl.signal }, 12000);
     if (token !== searchToken) return;
     $('loading').hidden = true;
-    results = j.results || [];
+    results = (j.results || []).filter((r) => !hiddenTrack(r));
     if (!results.length) {
       $('grid').innerHTML = '<div class="vempty">No songs found.</div>';
       $('grid').hidden = false;
@@ -623,7 +682,7 @@ async function enrichInBackground(ids, token) {
           el.querySelector('.thumb').appendChild(d);
         }
         const h = el.querySelector('h3');
-        if (h && c.title) h.textContent = c.title;
+        if (h && c.title) h.textContent = prettyTitle(c.title);
       }
       for (const list of [results, queue]) {
         const q = list.find((r) => r.id === c.id);
@@ -890,24 +949,19 @@ function listenSeconds(p) {
   return Math.max(t, wall);
 }
 
-async function muselyHeard(id) {
+async function onHeard(id) {
   if (!me || !id) return;
   const n = rememberHeard(id);
   if (n >= 3) maybeRefreshHomeMix();
-  await muselyRefreshGate();
-  if (!muselyGate.unlocked) {
-    await new Promise((r) => setTimeout(r, 500));
-    await muselyRefreshGate();
-  }
 }
 
-function maybeCreditMusely() {
-  if (!me || !lastPlay || lastPlay.credited || muselyGate.unlocked || muselyGate.login) return;
+function maybeCreditListen() {
+  if (!me || !lastPlay || lastPlay.credited) return;
   const el = listenSeconds(lastPlay);
   if (el < 30) return;
   lastPlay.credited = true;
   const p = lastPlay;
-  noteEvent('play', p, el).then(() => muselyHeard(p.id));
+  noteEvent('play', p, el).then(() => onHeard(p.id));
 }
 
 function finalizePrev(completed) {
@@ -920,7 +974,7 @@ function finalizePrev(completed) {
     if (completed) await noteEvent('complete', p, el);
     else if (!heard) await noteEvent('skip', p, el);
     else await noteEvent('play', p, el);
-    if (me && heard) await muselyHeard(p.id);
+    if (me && heard) await onHeard(p.id);
   })();
 }
 
@@ -969,6 +1023,11 @@ async function trackMeta(id, item) {
 }
 
 function playId(id, meta = {}, list = null, source = 'search') {
+  if (list) list = list.filter((r) => r && !hiddenTrack(r));
+  if (hiddenTrack(id, meta && meta.title)) {
+    if (list && list.length) return playId(list[0].id, list[0], list, source);
+    return;
+  }
   const myToken = ++playToken;
   finalizePrev(false);
   if (list) {
@@ -980,7 +1039,7 @@ function playId(id, meta = {}, list = null, source = 'search') {
   }
   const item = queue.find((r) => r.id === id) || meta;
   if (!list) qi = queue.findIndex((r) => r.id === id);
-  current = { id, ...item };
+  current = { id, ...item, title: prettyTitle(item.title) || item.title };
   lastPlay = { ...current, t0: Date.now() };
   lastPlayAt = Date.now();
   lastSongPos = 0;
@@ -1028,18 +1087,24 @@ function playId(id, meta = {}, list = null, source = 'search') {
   if ($('bigplayer').hidden) ensurePlayerHome();
   document.body.classList.add('has-player');
   playerShownAt = Date.now();
-  $('ptitle').textContent = item.title || 'Loading…';
+  $('ptitle').textContent = prettyTitle(item.title) || 'Loading…';
   swapArt(item.thumbnail, firstShow);
+  try { linuxPush(true); } catch {}
+  try { if ($('bigplayer') && !$('bigplayer').hidden) { syncBpNow(); loadLyrics(); } } catch {}
   $('bLike').classList.toggle('loved', likedSet.has(id));
   setPlaying(true);
   try { mediaSession(current, 'playing'); } catch {}
   try { warmNext(); } catch {}
   trackMeta(id, item).then((m) => {
     if (myToken !== playToken) return; // a newer tap won — stand down
-    current = { ...current, ...m };
+    current = { ...current, ...m, title: prettyTitle(m.title || current.title) || current.title };
     const titleEl = $('ptitle');
-    titleEl.textContent = m.title;
+    titleEl.textContent = current.title || 'Loading…';
     swapArt(m.thumbnail, firstShow);
+    try { linuxPush(true); } catch {}
+    // Force lyrics reload — a cold fetch without uploader caches plain text
+    // (Дофамин x Oohc) and never starts the karaoke clock.
+    try { if ($('bigplayer') && !$('bigplayer').hidden) { syncBpNow(); loadLyrics(true); } } catch {}
     if (m.duration) $('dur').textContent = fmt(m.duration);
     if ('liked' in m) {
       if (m.liked) likedSet.add(id);
@@ -1119,7 +1184,7 @@ function applyNowPlayingMeta(m) {
   if (!m || !('mediaSession' in navigator)) return;
   const key = `${m.id || ''}|${m.title || ''}|${m.uploader || ''}`;
   navigator.mediaSession.metadata = new MediaMetadata({
-    title: (m.title || 'Muse').slice(0, 180),
+    title: (prettyTitle(m.title) || m.title || 'Muse').slice(0, 180),
     artist: (m.uploader || 'Muse').slice(0, 180),
     album: 'Muse',
     artwork: nowPlayingArt(m.id, m.thumbnail),
@@ -1323,6 +1388,49 @@ function pushPositionState(force) {
       // Never 0: Safari drops Now Playing when playbackRate is zero.
       playbackRate: fxSpec().rate || 1,
       position: pos,
+    });
+  } catch {}
+  finally { linuxPush(); }
+}
+
+let lastLinuxPush = 0;
+function linuxPush(force) {
+  try {
+    if (typeof window.__musePushMpris !== 'function') return;
+    const now = Date.now();
+    if (!force && now - lastLinuxPush < 200) return;
+    lastLinuxPush = now;
+    const bar = $('player');
+    const hidden = !bar || bar.hidden;
+    const title = prettyTitle((current && current.title) || ($('ptitle') && $('ptitle').textContent) || '');
+    const blank = hidden || !title || title === '—' || title === '-' || title === '–' || title === 'Loading…';
+    let art = '';
+    try {
+      const a = $('art');
+      art = (a && (a.currentSrc || a.src)) || (current && (current.thumbnail || current.thumb)) || '';
+    } catch {}
+    const dur = trackDuration() || 0;
+    let pos = 0;
+    try { pos = audio.currentTime; } catch {}
+    if (!Number.isFinite(pos) || pos < 0) pos = 0;
+    const id = (current && current.id) || '';
+    const artist = String((current && current.uploader) || '').replace(/\s*-\s*Topic$/i, '').replace(/VEVO$/i, '').trim();
+    if (bar && bar !== __nullEl) {
+      bar.dataset.id = id;
+      bar.dataset.artist = artist;
+      bar.dataset.duration = String(dur || '');
+    }
+    window.__musePushMpris({
+      id,
+      title: blank ? '' : title,
+      artist: blank ? '' : artist,
+      art: blank ? '' : art,
+      url: (!blank && id) ? (`https://www.youtube.com/watch?v=${id}`) : '',
+      playing: !blank && $('bPlay').classList.contains('playing'),
+      stopped: !!blank,
+      position: pos,
+      duration: dur,
+      volume: $('vol') ? Number($('vol').value) / 100 : 0.85,
     });
   } catch {}
 }
@@ -1561,6 +1669,7 @@ function paintProgress(ratio) {
   $('pknob').style.left = pct;
   $('pos').textContent = fmt(ratio == null ? audio.currentTime : r * d);
   $('dur').textContent = fmt(d);
+  try { tickLyrics(); } catch {}
 }
 
 function seekRatio(ratio) {
@@ -1574,8 +1683,9 @@ function seekRatio(ratio) {
 function setPlaying(p) {
   $('bPlay').classList.toggle('playing', !!p);
   if (p) errTries = 0; // clean playback resets the recovery ladder
+  try { linuxPush(true); } catch {}
   paintHeaderPlay();
-  try { muselyGroove(); } catch {}
+  
   try {
     if ('mediaSession' in navigator) {
       navigator.mediaSession.playbackState = (p && !userPaused) ? 'playing' : 'paused';
@@ -1631,8 +1741,19 @@ if (isAndroidApp()) {
     document.documentElement.style.setProperty('--android-nav', `${Math.max(24, n)}px`);
   } catch {}
 }
-const isPhone = () => !isDeskApp() && matchMedia('(max-width: 760px)').matches;
+const isPhone = () => {
+  if (isDeskApp()) return false;
+  if (window.__museLane === 'pc') return false;
+  if (window.__museLane === 'iphone' || window.__museLane === 'android') return true;
+  return matchMedia('(max-width: 760px)').matches;
+};
 const isAndroidWeb = () => /Android/i.test(navigator.userAgent) && !isAndroidApp();
+function syncPhoneClass() {
+  try { document.documentElement.classList.toggle('muse-phone', isPhone()); } catch {}
+}
+syncPhoneClass();
+try { matchMedia('(max-width: 760px)').addEventListener('change', syncPhoneClass); } catch {}
+window.addEventListener('resize', syncPhoneClass);
 
 function hardCutIntro() {
   introDone = true;
@@ -1700,6 +1821,7 @@ function init() {
       if (go) go();
     });
   }
+  bindCookieBanner();
   bindMediaView();
   try { applyPlugs(); } catch {}
   setHome(true);
@@ -1957,7 +2079,7 @@ function init() {
   audio.addEventListener('timeupdate', () => {
     if (!dragging) paintProgress();
     rememberSongPos();
-    maybeCreditMusely();
+    maybeCreditListen();
     try { pushPositionState(); } catch {}
     if (isIOS && !audio.paused && (audio.muted || audio.volume < 0.05)) primeAudioSession();
     const raw = audio.currentTime;
@@ -2116,6 +2238,9 @@ function init() {
   audio.addEventListener('loadedmetadata', () => {
     posTrusted = true;
     paintProgress();
+    try {
+      if ($('bigplayer') && !$('bigplayer').hidden) loadLyrics();
+    } catch {}
   });
   const pline = $('pline');
   const ratioAt = (e) => {
@@ -2473,10 +2598,44 @@ function closeMore() {
   const p = $('morePop');
   if (p) p.hidden = true;
 }
+function closeLegal() {
+  const p = $('legalPop');
+  if (p) p.hidden = true;
+}
+function openLegalPage(path) {
+  const url = path || '/legal';
+  try { window.open(url, '_blank', 'noopener'); } catch { location.href = url; }
+}
+function openLegalMenu(fromEl) {
+  closeMenu();
+  closeAcct();
+  closeFxPop();
+  closeMore();
+  const pop = $('legalPop');
+  if (!pop) return;
+  pop.hidden = false;
+  pop.style.left = '';
+  pop.style.top = '';
+  const phone = isPhone() && !isDeskApp();
+  if (phone || !fromEl) return;
+  const card = pop.querySelector('.acct-card');
+  const r = fromEl.getBoundingClientRect();
+  const w = card.offsetWidth || 280;
+  const h = Math.min(card.scrollHeight || 420, window.innerHeight - 16);
+  let left = r.left;
+  let top = r.bottom + 10;
+  if (top + h > window.innerHeight - 8) top = Math.max(8, window.innerHeight - h - 8);
+  left = Math.max(8, Math.min(window.innerWidth - w - 8, left));
+  pop.style.left = `${Math.round(left)}px`;
+  pop.style.top = `${Math.round(top)}px`;
+}
+let moreAnchor = null;
 function openMore(fromEl) {
   closeMenu();
   closeAcct();
   closeFxPop();
+  closeLegal();
+  moreAnchor = fromEl || moreAnchor;
   const pop = $('morePop');
   if (!pop) return;
   pop.hidden = false;
@@ -2686,7 +2845,7 @@ async function renderPublic(v, handle) {
       }).join('')}</div>` : '<div class="up-empty">Нет плейлистов.</div>'}
     </div>` : ''}
   </div>`;
-  viewQueue = likes.map((t) => ({ ...t }));
+  viewQueue = shownTracks(likes).map((t) => ({ ...t }));
   v.querySelectorAll('[data-upl]').forEach((b) => {
     b.addEventListener('click', () => {
       const pl = pls.find((x) => String(x.id) === String(b.dataset.upl));
@@ -2733,40 +2892,67 @@ function openSettings() {
   const wait = waitLabel(me.handle_in);
   const canHandle = !wait;
   const pv = me.privacy || {};
+  const apps = (isDeskApp() || isAndroidApp() || isIOS)
+    ? ''
+    : `${isAndroidWeb() ? '' : `<button class="mbtn ghost block win" id="pfDesk" type="button">${ICO.windows}Download for Windows</button>`}<button class="mbtn ghost block win" id="pfApk" type="button">${ICO.android}Download for Android</button>`;
   openModal(`
-    <h2>Параметры</h2>
-    <p class="msub">Имя, @handle и ссылка на публичный профиль.</p>
-    <div class="profiletop">
-      ${avatarHTML('big', 'pfAv')}
-      <div style="flex:1;min-width:0">
-        <label class="fl" style="margin-top:0">Имя</label>
-        <input type="text" id="pfName" maxlength="24" value="${escapeHtml(me.display)}" />
+    <div class="pf-box">
+      <div class="pf-scroll">
+        <h2>Параметры</h2>
+        <p class="msub">Имя, @handle и ссылка на публичный профиль.</p>
+        <div class="profiletop">
+          ${avatarHTML('big', 'pfAv')}
+          <div class="pf-name">
+            <label class="fl" style="margin-top:0">Имя</label>
+            <input type="text" id="pfName" maxlength="24" value="${escapeHtml(me.display)}" />
+          </div>
+        </div>
+        <label class="fl">Handle</label>
+        <div class="handle-row">
+          <span>@</span>
+          <input type="text" id="pfHandle" maxlength="24" value="${escapeHtml(h)}" ${canHandle ? '' : 'disabled'} autocomplete="off" spellcheck="false" />
+        </div>
+        <p class="pf-link" id="pfLink">${escapeHtml(publicLink(h))}</p>
+        ${wait ? `<p class="pf-wait">${escapeHtml(wait)}</p>` : '<p class="pf-wait">Можно менять раз в 30 дней.</p>'}
+        <label class="fl">Приватность</label>
+        <div class="pf-priv">
+          ${[
+            ['pfHide', pv.hidden, 'Скрыть профиль', 'Другие увидят, что профиль закрыт'],
+            ['pfAnon', pv.anon, 'Анонимный профиль', 'Вместо имени будет «Аноним»'],
+            ['pfHidePl', pv.playlists, 'Скрыть плейлисты', 'Их не будет на странице профиля'],
+            ['pfHideLikes', pv.likes, 'Скрыть лайки', 'Liked Songs не показываются'],
+            ['pfHideBadges', pv.badges, 'Скрыть значки', 'Значки видны только тебе'],
+            ['pfHideAv', pv.avatar, 'Скрыть фото', 'Другие увидят букву вместо фото'],
+          ].map(([id, on, title, sub]) => `<label class="pf-tog"><span><b>${title}</b><i>${sub}</i></span><input type="checkbox" id="${id}"${on ? ' checked' : ''} /></label>`).join('')}
+        </div>
+        ${window.__museLane === 'pc' ? `<label class="pf-tog"><span><b>YouTube embed cookies</b><i>Optional youtube.com cookies for the desktop iframe. Off uses Muse audio.</i></span><input type="checkbox" id="pfCookies"${cookiesAll() ? ' checked' : ''} /></label>` : ''}
+        <label class="fl">Your data</label>
+        <p class="pf-wait">No email. Export a JSON copy, or type your password to delete the account. There is no password reset.</p>
+        <button class="mbtn ghost block" id="pfExport" type="button">Export my data</button>
+        <input type="password" id="pfDelPass" placeholder="Password to delete" autocomplete="current-password" />
+        <button class="mbtn danger block" id="pfDelete" type="button">Delete account</button>
+        <label class="fl">Legal</label>
+        <div class="legal-btns">
+          <a class="legal-btn" href="/privacy" target="_blank" rel="noopener"><b>Privacy</b><i>What I keep</i></a>
+          <a class="legal-btn" href="/gdpr" target="_blank" rel="noopener"><b>GDPR</b><i>Controller · France</i></a>
+          <a class="legal-btn" href="/terms" target="_blank" rel="noopener"><b>Terms</b><i>Rules</i></a>
+          <a class="legal-btn" href="/cookies" target="_blank" rel="noopener"><b>Cookies</b><i>Reject is real</i></a>
+          <a class="legal-btn" href="/dpa" target="_blank" rel="noopener"><b>Processor</b><i>Not Art. 28</i></a>
+          <a class="legal-btn" href="/subprocessors" target="_blank" rel="noopener"><b>Who else</b><i>Cloudflare, Contabo</i></a>
+          <a class="legal-btn" href="/sla" target="_blank" rel="noopener"><b>Uptime</b><i>Measured</i></a>
+          <a class="legal-btn" href="/credits" target="_blank" rel="noopener"><b>Credits</b><i>YouTube, authors</i></a>
+          <a class="legal-btn" href="/dmca" target="_blank" rel="noopener"><b>Copyright</b><i>Hosted files</i></a>
+        </div>
+        ${apps}
+      </div>
+      <div class="pf-actions">
+        <div class="mrow">
+          <button class="mbtn ghost" id="pfLogout">Выйти</button>
+          <button class="mbtn primary" id="pfSave">Сохранить</button>
+        </div>
       </div>
     </div>
-    <label class="fl">Handle</label>
-    <div class="handle-row">
-      <span>@</span>
-      <input type="text" id="pfHandle" maxlength="24" value="${escapeHtml(h)}" ${canHandle ? '' : 'disabled'} autocomplete="off" spellcheck="false" />
-    </div>
-    <p class="pf-link" id="pfLink">${escapeHtml(publicLink(h))}</p>
-    ${wait ? `<p class="pf-wait">${escapeHtml(wait)}</p>` : '<p class="pf-wait">Можно менять раз в 30 дней.</p>'}
-    <label class="fl">Приватность</label>
-    <div class="pf-priv">
-      ${[
-        ['pfHide', pv.hidden, 'Скрыть профиль', 'Другие увидят, что профиль закрыт'],
-        ['pfAnon', pv.anon, 'Анонимный профиль', 'Вместо имени будет «Аноним»'],
-        ['pfHidePl', pv.playlists, 'Скрыть плейлисты', 'Их не будет на странице профиля'],
-        ['pfHideLikes', pv.likes, 'Скрыть лайки', 'Liked Songs не показываются'],
-        ['pfHideBadges', pv.badges, 'Скрыть значки', 'Значки видны только тебе'],
-        ['pfHideAv', pv.avatar, 'Скрыть фото', 'Другие увидят букву вместо фото'],
-      ].map(([id, on, title, sub]) => `<label class="pf-tog"><span><b>${title}</b><i>${sub}</i></span><input type="checkbox" id="${id}"${on ? ' checked' : ''} /></label>`).join('')}
-    </div>
-    <div class="mrow">
-      <button class="mbtn ghost" id="pfLogout">Выйти</button>
-      <button class="mbtn primary" id="pfSave">Сохранить</button>
-    </div>
-    ${isDeskApp() || isAndroidApp() ? '' : `${isAndroidWeb() ? '' : `<button class="mbtn ghost block win" id="pfDesk" type="button">${ICO.windows}Download for Windows</button>`}<button class="mbtn ghost block win" id="pfApk" type="button">${ICO.android}Download for Android</button>`}
-    <p class="pf-legal"><a href="/legal" target="_blank" rel="noopener">Legal · DMCA</a></p>`);
+  `, isPhone() ? 'sheet' : undefined);
   $('pfAv').title = 'Change photo';
   $('pfAv').addEventListener('click', () => {
     coverKind = 'avatar';
@@ -2806,6 +2992,42 @@ function openSettings() {
   $('pfLogout').addEventListener('click', () => doLogout());
   $('pfDesk')?.addEventListener('click', downloadWindowsApp);
   $('pfApk')?.addEventListener('click', downloadAndroidApp);
+  $('pfCookies')?.addEventListener('change', () => {
+    const on = !!$('pfCookies').checked;
+    setCookies(on ? 'all' : 'needed');
+    location.reload();
+  });
+  $('pfExport')?.addEventListener('click', async () => {
+    try {
+      const r = await fetch('/api/me/export', { credentials: 'same-origin', cache: 'no-store' });
+      if (!r.ok) {
+        const j = await r.json().catch(() => ({}));
+        throw new Error(j.error || 'export failed');
+      }
+      const blob = await r.blob();
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'muse-data.json';
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+      toast('Exported', true);
+    } catch (e) { toast(e.message || 'Export failed'); }
+  });
+  $('pfDelete')?.addEventListener('click', async () => {
+    const password = ($('pfDelPass') && $('pfDelPass').value) || '';
+    if (!password) { toast('Type your password'); return; }
+    if (!confirm('Delete this Muse account forever? There is no email reset.')) return;
+    try {
+      await post('/api/me/delete', { password });
+      me = null;
+      swrClear();
+      likedSet = new Set();
+      closeModal();
+      await refreshMe();
+      await refreshCounts();
+      toast('Account deleted', true);
+    } catch (e) { toast(e.message || 'Delete failed'); }
+  });
 }
 
 function openPlugins() {}
@@ -2852,7 +3074,6 @@ async function refreshMe() {
     me = j.user;
     swrPut('/api/me', j);
     if (!me) swrClear();
-    muselyApplyGate(j.musely);
   } catch {
     me = null;
   }
@@ -2891,7 +3112,7 @@ let presenceTimer = 0;
 let presenceSeq = 0;
 function presenceListening() {
   if (document.hidden || !current || userPaused || !audio || audio.paused || audio.ended) return '';
-  return String(current.title || '').slice(0, 80);
+  return prettyTitle(current.title || '').slice(0, 80);
 }
 function beatPresence(away) {
   if (!me) return;
@@ -3196,7 +3417,7 @@ function isOurQueue() {
   return true;
 }
 
-function trackMeta(id, card) {
+function lookupTrack(id, card) {
   // View list first: it carries extra keys (item_id) the search queue lacks.
   const fromLists = viewQueue.find((r) => r.id === id)
     || queue.find((r) => r.id === id)
@@ -4048,7 +4269,7 @@ function chatCardHTML(m, side) {
     return `<button type="button" class="chat-card song ${side}" data-chsong="${escapeHtml(p.id || '')}"
       data-title="${escapeHtml(p.title || '')}" data-thumb="${escapeHtml(p.thumbnail || '')}">
       <img src="${escapeHtml(ytThumb(p.id, p.thumbnail))}" alt="" />
-      <span><b>${escapeHtml(p.title || 'Song')}</b><i>Нажми, чтобы слушать</i></span>
+      <span><b>${escapeHtml(prettyTitle(p.title) || 'Song')}</b><i>Нажми, чтобы слушать</i></span>
     </button>`;
   }
   if (m.kind === 'playlist') {
@@ -5491,13 +5712,13 @@ async function openFriendChat(v, handle, meta) {
         box.innerHTML = rows.map((t) => `
           <button type="button" class="mk-pick-row" data-sid="${escapeHtml(t.id)}" data-st="${escapeHtml(t.title || '')}" data-sth="${escapeHtml(t.thumbnail || '')}" data-sd="${t.duration || 0}">
             <img src="${escapeHtml(ytThumb(t.id, t.thumbnail))}" alt="" />
-            <span><b>${escapeHtml(t.title || 'Song')}</b><i>${escapeHtml(t.uploader || '')}</i></span>
+            <span><b>${escapeHtml(prettyTitle(t.title) || 'Song')}</b><i>${escapeHtml(t.uploader || '')}</i></span>
           </button>`).join('') || '<p class="fr-hits-empty">Ничего</p>';
         box.querySelectorAll('[data-sid]').forEach((b) => {
           b.addEventListener('click', () => {
             const payload = { id: b.dataset.sid, title: b.dataset.st, thumbnail: b.dataset.sth, duration: +b.dataset.sd || 0 };
             closeModal();
-            askCap(`<div class="chat-card"><img src="${escapeHtml(ytThumb(payload.id, payload.thumbnail))}" alt="" /><span><b>${escapeHtml(payload.title)}</b></span></div>`, 'song', payload);
+            askCap(`<div class="chat-card"><img src="${escapeHtml(ytThumb(payload.id, payload.thumbnail))}" alt="" /><span><b>${escapeHtml(prettyTitle(payload.title))}</b></span></div>`, 'song', payload);
           });
         });
       } catch { box.innerHTML = '<p class="fr-hits-empty">Поиск не вышел</p>'; }
@@ -5901,7 +6122,7 @@ function trowHTML(t, i, opts = {}) {
   return `<div class="trow" style="animation-delay:${Math.min(i * 40, 320)}ms" data-row="${t.item_id ?? t.id}">
     <img src="${ytThumb(t.id, t.thumbnail)}" data-playrow="${t.id}" alt="" loading="lazy" draggable="false"
       onerror="this.onerror=null;this.src='https://i.ytimg.com/vi/${t.id}/mqdefault.jpg'" />
-    <span class="tt" data-playrow="${t.id}" title="${escapeHtml(t.title)}"><span class="t">${escapeHtml(t.title)}</span>${t.duration ? `<span class="tdur">${fmt(t.duration)}</span>` : ''}</span>
+    <span class="tt" data-playrow="${t.id}" title="${escapeHtml(prettyTitle(t.title))}"><span class="t">${escapeHtml(prettyTitle(t.title))}</span>${t.duration ? `<span class="tdur">${fmt(t.duration)}</span>` : ''}</span>
     <button class="icb${t._liked ? ' loved' : ''}" data-like="${t.id}" title="Like">${ICO.heart}</button>
   </div>`;
 }
@@ -5916,7 +6137,7 @@ function recoCardHTML(t, i) {
       <span class="go"><span><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512" fill="currentColor"><path d="M73 39c-14.8-9.1-33.4-9.4-48.5-.9S0 62.6 0 80V432c0 17.4 9.4 33.4 24.5 41.9s33.7 8.1 48.5-.9L361 297c14.3-8.7 23-24.2 23-41s-8.7-32.2-23-41L73 39z"/></svg></span></span>
       ${t.duration ? `<span class="dur">${fmt(t.duration)}</span>` : ''}
     </div>
-    <h3>${escapeHtml(t.title)}</h3>
+    <h3>${escapeHtml(prettyTitle(t.title))}</h3>
   </div>`;
 }
 
@@ -5943,10 +6164,11 @@ async function renderForYou(v) {
         return;
       }
       v.querySelector('.vempty')?.remove();
-      viewQueue = j.tracks.map((t) => ({ ...t }));
-      $('fyGrid').innerHTML = j.tracks.map(recoCardHTML).join('');
-      markLiked(j.tracks.map((t) => t.id));
-      prewarm(j.tracks);
+      const recs = shownTracks(j.tracks);
+      viewQueue = recs.map((t) => ({ ...t }));
+      $('fyGrid').innerHTML = recs.map(recoCardHTML).join('');
+      markLiked(recs.map((t) => t.id));
+      prewarm(recs);
     });
   } catch (e) {
     v.insertAdjacentHTML('beforeend', `<div class="vempty">Couldn't tune in: ${escapeHtml(e.message)}</div>`);
@@ -5966,16 +6188,17 @@ async function renderLiked(v) {
 function paintLiked(v, j) {
   {
     if (currentView !== 'liked') return;
-    viewQueue = j.tracks.map((t) => ({ ...t }));
+    const likes = shownTracks(j.tracks);
+    viewQueue = likes.map((t) => ({ ...t }));
     // Prime the truth: every row here IS liked — otherwise the next
     // partial repaint elsewhere would strip these hearts.
-    j.tracks.forEach((t) => likedSet.add(t.id));
-    const total = j.tracks.reduce((a, t) => a + (t.duration || 0), 0);
+    likes.forEach((t) => likedSet.add(t.id));
+    const total = likes.reduce((a, t) => a + (t.duration || 0), 0);
     v.innerHTML = vheadHTML('liked', 'Liked Songs', '', '') +
-      (j.tracks.length
-        ? j.tracks.map((t, i) => trowHTML({ ...t, _liked: true }, i, { liked: true })).join('')
+      (likes.length
+        ? likes.map((t, i) => trowHTML({ ...t, _liked: true }, i, { liked: true })).join('')
         : '<div class="vempty">Nothing hearted yet — right-click any song and hit Like.</div>');
-    if (j.tracks.length) v.querySelector('[data-vact]').innerHTML = vplayIc('data-playall="1"');
+    if (likes.length) v.querySelector('[data-vact]').innerHTML = vplayIc('data-playall="1"');
     paintHeaderPlay('liked');
   }
 }
@@ -5993,6 +6216,7 @@ async function renderPlaylist(v, pid) {
 function paintPlaylist(v, pid, pl) {
   {
     if (currentView !== 'playlist' || viewArg !== pid) return;
+    pl.tracks = shownTracks(pl.tracks);
     viewQueue = pl.tracks.map((t) => ({ ...t }));
     const total = pl.tracks.reduce((a, t) => a + (t.duration || 0), 0);
     const cover = pl.custom_cover || (pl.tracks.length ? ytThumb(pl.tracks[0].id, pl.tracks[0].thumbnail) : '');
@@ -6057,7 +6281,7 @@ async function renderShared(v, arg) {
     return;
   }
   const pl = data.playlist || {};
-  const tracks = pl.tracks || [];
+  const tracks = shownTracks(pl.tracks);
   viewArg = { handle, slug, id: pl.id };
   viewQueue = tracks.map((t) => ({ ...t }));
   const total = tracks.reduce((a, t) => a + (t.duration || 0), 0);
@@ -6433,7 +6657,7 @@ document.addEventListener('contextmenu', (e) => {
   }
   const card = e.target.closest('[data-play]');
   if (card) {
-    openTrackMenuAt(e.clientX, e.clientY, trackMeta(card.dataset.play, card));
+    openTrackMenuAt(e.clientX, e.clientY, lookupTrack(card.dataset.play, card));
     return;
   }
   const row = e.target.closest('.trow');
@@ -6460,7 +6684,7 @@ document.addEventListener('touchstart', (e) => {
     if (plr && plr.dataset.pid) {
       openPlaylistMenu(t.clientX, t.clientY, +plr.dataset.pid,
         plr.querySelector('.nm')?.textContent || '');
-    } else if (card) openTrackMenuAt(t.clientX, t.clientY, trackMeta(card.dataset.play, card));
+    } else if (card) openTrackMenuAt(t.clientX, t.clientY, lookupTrack(card.dataset.play, card));
     else if (row) {
       const id = row.querySelector('[data-playrow]')?.dataset.playrow;
       if (id) openTrackMenuAt(t.clientX, t.clientY, rowTrack(row, id));
@@ -6901,6 +7125,8 @@ function openAuth(tab = 'signin') {
     <input type="text" id="aUser" maxlength="24" autocomplete="username" />
     <label class="fl">Password</label>
     <input type="password" id="aPass" autocomplete="current-password" />
+    ${tab === 'signup' ? `<label class="tos-row"><input type="checkbox" id="aTos" />
+      <span>I agree to the <a href="/terms" target="_blank" rel="noopener">Terms</a> and <a href="/privacy" target="_blank" rel="noopener">Privacy Policy</a>.</span></label>` : ''}
     <div class="merr" id="aErr"></div>
     <div class="mrow">
       <button class="mbtn ghost" id="aCancel">Cancel</button>
@@ -6913,8 +7139,12 @@ function openAuth(tab = 'signin') {
     const err = $('aErr');
     err.textContent = '';
     try {
-      const j = await post(mode === 'signin' ? '/api/login' : '/api/signup',
-        { username: $('aUser').value.trim(), password: $('aPass').value });
+      const body = { username: $('aUser').value.trim(), password: $('aPass').value };
+      if (mode === 'signup') {
+        if ($('aTos').checked !== true) throw new Error('accept the terms to create an account');
+        body.accepted_tos = true;
+      }
+      const j = await post(mode === 'signin' ? '/api/login' : '/api/signup', body);
       me = j.user;
       applyTheme();
       closeModal();
@@ -6959,6 +7189,10 @@ function paintOnboard(mode) {
   $('obSwitch').textContent = signup ? 'I already have one' : 'Create an account';
   $('obPass').autocomplete = signup ? 'new-password' : 'current-password';
   $('obErr').textContent = '';
+  const wrap = $('obTosWrap');
+  if (wrap && wrap !== __nullEl) wrap.hidden = !signup;
+  const box = $('obTos');
+  if (box && box !== __nullEl) box.checked = false;
 }
 
 function paintOnboardArts(tracks) {
@@ -7009,8 +7243,12 @@ async function submitOnboard() {
   submitOnboard.busy = true;
   go.disabled = true;
   try {
-    const j = await post(onboardMode === 'signin' ? '/api/login' : '/api/signup',
-      { username: $('obUser').value.trim(), password: $('obPass').value });
+    const body = { username: $('obUser').value.trim(), password: $('obPass').value };
+    if (onboardMode === 'signup') {
+      if ($('obTos').checked !== true) throw new Error('accept the terms to create an account');
+      body.accepted_tos = true;
+    }
+    const j = await post(onboardMode === 'signin' ? '/api/login' : '/api/signup', body);
     me = j.user;
     applyTheme();
     hideOnboard();
@@ -7220,7 +7458,7 @@ document.addEventListener('click', (e) => {
   let el;
   if ((el = t('[data-like]'))) {
     const row = el.closest('.trow');
-    toggleLike(el.dataset.like, row ? rowTrack(row, el.dataset.like) : (trackMeta(el.dataset.like) || {})).then(() => {
+    toggleLike(el.dataset.like, row ? rowTrack(row, el.dataset.like) : (lookupTrack(el.dataset.like) || {})).then(() => {
       if (currentView === 'liked' && !likedSet.has(el.dataset.like)) {
         el.closest('.trow')?.remove();
         if (!document.querySelector('#view .trow')) renderLiked($('view'));
@@ -7512,17 +7750,23 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && drag?.ac
 
 /* ---------- self-update notice ---------- */
 async function checkUpdate() {
+  if (isDeskApp()) return;
   try {
     const j = await (await fetch(`/api/version?t=${Date.now()}`, { cache: 'no-store' })).json();
-    if (j.build > (window.__museBuild || 0)) {
-      if (document.getElementById('intro') || window.__museIntro !== 'done') return;
-      try { sessionStorage.setItem('muse:updated', String(j.build)); } catch {}
-      await hardRefresh();
-    }
+    if (!(j.build > (window.__museBuild || 0))) return;
+    if (document.getElementById('intro') || window.__museIntro !== 'done') return;
+    const once = `muse:reloaded:${j.build}`;
+    try {
+      if (sessionStorage.getItem(once)) return;
+      sessionStorage.setItem(once, '1');
+      sessionStorage.setItem('muse:updated', String(j.build));
+    } catch {}
+    await hardRefresh();
   } catch { /* offline — stay quiet */ }
 }
 
 function registerSW() {
+  if (isDeskApp()) return Promise.resolve(null);
   if (!('serviceWorker' in navigator)) return Promise.resolve(null);
   if (!registerSW._p) {
     registerSW._p = navigator.serviceWorker.register('/sw.js').then((reg) => {
@@ -7543,527 +7787,27 @@ function registerSW() {
   return registerSW._p;
 }
 
-/* ---------- Musely (desktop AI) ---------- */
-const MUSELY_CLOSED = 'muse:muselyClosed';
-const MUSELY_GOT = 'muse:muselyGot';
-const MUSELY_STORE = 'muse:muselyHist';
-const MUSELY_FRAME = { idle: 0, blink: 1, hop: 2, talk: 3, wave1: 4, wave2: 5, look: 6, wink: 7 };
-const MUSELY_HIST_TURNS = 80;
-const MUSELY_TURN_CHARS = 2000;
-let muselyHist = [];
-let muselyBusy = false;
-let muselyMoodT = null;
 
-function muselyHost() {
-  try { return window.chrome && window.chrome.webview; } catch { return null; }
-}
-
-function muselyThinkDump(text) {
-  const t = String(text || '');
-  const low = t.toLowerCase();
-  if (/thinking process|analyze user input|here's a thinking/.test(low)) return true;
-  if (/^\s*1\.\s/.test(t) && t.includes('**')) return true;
-  return false;
-}
-
-function muselyHistJunk(text) {
-  const low = String(text || '').toLowerCase();
-  if (muselyThinkDump(text)) return true;
-  return /brain freeze|couldn't shape that|blank stare|ask me one more time/.test(low);
-}
-
-function muselyTracksFromText(text) {
-  const t = String(text || '').trim();
-  if (!t || t[0] === '{' || t[0] === '[') return [];
-  if (/"mode"\s*:|"tracks"\s*:/.test(t)) return [];
-  const lined = [];
-  for (const ln of t.split(/\n+/)) {
-    const m = ln.match(/^\s*(?:[-–—•*]|\d+[.)])\s+(.*\S)\s*$/);
-    if (!m) continue;
-    const q = m[1].replace(/^[\s\-–—•*]+/, '').trim().slice(0, 160);
-    if (q.length >= 2 && !/[{}"]/.test(q)) lined.push({ title: (q.split(' - ')[0] || q).slice(0, 40), query: q });
-  }
-  if (lined.length >= 2) return lined.slice(0, 3);
-  if (!/^[-–—•*]/.test(t) || (t.match(/ - /g) || []).length < 2) return lined.slice(0, 3);
-  const parts = t.replace(/^[\s\-–—•*]+/, '').split(/\s+-\s+/).map((p) => p.replace(/^[\s\-–—•*]+/, '').trim()).filter((p) => p && !/[{}"]/.test(p));
-  if (parts.length >= 3) {
-    return parts.slice(0, 3).map((q) => ({ title: (q.split(' - ')[0] || q).slice(0, 40), query: q.slice(0, 160) }));
-  }
-  return lined.slice(0, 3);
-}
-
-function muselyCap(hist) {
-  const out = [];
-  const src = Array.isArray(hist) ? hist : [];
-  for (const t of src.slice(-MUSELY_HIST_TURNS)) {
-    if (!t || (t.role !== 'user' && t.role !== 'assistant')) continue;
-    const content = String(t.content || '').trim().slice(0, MUSELY_TURN_CHARS);
-    if (!content) continue;
-    if (t.role === 'assistant' && muselyHistJunk(content)) continue;
-    out.push({ role: t.role, content });
-  }
-  return out;
-}
-
-function muselyPersist() {
-  const hist = muselyCap(muselyHist);
-  muselyHist = hist;
-  try { localStorage.setItem(MUSELY_STORE, JSON.stringify(hist)); } catch {}
-  const host = muselyHost();
-  if (!host) return;
-  try { host.postMessage(JSON.stringify({ type: 'musely-save', history: hist })); } catch {}
-}
-
-function muselyLoadHist() {
-  return new Promise((resolve) => {
-    const finish = (hist) => {
-      muselyHist = muselyCap(hist);
-      resolve();
-    };
-    const fromLs = () => {
-      try { return JSON.parse(localStorage.getItem(MUSELY_STORE) || '[]'); }
-      catch { return []; }
-    };
-    const seed = Array.isArray(window.__muselyChat) ? window.__muselyChat : fromLs();
-    const host = muselyHost();
-    if (!host) {
-      finish(seed);
-      return;
-    }
-    let settled = false;
-    const done = (hist) => {
-      if (settled) return;
-      settled = true;
-      try { host.removeEventListener('message', onMsg); } catch {}
-      const fileHist = muselyCap(hist);
-      const next = fileHist.length ? fileHist : muselyCap(seed);
-      finish(next);
-    };
-    const onMsg = (e) => {
-      try {
-        const d = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
-        if (d && d.type === 'musely-chat') done(d.history || []);
-      } catch {}
-    };
-    try { host.addEventListener('message', onMsg); } catch {}
-    try { host.postMessage(JSON.stringify({ type: 'musely-load' })); }
-    catch { done(seed); return; }
-    setTimeout(() => done(seed), 900);
-  });
-}
-
-function muselyFrame(name) {
-  const sp = $('muselySprite');
-  if (!sp) return;
-  const i = MUSELY_FRAME[name] || 0;
-  sp.dataset.mood = name;
-  sp.style.backgroundPosition = `${-i * 72}px 0`;
-}
-
-function muselyMood(name, ms) {
-  const root = $('musely');
-  const sp = $('muselySprite');
-  if (!root) return;
-  clearTimeout(muselyMoodT);
-  muselyMoodT = null;
-  root.classList.remove('is-talk', 'is-wave');
-  if (sp) sp.style.backgroundPosition = '';
-  if (name === 'talk') {
-    root.classList.add('is-talk');
-    if (sp) sp.dataset.mood = 'talk';
-  } else if (name === 'wave1' || name === 'wave2') {
-    root.classList.add('is-wave');
-    if (sp) sp.dataset.mood = 'wave';
-  } else {
-    muselyFrame(name);
-  }
-  if (name === 'hop') {
-    const guy = $('muselyGuy');
-    if (guy) {
-      guy.style.animation = 'none';
-      void guy.offsetWidth;
-      guy.style.animation = 'musely-hop 520ms var(--spring)';
-      setTimeout(() => { guy.style.animation = ''; }, 540);
-    }
-    muselyFrame('hop');
-  }
-  if (ms) muselyMoodT = setTimeout(() => muselyMood('idle'), ms);
-}
-
-const MUSELY_HI = '<div class="musely-hi"><p class="musely-hi-a">Привет, Я Musely <i class="musely-hand" aria-hidden="true"></i></p><p class="musely-hi-b">могу найти трендовую музыку.</p></div>';
-
-function muselyGroove() {
-  const root = $('musely');
-  if (!root) return;
-  const live = !!$('bPlay')?.classList.contains('playing') && !root.classList.contains('is-closed');
-  root.classList.toggle('is-groove', live);
-}
-
-let muselyAnimT = null;
-
-function muselyOpen(on) {
-  const root = document.getElementById('musely');
-  const call = document.getElementById('muselyCall');
-  if (!root) return;
-  if (on && !muselyGate.unlocked) return;
-  muselySetChat();
-  const closed = root.classList.contains('is-closed');
-  if (on === !closed) {
-    if (on) muselyMood('wave1', 900);
-    return;
-  }
-  clearTimeout(muselyAnimT);
-  try { localStorage.setItem(MUSELY_CLOSED, on ? '0' : '1'); } catch {}
-  if (on) {
-    try { localStorage.setItem(MUSELY_GOT, '1'); } catch {}
-    call?.classList.remove('is-on');
-    call?.classList.add('is-out');
-    root.classList.remove('is-closed', 'is-leave');
-    void root.offsetWidth;
-    root.classList.add('is-enter');
-    muselyMood('wave1', 900);
-    if (!$('muselyLog')?.childElementCount) muselyHello();
-    setTimeout(() => { try { $('muselyQ')?.focus({ preventScroll: true }); } catch {} }, 120);
-    muselyAnimT = setTimeout(() => {
-      call?.classList.remove('is-out');
-      root.classList.remove('is-enter');
-    }, 520);
-  } else {
-    root.classList.remove('is-enter');
-    root.classList.add('is-leave');
-    call?.classList.remove('is-out');
-    call?.classList.add('is-on');
-    muselyAnimT = setTimeout(() => {
-      root.classList.add('is-closed');
-      root.classList.remove('is-leave');
-    }, 360);
-  }
-  muselyGroove();
-}
-
-function muselySetChat() {
-  const root = $('musely');
-  if (root) root.classList.remove('is-chat');
-  const scrim = $('muselyScrim');
-  if (scrim) scrim.hidden = true;
-}
-
-function muselyHello() {
-  const log = $('muselyLog');
-  if (!log) return;
-  muselySetChat();
-  log.innerHTML = MUSELY_HI;
-}
-
-function muselyPaintTracks(tracks) {
-  const log = $('muselyLog');
-  if (!log) return;
-  muselySetChat();
-  log.innerHTML = '';
-  for (const t of tracks.slice(0, 3)) {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'musely-track';
-    b.dataset.mq = t.query || t.title || '';
-    b.textContent = t.title || t.query || 'play';
-    log.appendChild(b);
-  }
-}
-
-function muselyAppend(cls, text) {
-  const log = $('muselyLog');
-  if (!log || !text) return;
-  const el = document.createElement('div');
-  el.className = cls;
-  el.textContent = text;
-  log.appendChild(el);
-  log.scrollTop = log.scrollHeight;
-}
-
-function muselyPaint(j) {
-  const log = $('muselyLog');
-  if (log) log.querySelector('.musely-dots')?.remove();
-  let say = (j && j.say) || '';
-  if (muselyThinkDump(say)) say = '';
-  let tracks = ((j && j.tracks) || []).slice(0, 3);
-  if (tracks.length < 2) {
-    const fromSay = muselyTracksFromText(say);
-    if (fromSay.length > tracks.length) {
-      tracks = fromSay;
-      say = '';
-    }
-  }
-  if (tracks.length) {
-    muselyPaintTracks(tracks);
-    return;
-  }
-  if (say) {
-    muselySetChat();
-    if (log) log.innerHTML = '';
-    muselyAppend('musely-say', say);
-    return;
-  }
-  muselySetChat();
-  if (log) log.innerHTML = '';
-  muselyAppend('musely-say', 'завис — напиши ещё раз.');
-}
-
-function muselyWaiting() {
-  const log = $('muselyLog');
-  if (!log || log.querySelector('.musely-dots')) return;
-  const d = document.createElement('div');
-  d.className = 'musely-dots';
-  d.innerHTML = '<i></i><i></i><i></i>';
-  log.appendChild(d);
-  log.scrollTop = log.scrollHeight;
-}
-
-function muselyErr(e) {
-  const m = String((e && e.message) || 'blanked');
-  if (/HTTP 50[234]|Failed to fetch|NetworkError|Load failed|ERR_CONNECTION/i.test(m)) {
-    return 'завис — напиши ещё раз.';
-  }
-  return m.replace('Request timed out — YouTube is slow, try again', 'долго думал — напиши ещё раз');
-}
-
-async function muselyAsk(text) {
-  if (muselyBusy) return;
-  const q = (text || '').trim();
-  if (!q) {
-    muselyHello();
-    return;
-  }
-  muselyBusy = true;
-  muselyMood('talk');
-  const root = $('musely');
-  const log = $('muselyLog');
-  if (log) log.innerHTML = '';
-  muselyWaiting();
+/* Desktop chrome: WinForms posts muse-chrome {mini} when the window is tiny. */
+(function bindDesktopChrome() {
   try {
-    const j = await fetchJSON('/api/musely', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: q }),
-    }, 18000);
-    if (!(j.tracks || []).length) {
-      const coerced = muselyTracksFromText(j.say || '');
-      if (coerced.length) {
-        j.tracks = coerced;
-        j.say = '';
-        j.mode = 'music';
+    const w = window.chrome && window.chrome.webview;
+    if (!w || !w.addEventListener) return;
+    w.addEventListener('message', (e) => {
+      let d = e && e.data;
+      try { if (typeof d === 'string') d = JSON.parse(d); } catch { return; }
+      if (!d || d.type !== 'muse-chrome') return;
+      document.documentElement.classList.toggle('muse-mini', !!d.mini);
+      if (d.mini) {
+        const p = document.getElementById('player');
+        if (p) p.hidden = false;
       }
-    }
-    muselyPaint(j);
-    muselyMood('hop', 700);
-  } catch (e) {
-    muselyPaint({ mode: 'chat', say: muselyErr(e) });
-    muselyMood('wink', 800);
-  } finally {
-    muselyBusy = false;
-    if (root) root.classList.remove('is-talk', 'is-wave');
-    if (!muselyMoodT) muselyMood('idle');
-  }
-}
-
-async function muselyPlay(query) {
-  if (!query) return;
-  muselyMood('hop', 600);
-  try {
-    const j = await fetchJSON(`/api/search?q=${encodeURIComponent(query)}&n=4`, {}, 12000);
-    const r = (j.results || [])[0];
-    if (!r) return;
-    playId(r.id, r, j.results, 'search');
+    });
   } catch {}
-}
-
-const MUSELY_NEED = 3;
-let muselyGate = { unlocked: false, have: 0, need: MUSELY_NEED, login: true };
-
-function muselyApplyGate(g) {
-  if (g && typeof g === 'object') muselyGate = {
-    unlocked: !!g.unlocked,
-    have: +g.have || 0,
-    need: +g.need || MUSELY_NEED,
-    login: !!g.login,
-  };
-  muselyPaintCall();
-}
-
-function muselyOk() {
-  if (isAndroidApp()) return false;
-  if (isPhone()) return false;
-  return true;
-}
-
-function muselyPaintCall() {
-  if (!muselyOk()) return;
-  const call = $('muselyCall');
-  const root = $('musely');
-  if (!call) return;
-  if (!muselyGate.unlocked) {
-    root?.classList.add('is-closed');
-    root?.classList.remove('is-chat');
-    call.classList.add('is-on', 'is-locked');
-    call.classList.remove('is-out');
-    if (muselyGate.login) {
-      call.textContent = 'Sign in for Musely';
-      call.setAttribute('aria-label', 'Sign in for Musely');
-    } else {
-      call.textContent = `Listen ${muselyGate.have}/${muselyGate.need}`;
-      call.setAttribute('aria-label', 'Listen to unlock Musely');
-    }
-    return;
-  }
-  call.classList.remove('is-locked');
-  call.textContent = 'Позвать Musely';
-  call.setAttribute('aria-label', 'Позвать Musely');
-  const closed = !root || root.classList.contains('is-closed');
-  call.classList.toggle('is-on', closed);
-}
-
-async function muselyRefreshGate() {
-  if (!muselyOk()) return;
-  try {
-    const j = await fetchJSON('/api/musely', {}, 8000);
-    muselyApplyGate(j.musely);
-  } catch {}
-}
-
-function muselyPlaceCall() {
-  let call = document.getElementById('muselyCall');
-  const user = document.getElementById('sideUser');
-  const foot = document.getElementById('sideFoot') || user?.parentNode;
-  if (!call) {
-    if (!user || !foot) return null;
-    call = document.createElement('button');
-    call.type = 'button';
-    call.className = 'musely-call';
-    call.id = 'muselyCall';
-    call.setAttribute('aria-label', 'Позвать Musely');
-    call.textContent = 'Позвать Musely';
-    foot.insertBefore(call, user.nextSibling);
-    muselyPaintCall();
-    return call;
-  }
-  if (user && foot && call.previousElementSibling !== user) {
-    foot.insertBefore(call, user.nextSibling);
-  }
-  muselyPaintCall();
-  return call;
-}
-
-function muselyMount() {
-  let root = document.getElementById('musely');
-  const after = document.getElementById('sideFoot') || document.getElementById('sideUser');
-  if (root) {
-    muselyPlaceCall();
-    return root;
-  }
-  if (!after || !after.parentNode) return null;
-  root = document.createElement('div');
-  root.id = 'musely';
-  root.innerHTML = `
-      <button type="button" class="musely-guy" id="muselyGuy" title="Musely" aria-label="Musely">
-        <span class="musely-sprite" id="muselySprite" data-mood="idle"></span>
-      </button>
-      <section class="musely-box" id="muselyBox" aria-label="Musely">
-        <header class="musely-hd">
-          <button type="button" id="muselyClose" aria-label="Close Musely">
-            <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-          </button>
-        </header>
-        <div class="musely-log" id="muselyLog">${MUSELY_HI}</div>
-        <form id="muselyForm" class="musely-form">
-          <input id="muselyQ" maxlength="200" placeholder="напиши…" autocomplete="off" spellcheck="false" />
-          <button type="submit" aria-label="Send">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
-          </button>
-        </form>
-      </section>
-      <button type="button" class="musely-scrim" id="muselyScrim" hidden aria-label="Close chat"></button>`;
-  after.parentNode.insertBefore(root, after);
-  muselyPlaceCall();
-  return root;
-}
-
-async function initMusely() {
-  if (!muselyOk()) {
-    document.getElementById('musely')?.remove();
-    document.getElementById('muselyCall')?.remove();
-    return;
-  }
-  const root = muselyMount();
-  if (!root || root.dataset.ready) return;
-  root.dataset.ready = '1';
-  const call = muselyPlaceCall();
-  await muselyLoadHist();
-  await muselyRefreshGate();
-  document.addEventListener('visibilitychange', () => {
-    if (!document.hidden && !muselyGate.unlocked) muselyRefreshGate();
-  });
-  let closed = true;
-  try {
-    if (muselyGate.unlocked && localStorage.getItem(MUSELY_GOT) === '1') {
-      closed = localStorage.getItem(MUSELY_CLOSED) === '1';
-    }
-  } catch {}
-  root.classList.toggle('is-closed', closed);
-  call?.classList.toggle('is-on', closed);
-  $('muselyClose')?.addEventListener('click', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    muselyOpen(false);
-  });
-  $('muselyCall')?.addEventListener('click', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (!muselyGate.unlocked) {
-      if (muselyGate.login) openAuth('signin');
-      else toast(`Listen to ${Math.max(1, muselyGate.need - muselyGate.have)} more. Then he's yours.`);
-      return;
-    }
-    muselyOpen(true);
-  });
-  $('muselyGuy')?.addEventListener('click', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (root.classList.contains('is-closed')) muselyOpen(true);
-    else muselyMood('wave1', 800);
-  });
-  $('muselyForm')?.addEventListener('submit', (e) => {
-    e.preventDefault();
-    const inp = $('muselyQ');
-    const v = (inp?.value || '').trim();
-    if (!v || muselyBusy) return;
-    inp.value = '';
-    muselyAsk(v);
-  });
-  $('muselyLog')?.addEventListener('click', (e) => {
-    const t = e.target.closest('[data-mq]');
-    if (!t) return;
-    e.preventDefault();
-    e.stopPropagation();
-    muselyPlay(t.dataset.mq);
-  });
-  setInterval(() => {
-    if (muselyBusy) return;
-    const sp = $('muselySprite');
-    if (!sp || sp.dataset.mood !== 'idle') return;
-    const r = Math.random();
-    if (r < 0.12) muselyMood('blink', 220);
-    else if (r < 0.18) muselyMood('look', 700);
-    else if (r < 0.21) muselyMood('wink', 400);
-  }, 1600);
-  const groove = () => muselyGroove();
-  groove();
-  try {
-    new MutationObserver(groove).observe($('bPlay') || document.body, { attributes: true, attributeFilter: ['class'] });
-  } catch {}
-  if (!closed) muselyHello();
-  muselyPaintCall();
-}
+})();
 
 async function maybeColdRefresh() {
+  if (isDeskApp()) return;
   try {
     if (playToken > 0 || userTouched) {
       checkUpdate();
@@ -8095,6 +7839,335 @@ function showUpdateBar(build) {
 /* ---------- phone: tab bar, library sheet, expandable player ---------- */
 let playerKids = null;
 
+function songArtist() {
+  // Display only — never rewrite from the title (that corrupted Now Playing).
+  return String((current && current.uploader) || '')
+    .replace(/\s*-\s*Topic$/i, '')
+    .replace(/VEVO$/i, '')
+    .trim();
+}
+
+function songTitle() {
+  // Display-oriented clean title (prefix strip for the label path).
+  let t = prettyTitle((current && current.title) || ($('ptitle') && $('ptitle').textContent) || '');
+  if (!t || t === '—' || t === '-' || t === '–' || t === 'Loading…') return '';
+  t = t.replace(/\s*[–—―]\s*/g, ' - ');
+  t = t.replace(/\s*[\(\[][^)\]]*(official|lyric|audio|video|visualizer|\bmv\b|\bhd\b|\b4k\b|slowed|sped\s*up|nightcore|topic|remaster(?:ed)?|radio\s*edit)[^)\]]*[\)\]]/ig, '');
+  t = t.replace(/\s*[\(\[]?\s*(feat\.?|ft\.?|featuring)\s+.+$/i, '');
+  t = t.replace(/\s{2,}/g, ' ').replace(/^[-–—\s]+|[-–—\s]+$/g, '').trim();
+  const artist = songArtist();
+  if (artist) {
+    const low = t.toLowerCase();
+    for (const sep of [' - ', ': ']) {
+      const prefix = (artist + sep).toLowerCase();
+      if (low.startsWith(prefix)) {
+        t = t.slice(prefix.length).trim();
+        break;
+      }
+    }
+  }
+  return t;
+}
+
+/** Title/artist for /api/lyrics only — may infer artist from "Artist - Title" uploads. */
+function lyricQuery() {
+  let title = prettyTitle((current && current.title) || '') || '';
+  let artist = songArtist();
+  title = title.replace(/\s*[–—―]\s*/g, ' - ');
+  title = title.replace(/\s*[\(\[][^)\]]*(official|lyric|audio|video|visualizer|\bmv\b|\bhd\b|\b4k\b|slowed|sped\s*up|nightcore|topic|remaster(?:ed)?|radio\s*edit)[^)\]]*[\)\]]/ig, '');
+  title = title.replace(/\s{2,}/g, ' ').replace(/^[-–—\s]+|[-–—\s]+$/g, '').trim();
+  const m = title.match(/^(.{2,80}?)\s+-\s+(.+)$/);
+  if (m) {
+    const left = m[1].replace(/\s*,.*$/, '').trim();
+    const right = m[2].replace(/\s*[\(\[][^)\]]+[\)\]]\s*$/g, '').trim();
+    const looksChannel = !artist
+      || /radio|\bmusic\b|records|official|channel|vevo|lyrics|\b ent\.|\btv\b/i.test(artist)
+      || (left && artist.toLowerCase() !== left.toLowerCase()
+          && !artist.toLowerCase().includes(left.toLowerCase().slice(0, Math.min(12, left.length))));
+    if (looksChannel && left && right && !/official audio|lyrics|text|текст/i.test(left)) {
+      artist = left;
+      title = right;
+    }
+  }
+  if (artist) {
+    const low = title.toLowerCase();
+    for (const sep of [' - ', ': ']) {
+      const prefix = (artist + sep).toLowerCase();
+      if (low.startsWith(prefix)) {
+        title = title.slice(prefix.length).trim();
+        break;
+      }
+    }
+    if (low.startsWith(artist.toLowerCase()) && title.includes(' - ')) {
+      const rest = title.slice(artist.length).replace(/^[,\s/-]+/, '');
+      const cut = rest.indexOf(' - ');
+      if (cut >= 0) title = rest.slice(cut + 3).trim();
+    }
+  }
+  title = title.replace(/\s*[\(\[][^)\]]+[\)\]]\s*$/g, '').trim();
+  return { title, artist };
+}
+
+function syncBpNow() {
+  const art = $('art');
+  const cover = $('bpCover');
+  const src = (art && art !== __nullEl && (art.currentSrc || art.src))
+    || (current && (current.thumbnail || current.thumb))
+    || '';
+  if (cover && cover !== __nullEl && src) cover.src = src;
+  if ($('bpNowTitle') && $('bpNowTitle') !== __nullEl) {
+    $('bpNowTitle').textContent = prettyTitle((current && current.title) || ($('ptitle') && $('ptitle').textContent) || '');
+  }
+  if ($('bpNowArtist') && $('bpNowArtist') !== __nullEl) $('bpNowArtist').textContent = songArtist();
+}
+
+function parkLyrics(intoStage) {
+  const ly = $('bpLyrics');
+  const bp = $('bigplayer');
+  const stage = $('bpStage');
+  if (!ly || ly === __nullEl || !bp || bp === __nullEl) return;
+  if (intoStage && stage && stage !== __nullEl) {
+    const center = stage.querySelector('.p-center');
+    if (center) stage.insertBefore(ly, center);
+    else stage.appendChild(ly);
+  } else {
+    bp.appendChild(ly);
+  }
+}
+
+function lyricsVoid(kind) {
+  const box = $('bpLyrics');
+  const pad = $('bpLyricsPad');
+  if (!box || box === __nullEl || !pad || pad === __nullEl) return;
+  box.classList.add('is-void');
+  box.classList.remove('is-plain');
+  pad.classList.remove('ly-ready');
+  pad.style.transform = '';
+  pad.style.transition = 'none';
+  lyricSynced = false;
+  stopLyricClock();
+  if (kind === 'wait') {
+    pad.innerHTML = `<div class="lyrics-void lyrics-void-wait" aria-live="polite">
+      <span class="lyrics-void-mark">♪</span>
+      <b>Looking up lyrics</b>
+    </div>`;
+  } else {
+    pad.innerHTML = `<div class="lyrics-void">
+      <span class="lyrics-void-mark">♪</span>
+      <b>No lyrics</b>
+      <i>Nothing written down for this one</i>
+    </div>`;
+  }
+}
+
+function stopLyricClock() {
+  if (lyricRaf) {
+    try { cancelAnimationFrame(lyricRaf); } catch {}
+    lyricRaf = 0;
+  }
+}
+
+function bindLyricRO() {
+  const box = $('bpLyrics');
+  if (!box || box === __nullEl) return;
+  try {
+    if (lyricRO) lyricRO.disconnect();
+  } catch {}
+  lyricRO = null;
+  if (typeof ResizeObserver === 'undefined') return;
+  try {
+    lyricRO = new ResizeObserver(() => {
+      const h = box.clientHeight || 0;
+      if (h > 0 && Math.abs(h - lyricViewH) > 1) {
+        lyricViewH = h;
+        try { tickLyrics(true); } catch {}
+      }
+    });
+    lyricRO.observe(box);
+  } catch { lyricRO = null; }
+}
+
+function settleLyrics() {
+  requestAnimationFrame(() => {
+    try { tickLyrics(true); } catch {}
+    requestAnimationFrame(() => {
+      try { tickLyrics(true); } catch {}
+    });
+  });
+}
+
+function startLyricClock() {
+  stopLyricClock();
+  const bp = $('bigplayer');
+  if (!bp || bp.hidden || !lyricSynced || !lyricLines.length) return;
+  bindLyricRO();
+  const loop = () => {
+    lyricRaf = requestAnimationFrame(loop);
+    try { tickLyrics(); } catch {}
+  };
+  lyricRaf = requestAnimationFrame(loop);
+  settleLyrics();
+}
+
+function paintLyricLines(lines, synced) {
+  const box = $('bpLyrics');
+  const pad = $('bpLyricsPad');
+  if (!box || box === __nullEl || !pad || pad === __nullEl) return;
+  box.classList.remove('is-void');
+  box.classList.remove('is-plain');
+  pad.classList.remove('ly-ready');
+  pad.style.transform = '';
+  pad.style.transition = 'none';
+  // Any timed line counts — short intros often start under 0.4s.
+  lyricSynced = !!synced && lines.some((l) => Number(l.t) > 0);
+  // Plain text: same karaoke font, no time-chasing.
+  box.classList.toggle('is-plain', !lyricSynced);
+  pad.innerHTML = lines.map((l, i) =>
+    `<div class="ly-line" data-i="${i}">${escapeHtml(l.text)}</div>`
+  ).join('');
+  lyricIdx = -1;
+  lyricViewH = 0;
+  bindLyricRO();
+  if (lyricSynced) startLyricClock();
+  else {
+    stopLyricClock();
+    settleLyrics();
+  }
+}
+
+function lyricIndexAt(t) {
+  const lines = lyricLines;
+  if (!lines.length) return -1;
+  if (!lyricSynced) return -1;
+  // Small lead only — large lead + early advance made lines jump ahead of vocals.
+  const clock = t + 0.03;
+  // Before the first stamp (e.g. Дофамин intro → 0:07) highlight nothing.
+  if (clock < Number(lines[0].t) - 0.001) return -1;
+  let lo = 0;
+  let hi = lines.length - 1;
+  let ans = 0;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (lines[mid].t <= clock) {
+      ans = mid;
+      lo = mid + 1;
+    } else {
+      hi = mid - 1;
+    }
+  }
+  return ans;
+}
+
+function tickLyrics(force) {
+  const pad = $('bpLyricsPad');
+  const box = $('bpLyrics');
+  const bp = $('bigplayer');
+  if (!bp || bp.hidden || !box || box === __nullEl || box.classList.contains('is-void') || !lyricLines.length) return;
+  if (!pad || pad === __nullEl) return;
+  // Unsynced: static readable text, no time-chasing highlight.
+  if (!lyricSynced) {
+    pad.style.transition = 'none';
+    pad.style.transform = '';
+    return;
+  }
+  const viewH = box.clientHeight || 0;
+  // Layout not ready yet — don't lock lyricIdx on a broken mid.
+  if (viewH < 40) return;
+  const layoutChanged = Math.abs(viewH - lyricViewH) > 1;
+  lyricViewH = viewH;
+  const t = Number.isFinite(audio.currentTime) ? audio.currentTime : 0;
+  const i = lyricIndexAt(t);
+  if (!force && !layoutChanged && i === lyricIdx) return;
+  lyricIdx = i;
+  const nodes = pad.children;
+  for (let k = 0; k < nodes.length; k++) {
+    nodes[k].classList.toggle('on', k === i);
+    nodes[k].classList.toggle('past', i >= 0 && k < i);
+  }
+  // Intro: park the upcoming first line under the center, still dim.
+  const focus = i >= 0 ? nodes[i] : nodes[0];
+  if (!focus) return;
+  const mid = viewH / 2;
+  const y = focus.offsetTop + focus.offsetHeight / 2;
+  const ty = Math.round(mid - y);
+  const ready = pad.classList.contains('ly-ready');
+  pad.style.transition = (!REDUCED && ready && !layoutChanged)
+    ? 'transform 380ms cubic-bezier(0.22, 1, 0.36, 1)'
+    : 'none';
+  pad.style.transform = `translate3d(0, ${ty}px, 0)`;
+  if (!ready) requestAnimationFrame(() => pad.classList.add('ly-ready'));
+}
+
+async function loadLyrics(forceReload) {
+  const box = $('bpLyrics');
+  if (!box || box === __nullEl || !$('bigplayer') || $('bigplayer').hidden) return;
+  const id = (current && current.id) || '';
+  if (!id) { lyricLines = []; lyricsVoid(); return; }
+  const { title, artist } = lyricQuery();
+  const my = ++lyricReq;
+  lyricId = id;
+  let dur = 0;
+  try { dur = Math.round(audio.duration || (current && current.duration) || 0); } catch {}
+  if (!Number.isFinite(dur) || dur < 0) dur = 0;
+  const cached = lyricsCache.get(id);
+  const qKey = `${title}\n${artist}`;
+  // Re-fetch when duration appears, artist/title arrives, or a plain cache was
+  // stored before metadata (static lyrics that never scroll).
+  const needDurUpgrade = !!(cached && dur > 5 && !(cached.dur > 5) && !cached.triedWithDur);
+  const needQueryUpgrade = !!(cached && qKey && cached.qKey !== qKey);
+  const needSyncUpgrade = !!(cached && !cached.synced && artist && !cached.triedSyncUpgrade);
+  if (cached && !forceReload && !needDurUpgrade && !needQueryUpgrade && !needSyncUpgrade) {
+    lyricLines = cached.lines || [];
+    lyricLoadedDur = cached.dur || 0;
+    if (!lyricLines.length) lyricsVoid();
+    else paintLyricLines(lyricLines, cached.synced);
+    requestAnimationFrame(() => tickLyrics(true));
+    return;
+  }
+  if (cached && needDurUpgrade) cached.triedWithDur = true;
+  if (cached && needSyncUpgrade) cached.triedSyncUpgrade = true;
+  if (!title) {
+    lyricsVoid('wait');
+    return;
+  }
+  if (!cached || forceReload || needQueryUpgrade || needSyncUpgrade) {
+    lyricsVoid('wait');
+    lyricLines = [];
+  }
+  try {
+    const q = new URLSearchParams({ title, artist });
+    if (dur > 5) q.set('duration', String(dur));
+    let data = await api('/api/lyrics?' + q.toString());
+    // Duration-matched plain can beat timed LRC on LRCLIB — retry without
+    // duration once so karaoke stamps still load (Дофамин x Oohc).
+    if (data && !data.synced && dur > 5 && title) {
+      try {
+        const q2 = new URLSearchParams({ title, artist });
+        const data2 = await api('/api/lyrics?' + q2.toString());
+        if (data2 && data2.synced && Array.isArray(data2.lines) && data2.lines.length) {
+          data = data2;
+        }
+      } catch {}
+    }
+    if (my !== lyricReq || lyricId !== id) return;
+    const lines = Array.isArray(data.lines) ? data.lines : [];
+    const synced = !!data.synced;
+    lyricsCache.set(id, {
+      lines, synced, dur: dur > 5 ? dur : 0, triedWithDur: dur > 5,
+      qKey, triedSyncUpgrade: !!(synced || !artist),
+    });
+    if (lyricsCache.size > 80) lyricsCache.delete(lyricsCache.keys().next().value);
+    lyricLines = lines;
+    lyricLoadedDur = dur;
+    if (!lines.length) lyricsVoid();
+    else paintLyricLines(lines, synced);
+    requestAnimationFrame(() => tickLyrics(true));
+  } catch {
+    if (my !== lyricReq) return;
+    if (!lyricLines.length) lyricsVoid();
+  }
+}
+
 /* The footer nodes travel into the fullscreen overlay and back. If anything
  * ever strands them, the mini player degrades to a lone play button —
  * so every steward re-homes them first. */
@@ -8105,43 +8178,71 @@ function ensurePlayerHome() {
     const art = document.getElementById('art');
     const meta = document.querySelector('.p-meta');
     const center = document.querySelector('.p-center');
-    const right = foot.querySelector('.p-right');
-    [art, meta, center].forEach((n) => {
+    const right = document.querySelector('.p-right');
+    [art, meta, center, right].forEach((n) => {
       if (n && n.parentElement !== foot) foot.appendChild(n);
     });
-    if (right) foot.appendChild(right);
   } catch {}
 }
 
 function expandPlayer() {
-  if (!isPhone() || $('player').hidden || !$('bigplayer').hidden) return;
-  ensurePlayerHome();
-  if (!playerKids) playerKids = [...$('player').children];
-  const stage = $('bpStage');
-  stage.append(
-    document.querySelector('#player #art'),
-    document.querySelector('#player .p-meta'),
-    document.querySelector('#player .p-center')
-  );
-  if (stage.children.length < 3) {
-    ensurePlayerHome();
-    return;
-  }
+  if ($('player').hidden || !$('bigplayer').hidden) return;
+  const desk = !isPhone();
   const bp = $('bigplayer');
-  bp.classList.remove('closing');
+  bp.classList.toggle('is-desk', desk);
+  bp.classList.remove('closing', 'morphing');
   delete bp.dataset.closing;
+  if (!desk) {
+    ensurePlayerHome();
+    if (!playerKids) playerKids = [...$('player').children];
+    const stage = $('bpStage');
+    stage.classList.add('has-ly');
+    const art = document.querySelector('#player #art');
+    const meta = document.querySelector('#player .p-meta');
+    const center = document.querySelector('#player .p-center');
+    if (art) stage.appendChild(art);
+    if (meta) stage.appendChild(meta);
+    parkLyrics(true);
+    if (center) stage.appendChild(center);
+    if (!art || !meta || !center) {
+      parkLyrics(false);
+      ensurePlayerHome();
+      stage.classList.remove('has-ly');
+      return;
+    }
+  } else {
+    ensurePlayerHome();
+    parkLyrics(false);
+    const now = $('bpNow');
+    const art = document.getElementById('art');
+    const meta = document.querySelector('.p-meta');
+    const center = document.querySelector('.p-center');
+    const right = document.querySelector('.p-right');
+    if (now && now !== __nullEl) {
+      if (art) now.insertBefore(art, now.firstChild);
+      if (meta) now.appendChild(meta);
+    }
+    if (center) bp.appendChild(center);
+    if (right) bp.appendChild(right);
+    syncBpNow();
+  }
+  document.body.classList.add('now-open');
   bp.hidden = false;
   try {
     bp.style.animation = 'none';
     void bp.offsetWidth;
     bp.style.animation = '';
   } catch {}
+  bindLyricRO();
+  loadLyrics();
+  settleLyrics();
 }
 
 function collapsePlayer() {
-  if (!playerKids || $('bigplayer').hidden) return;
   const bp = $('bigplayer');
+  if (!bp || bp.hidden) return;
   if (bp.dataset.closing) return;
+  const desk = bp.classList.contains('is-desk');
   const finish = () => {
     try {
       document.querySelectorAll('.art-morph').forEach((n) => n.remove());
@@ -8149,13 +8250,27 @@ function collapsePlayer() {
       if (art) art.style.opacity = '';
     } catch {}
     try {
-      playerKids.forEach((k) => { if (k && k.isConnected) $('player').appendChild(k); });
+      if (!desk && playerKids) {
+        playerKids.forEach((k) => { if (k && k.isConnected) $('player').appendChild(k); });
+      }
       ensurePlayerHome();
     } catch {}
+    try {
+      parkLyrics(false);
+      $('bpStage').classList.remove('has-ly');
+    } catch {}
+    try { stopLyricClock(); } catch {}
     bp.hidden = true;
-    bp.classList.remove('closing', 'morphing');
+    bp.classList.remove('closing', 'morphing', 'is-desk');
+    document.body.classList.remove('now-open');
     delete bp.dataset.closing;
   };
+  if (desk && !REDUCED) {
+    bp.dataset.closing = '1';
+    bp.classList.add('closing');
+    setTimeout(finish, 440);
+    return;
+  }
   if (!(isPhone() && !REDUCED)) {
     finish();
     return;
@@ -8337,7 +8452,9 @@ function bootAccountUI() {
     vibe();
     e.stopPropagation();
     const pop = $('morePop');
-    if (pop && !pop.hidden) closeMore();
+    const legal = $('legalPop');
+    if (legal && !legal.hidden) closeLegal();
+    else if (pop && !pop.hidden) closeMore();
     else openMore($('tabMore'));
   });
   $('sideMore')?.addEventListener('click', (e) => e.stopPropagation());
@@ -8351,8 +8468,15 @@ function bootAccountUI() {
       if (!me) { openAuth('signin'); return; }
       showView('friends');
     } else if (act === 'legal') {
-      window.open('/legal', '_blank', 'noopener');
+      openLegalMenu(moreAnchor || $('sideMore') || $('tabMore'));
     }
+  });
+  $('legalPop')?.addEventListener('click', (e) => {
+    if (e.target === $('legalPop')) { closeLegal(); return; }
+    const path = e.target.closest('[data-legal]')?.dataset.legal;
+    if (!path) return;
+    closeLegal();
+    openLegalPage(path);
   });
   $('acctPop')?.addEventListener('click', (e) => {
     const act = e.target.closest('[data-acct]')?.dataset.acct;
@@ -8387,11 +8511,13 @@ function bootAccountUI() {
   bindApkPrompt();
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
+      if ($('bigplayer') && !$('bigplayer').hidden) { collapsePlayer(); return; }
       if (mediaViewOpen()) { closeMediaView(); return; }
       if ($('deskPrompt') && !$('deskPrompt').hidden) { hideDeskPrompt(); return; }
       if ($('apkPrompt') && !$('apkPrompt').hidden) { hideApkPrompt(); return; }
       if ($('acctPop') && !$('acctPop').hidden) { closeAcct(); return; }
       if ($('morePop') && !$('morePop').hidden) { closeMore(); return; }
+      if ($('legalPop') && !$('legalPop').hidden) { closeLegal(); return; }
       if ($('fxPop') && !$('fxPop').hidden) { closeFxPop(); return; }
       if (document.body.classList.contains('chat-open')) {
         if (chatDismissOverlays()) return;
@@ -8411,6 +8537,9 @@ function bootAccountUI() {
     const mp = $('morePop');
     if (mp && !mp.hidden && !mp.querySelector('.acct-card')?.contains(e.target)
         && !e.target.closest('#sideMore, #tabMore')) closeMore();
+    const lp = $('legalPop');
+    if (lp && !lp.hidden && !lp.querySelector('.acct-card')?.contains(e.target)
+        && !e.target.closest('#sideMore, #tabMore')) closeLegal();
     const fx = $('fxPop');
     if (fx && !fx.hidden && !fx.querySelector('.fx-card')?.contains(e.target)
         && !e.target.closest('#bFx')) closeFxPop();
@@ -8524,11 +8653,24 @@ function bootAccountUI() {
     else openAuth('signin');
   });
   $('player').addEventListener('click', (e) => {
-    if (!isPhone()) return;
-    if (e.target.closest('button, input, .p-line')) return;
+    if (e.target.closest('button, input, .p-line, .p-btns, .p-right, .p-track')) return;
     if (Date.now() - playerShownAt < 900) return; // just appeared under the finger — ignore
     expandPlayer();
   });
+  $('bpLyricsPad').addEventListener('click', (e) => {
+    const el = e.target.closest('.ly-line');
+    if (!el) return;
+    const line = lyricLines[Number(el.dataset.i)];
+    if (!line || !(line.t > 0.05) || !lyricLines.some((l) => l.t > 0.4)) return;
+    try {
+      if (audio.duration) audio.currentTime = Math.min(audio.duration - 0.05, Math.max(0, line.t));
+      paintProgress();
+      tickLyrics(true);
+    } catch {}
+  });
+  try {
+    $('art').addEventListener('load', () => { try { if ($('bigplayer') && !$('bigplayer').hidden) syncBpNow(); } catch {} });
+  } catch {}
   $('bpClose').addEventListener('click', collapsePlayer);
   let swipeY = null;
   $('bigplayer').addEventListener('touchstart', (e) => {
@@ -8542,10 +8684,12 @@ function bootAccountUI() {
     if (dy > 90) collapsePlayer();
   });
   try {
-    matchMedia('(max-width: 760px)').addEventListener('change', (e) => { if (isDeskApp() || !e.matches) collapsePlayer(); });
+    matchMedia('(max-width: 760px)').addEventListener('change', () => { if (!isDeskApp()) collapsePlayer(); });
   } catch {}
-  setTimeout(maybeColdRefresh, 2200);
-  setInterval(checkUpdate, 30000);
+  if (!isDeskApp()) {
+    setTimeout(maybeColdRefresh, 2200);
+    setInterval(checkUpdate, 30000);
+  }
   if (isIOS) {
     setInterval(() => {
       try {
@@ -8558,6 +8702,7 @@ function bootAccountUI() {
   }
   window.addEventListener('pageshow', (e) => {
     if (!e.persisted) return;
+    if (isDeskApp()) return;
     // A reload here destroys Control Center / lock screen. Re-bind instead.
     if (current && audio && audio.src) {
       primeAudioSession();
@@ -8582,4 +8727,3 @@ function bootWhenReady(fn) {
 }
 bootWhenReady(init);
 bootWhenReady(bootAccountUI);
-bootWhenReady(initMusely);

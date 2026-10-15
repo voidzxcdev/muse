@@ -7,27 +7,188 @@
   <link rel="icon" href="/favicon.png" />
   <style>
     html, body { margin: 0; background: #0a0a0b; color: #e4e4e7; font: 16px/1.55 Satoshi, ui-sans-serif, system-ui, sans-serif; }
-    main { max-width: 40rem; margin: 0 auto; padding: 48px 20px 80px; }
-    a { color: #1ed760; }
-    h1 { font-size: 1.6rem; font-weight: 600; letter-spacing: -0.03em; }
-    h2 { font-size: 1.05rem; margin-top: 2rem; }
+    main { max-width: 42rem; margin: 0 auto; padding: 40px 20px 96px; }
+    a { color: #1ed760; text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }
+    a:hover { color: #4ae47a; }
+    nav a, .back { text-decoration: none; }
+    h1 { font-size: 1.7rem; font-weight: 600; letter-spacing: -0.03em; margin: 0 0 8px; }
+    h2 { font-size: 1.08rem; margin: 2.2rem 0 8px; }
+    h3 { font-size: 0.95rem; margin: 1.2rem 0 6px; color: #e4e4e7; }
     p, li { color: #a1a1aa; }
     .back { color: #e4e4e7; text-decoration: none; font-size: 0.9rem; }
+    nav { display: flex; flex-wrap: wrap; gap: 8px 14px; margin: 18px 0 28px; font-size: 0.9rem; }
+    nav a { color: #a1a1aa; text-decoration: none; }
+    nav a:hover, nav a.on { color: #1ed760; }
+    .meta { font-size: 0.85rem; color: #71717a; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.92rem; margin: 12px 0; }
+    th, td { text-align: left; padding: 8px 10px 8px 0; border-bottom: 1px solid rgba(255,255,255,0.08); vertical-align: top; color: #a1a1aa; }
+    th { color: #e4e4e7; font-weight: 600; }
+    .live { background: #131316; border-radius: 16px; padding: 14px 16px; margin: 12px 0 18px; }
+    .live b { color: #e4e4e7; }
   </style>
 </head>
 <body>
   <main>
     <p><a class="back" href="/">Muse</a></p>
     <h1>Legal</h1>
-    <p>Muse is independent software. It is not affiliated with YouTube, Google, or any label.</p>
-    <h2>Code vs content</h2>
-    <p>The MIT license covers Muse source code only. Songs, art, and names you hear or see stay with their owners. Muse does not sell a music catalog.</p>
-    <h2>Operators</h2>
-    <p>If you run your own Muse server, you are the operator. You need a lawful basis for any catalog you plug in. Prefer an official player embed or a catalog you are licensed to stream.</p>
-    <h2>DMCA</h2>
-    <p>To report copyright abuse of files stored on getmuse.eu (avatars, covers, chat uploads), email <a href="mailto:hello@getmuse.eu">hello@getmuse.eu</a> with the URL and proof you can act.</p>
-    <h2>Trademarks</h2>
-    <p>YouTube and YouTube Music are trademarks of Google LLC. Muse is not an official Google product.</p>
+    <p class="meta">The server is in France. Contact: <a href="mailto:hello@getmuse.eu">hello@getmuse.eu</a>. Last updated 13 October 2026.</p>
+    <nav>
+      <a href="#privacy">Privacy</a>
+      <a href="#gdpr">GDPR</a>
+      <a href="#terms">Terms</a>
+      <a href="#cookies">Cookies</a>
+      <a href="#dpa">Processor</a>
+      <a href="#subprocessors">Subprocessors</a>
+      <a href="#sla">Uptime</a>
+      <a href="#credits">Credits</a>
+      <a href="#dmca">Copyright</a>
+    </nav>
+
+    <h2 id="privacy">Privacy</h2>
+    <p>Muse is a music player project. You may use it without an account. Muse does not sell recordings and does not display advertising.</p>
+    <p>Accounts do not collect an email address. Password reset by email is therefore not available. If you lose your password, create a new account.</p>
+    <h3>Account data</h3>
+    <p>If you register, Muse stores:</p>
+    <ul>
+      <li>Username, a hashed password, display name, handle, and avatar</li>
+      <li>Likes, playlists, covers, and playback events (used for For You)</li>
+      <li>Friends, chat, and files you send</li>
+      <li>A push endpoint, if you enable notifications</li>
+      <li>A session cookie to keep you signed in</li>
+    </ul>
+    <p>Without an account, Muse still records IP addresses in ordinary server and <a href="https://www.cloudflare.com" target="_blank" rel="noopener">Cloudflare</a> logs, as most websites do. Those logs rotate. They are not used to build a marketing profile.</p>
+    <h3>Data not collected</h3>
+    <ul>
+      <li>Email, phone number, or payment details. There is nothing to bill.</li>
+      <li>The recordings themselves. Thumbnails and streams remain with their rights holders.</li>
+    </ul>
+    <h3>Legal basis</h3>
+    <p>Account features (library, friends, chat, session cookie, For You) are processed to perform the contract you request when you register (<a href="https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX%3A32016R0679" target="_blank" rel="noopener">GDPR</a> Art. 6(1)(b)).</p>
+    <p>Server logs and abuse prevention are processed on the basis of legitimate interests (Art. 6(1)(f)). You may object by writing to <a href="mailto:hello@getmuse.eu">hello@getmuse.eu</a>, or by not using Muse.</p>
+    <p>The following require consent (Art. 6(1)(a)): desktop <a href="https://www.youtube.com" target="_blank" rel="noopener">YouTube</a> iframe cookies, and push notifications. You can withdraw consent in the same place you granted it.</p>
+    <p>Cover art is an HTTP image fetch from <a href="https://www.google.com" target="_blank" rel="noopener">Google</a> / <a href="https://www.youtube.com" target="_blank" rel="noopener">YouTube</a> CDNs (<a href="https://i.ytimg.com" target="_blank" rel="noopener">i.ytimg.com</a> and related hosts). The request includes your IP. Google processes that as its own CDN logs; Muse is not Google’s processor for it. Muse’s legal bases for causing the request are GDPR Art. 6(1)(b) when you use the player you asked for, and Art. 6(1)(f) when you browse logged out (interest: showing search and library covers). Under EU cookie / ePrivacy rules this is a content fetch, not storing or reading a YouTube cookie on your device. The optional banner is only for the desktop iframe, which can set cookies Muse does not control. Reject does not stop thumbnails. Object to hello@ or do not use the site.</p>
+    <p>Lyrics are looked up from the Muse origin using the track title and artist. Muse may call <a href="https://lrclib.net" target="_blank" rel="noopener">LRCLIB</a>, <a href="https://lyrics.ovh" target="_blank" rel="noopener">lyrics.ovh</a>, <a href="https://textyl.co" target="_blank" rel="noopener">textyl</a>, and <a href="https://music.163.com" target="_blank" rel="noopener">NetEase Cloud Music</a>. Your account and IP are not sent. That is a content fetch of public lyric text, not a cookie, and not an account transfer.</p>
+    <h3>Your rights</h3>
+    <p>In Settings you can update your profile, download a JSON export, and delete your account. Deletion removes the library, chat files held on the server, and the username. For other requests, write to <a href="mailto:hello@getmuse.eu">hello@getmuse.eu</a>. Further detail is under <a href="#gdpr">GDPR</a>.</p>
+    <p>You must be 16 or older to create an account.</p>
+    <h3>Where data is processed</h3>
+    <p>The controller is <a href="https://github.com/voidzxcdev" target="_blank" rel="noopener">voidzxcdev</a>. The application and database run on a <a href="https://contabo.com" target="_blank" rel="noopener"><strong>Contabo</strong></a> server in <strong>France</strong>. Contabo is the host, not the controller. <a href="https://www.cloudflare.com" target="_blank" rel="noopener">Cloudflare</a> sits in front of the origin and operates globally. <a href="https://www.youtube.com" target="_blank" rel="noopener">YouTube</a> receives thumbnail requests, and desktop embed requests if you accept cookies.</p>
+
+    <h2 id="gdpr">GDPR</h2>
+    <p><a href="https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX%3A32016R0679" target="_blank" rel="noopener">GDPR</a> applies to personal data processed on this public instance. Where the server is hosted does not decide who the controller is. The .eu domain is also not the trigger.</p>
+    <p>There is no data protection officer. Contact: <a href="mailto:hello@getmuse.eu">hello@getmuse.eu</a>.</p>
+    <h3>Controller</h3>
+    <p>The controller is <a href="https://github.com/voidzxcdev" target="_blank" rel="noopener">voidzxcdev</a>. <a href="https://getmuse.eu">getmuse.eu</a> is this project’s public instance. Accounts do not store an email address, so <a href="mailto:hello@getmuse.eu">hello@getmuse.eu</a> is the contact channel.</p>
+    <p>The VPS is in France, with <a href="https://contabo.com" target="_blank" rel="noopener">Contabo</a>. That is hosting. It does not make France or Contabo the controller.</p>
+    <h3>Retention</h3>
+    <ul>
+      <li>Library and profile: until you delete the account.</li>
+      <li>Session cookie: until you sign out or the cookie expires.</li>
+      <li><a href="https://www.youtube.com" target="_blank" rel="noopener">YouTube</a> cookies: until you choose Reject or clear site data. Those cookies are set by <a href="https://www.google.com" target="_blank" rel="noopener">Google</a>.</li>
+      <li>Request logs: rotated on the host and at <a href="https://www.cloudflare.com" target="_blank" rel="noopener">Cloudflare</a>.</li>
+    </ul>
+    <p>After account deletion, Muse stops using the account copy. Residual logs expire with ordinary rotation.</p>
+    <h3>Transfers outside the EEA</h3>
+    <p>The origin server is in France and remains in the EU. That is not a Chapter V transfer. Muse does not execute a separate Chapter V contract with you. For each helper below, this is the Chapter V tool Muse relies on as of 13 October 2026 (as published by that provider, not as a court ruling):</p>
+    <ul>
+      <li><a href="https://www.cloudflare.com" target="_blank" rel="noopener">Cloudflare</a> (CDN, DNS, TLS, forwarding of hello@): <a href="https://www.dataprivacyframework.gov/participant/5666" target="_blank" rel="noopener">EU-US Data Privacy Framework</a> (Cloudflare, Inc., participant 5666). Fallback in <a href="https://www.cloudflare.com/cloudflare-customer-dpa/" target="_blank" rel="noopener">Cloudflare’s Customer DPA</a>: EU <a href="https://commission.europa.eu/law/law-topic/data-protection/international-dimension-data-protection/standard-contractual-clauses-scc_en" target="_blank" rel="noopener">SCCs</a> (Decision 2021/914) if DPF lapses.</li>
+      <li>Push, only if you enable it: <a href="https://firebase.google.com/docs/cloud-messaging" target="_blank" rel="noopener">FCM</a> / <a href="https://www.google.com" target="_blank" rel="noopener">Google</a> LLC under the <a href="https://policies.google.com/privacy/frameworks" target="_blank" rel="noopener">EU-US Data Privacy Framework</a>. <a href="https://www.mozilla.org" target="_blank" rel="noopener">Mozilla</a> and <a href="https://www.apple.com" target="_blank" rel="noopener">Apple</a>: their published transfer terms for their push services.</li>
+    </ul>
+    <p>Thumbnail fetches to Google/YouTube CDNs are not a Muse processor transfer. Google processes the requester IP as its own CDN. Muse’s GDPR bases for causing that request are in Privacy. Rejecting cookies still blocks only the desktop iframe.</p>
+    <h3>For You</h3>
+    <p>For You ranks tracks from your listening history on Muse. It is not used to make decisions with legal or similarly significant effects about you.</p>
+    <h3>Personal data breaches</h3>
+    <p>If a personal data breach occurs, the competent supervisory authority will be notified within 72 hours where GDPR requires it. Affected users will be informed if the breach is likely to result in a high risk to their rights and freedoms.</p>
+    <h3>Complaints</h3>
+    <p>You may lodge a complaint with the competent <strong>national</strong> supervisory authority in your country of residence, your place of work, or the place of the alleged infringement. The <a href="https://www.edpb.europa.eu/about-edpb/about-edpb/members_en" target="_blank" rel="noopener">EDPB members list</a> is a directory of those authorities. The EDPB itself does not handle individual complaints.</p>
+
+    <h2 id="terms">Terms</h2>
+    <p>Use of <a href="https://getmuse.eu">getmuse.eu</a> or creation of an account constitutes acceptance of these terms. The source code is licensed under <a href="https://opensource.org/licenses/MIT" target="_blank" rel="noopener">MIT</a>. That licence covers Muse’s code, not recordings or third-party marks.</p>
+    <ul>
+      <li>You must be 16 or older to create an account.</li>
+      <li>You are responsible for your password. Muse cannot reset it by email.</li>
+      <li>You may not upload unlawful material, harass others, or attempt to compromise this instance.</li>
+      <li>Muse is independent of <a href="https://www.youtube.com" target="_blank" rel="noopener">YouTube</a> and <a href="https://www.google.com" target="_blank" rel="noopener">Google</a> and must not be presented as theirs.</li>
+      <li>Muse does not grant you a licence to recordings.</li>
+      <li>You may close your account at any time in Settings. Export first if you want a copy of your data.</li>
+    </ul>
+    <h3>Other copies</h3>
+    <p>These terms cover only the public instance at <a href="https://getmuse.eu">getmuse.eu</a>, operated by <a href="https://github.com/voidzxcdev" target="_blank" rel="noopener">voidzxcdev</a>.</p>
+    <p>The source is published on <a href="https://github.com/voidzxcdev/muse" target="_blank" rel="noopener">GitHub</a> under <a href="https://opensource.org/licenses/MIT" target="_blank" rel="noopener">MIT</a>. Anyone may copy, modify, host, or redistribute it. If you run your own version, that instance is yours. You are its operator and, where <a href="https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX%3A32016R0679" target="_blank" rel="noopener">GDPR</a> applies, its controller. <a href="https://github.com/voidzxcdev" target="_blank" rel="noopener">voidzxcdev</a> does not operate it and accepts no liability for it, including how it is used, what data it processes, or any claim arising from a fork, clone, or derived work.</p>
+    <p>A copy of Muse is not getmuse.eu and must not be presented as this project’s public instance.</p>
+    <h3>Liability</h3>
+    <p>Nothing in these terms limits liability for intent or gross negligence, for injury to life, body or health, or any liability that German law does not allow to be limited, including mandatory consumer rights. The “as is” wording does not override those rules. A court may still award damages where the law requires it. These clauses are not a guarantee that every other claim is excluded.</p>
+    <p>Where German law permits a contractual limit, there is no fee for getmuse.eu, so there is no contract price to use as a damages figure. That is not a promise that remaining liability is always EUR 0. The operator of getmuse.eu is not otherwise liable, where a waiver is allowed, for lost data, playback failures, <a href="https://www.youtube.com" target="_blank" rel="noopener">YouTube</a> outages, third-party claims about a track, or any other person’s copy of the source.</p>
+    <p>Avatars, covers, and chat uploads remain yours. You grant Muse a licence to host them as needed for those features, and you confirm you have the right to upload them.</p>
+    <p>Abusive accounts on getmuse.eu may be closed. This public instance may be changed or taken down. You may continue to run the <a href="https://opensource.org/licenses/MIT" target="_blank" rel="noopener">MIT</a> source yourself, on the terms above.</p>
+    <p>These terms are governed by German law, without prejudice to mandatory consumer protections in your country of residence.</p>
+
+    <h2 id="cookies">Cookies</h2>
+    <p>The session cookie is strictly necessary if you are signed in. Player preferences such as volume are stored on your device. Under EU cookie rules, those do not require a banner consent.</p>
+    <p>The optional cookie is the desktop <a href="https://www.youtube.com" target="_blank" rel="noopener">YouTube</a> player iframe, and only after Accept. Muse then loads their iframe API, which may set cookies Muse does not control. Until then, and on phone, playback stays on Muse’s own audio. Both options work. There are no ads.</p>
+    <p>Thumbnails still load from Google/YouTube CDNs without that Accept. That is an image GET, not the iframe, and it does not store a YouTube cookie on your device. The request includes your IP, which Google may log. GDPR bases are in Privacy. Reject does not hide artwork.</p>
+    <p>You can change this later with Reject, the desktop Settings toggle, or by clearing site data.</p>
+
+    <h2 id="dpa">Not an Article 28 contract</h2>
+    <p>This page is not a <a href="https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX%3A32016R0679" target="_blank" rel="noopener">GDPR</a> Art. 28 processor agreement and is not offered as one. For ordinary use of <a href="https://getmuse.eu">getmuse.eu</a>, <a href="https://github.com/voidzxcdev" target="_blank" rel="noopener">voidzxcdev</a> is the controller. Muse does not process personal data on behalf of other operators.</p>
+    <p>If you created accounts here for other people, you remain their controller. Do not treat this page as a signed DPA. Remove their data in the app or write to <a href="mailto:hello@getmuse.eu">hello@getmuse.eu</a>.</p>
+    <p>If you run your own copy of Muse, you are the operator of that copy. This page does not apply to it.</p>
+
+    <h2 id="subprocessors">Subprocessors</h2>
+    <table>
+      <tr><th>Who</th><th>Role</th><th>Location</th></tr>
+      <tr><td><a href="https://www.cloudflare.com" target="_blank" rel="noopener">Cloudflare, Inc.</a></td><td>CDN, DNS, TLS, DDoS, hello@ forwarding</td><td>Global edge</td></tr>
+      <tr><td><a href="https://contabo.com" target="_blank" rel="noopener">Contabo GmbH</a></td><td>VPS: application and database</td><td>France (EU)</td></tr>
+      <tr><td><a href="https://firebase.google.com/docs/cloud-messaging" target="_blank" rel="noopener">FCM</a>, <a href="https://www.mozilla.org" target="_blank" rel="noopener">Mozilla</a>, <a href="https://www.apple.com" target="_blank" rel="noopener">Apple</a></td><td>Push notifications, if enabled</td><td>Their respective clouds</td></tr>
+    </table>
+    <p>Not processors of Muse: <a href="https://www.google.com" target="_blank" rel="noopener">Google</a>, <a href="https://www.youtube.com" target="_blank" rel="noopener">YouTube</a>, and <a href="https://music.youtube.com" target="_blank" rel="noopener">YouTube Music</a> (search, artwork, optional embed), <a href="https://www.fontshare.com" target="_blank" rel="noopener">Fontshare</a> for typefaces, and lyrics hosts (<a href="https://lrclib.net" target="_blank" rel="noopener">LRCLIB</a>, <a href="https://lyrics.ovh" target="_blank" rel="noopener">lyrics.ovh</a>, <a href="https://textyl.co" target="_blank" rel="noopener">textyl</a>, <a href="https://music.163.com" target="_blank" rel="noopener">NetEase Cloud Music</a>), which receive only the track title and artist from the origin.</p>
+
+    <h2 id="sla">Uptime</h2>
+    <p>Availability is measured. It is not advertised as 99.99%. Muse is free; missed time is not compensated. Outages at <a href="https://www.youtube.com" target="_blank" rel="noopener">YouTube</a>, <a href="https://www.cloudflare.com" target="_blank" rel="noopener">Cloudflare</a>, or the catalog are excluded.</p>
+    <p>The target is 99.0% of minutes in a UTC calendar month on <code>GET /api/health</code>. A tick is recorded each minute. A missing tick counts as downtime for that minute.</p>
+    <div class="live" id="slaLive">Loading this month’s ticks…</div>
+    <p>If the target is missed, the remedy is to export or delete your data and run the source yourself. There is no other remedy.</p>
+    <p>Measurement began when this counter was enabled. Figures for a partial first month will be incomplete.</p>
+
+    <h2 id="credits">Credits</h2>
+    <p>Muse source is by <a href="https://github.com/voidzxcdev" target="_blank" rel="noopener">voidzxcdev</a>, licensed under <a href="https://opensource.org/licenses/MIT" target="_blank" rel="noopener">MIT</a>. <a href="https://github.com/voidzxcdev/muse" target="_blank" rel="noopener">Repository</a>, <a href="https://github.com/voidzxcdev/muse/blob/main/LICENSE" target="_blank" rel="noopener">LICENSE</a>, <a href="https://github.com/voidzxcdev/muse/blob/main/NOTICE" target="_blank" rel="noopener">NOTICE</a>.</p>
+    <p><a href="https://www.youtube.com" target="_blank" rel="noopener"><strong>YouTube</strong></a> and <a href="https://music.youtube.com" target="_blank" rel="noopener"><strong>YouTube Music</strong></a> are trademarks of <a href="https://www.google.com" target="_blank" rel="noopener">Google</a> LLC. Muse is not affiliated with, endorsed by, or sponsored by Google. Artwork and some playback are provided under their terms. Muse cannot sublicense that material.</p>
+    <p>Thumbnails: <a href="https://www.google.com" target="_blank" rel="noopener">Google</a> / <a href="https://www.youtube.com" target="_blank" rel="noopener">YouTube</a> (<a href="https://i.ytimg.com" target="_blank" rel="noopener">i.ytimg.com</a>, googleusercontent.com, ggpht.com). Avatars, covers, and chat images belong to the users who uploaded them. The Muse mark is this project’s.</p>
+    <p>Typefaces: <a href="https://www.fontshare.com/fonts/clash-display" target="_blank" rel="noopener">Clash Display</a> and <a href="https://www.fontshare.com/fonts/satoshi" target="_blank" rel="noopener">Satoshi</a>, <a href="https://www.fontshare.com" target="_blank" rel="noopener">Fontshare</a> / <a href="https://www.indiantypefoundry.com" target="_blank" rel="noopener">Indian Type Foundry</a>. Icons: <a href="https://feathericons.com" target="_blank" rel="noopener">Feather</a> (<a href="https://github.com/colebemis" target="_blank" rel="noopener">Cole Bemis</a>, <a href="https://opensource.org/licenses/MIT" target="_blank" rel="noopener">MIT</a>). Play/pause: <a href="https://fontawesome.com" target="_blank" rel="noopener">Font Awesome</a> Free 6 (<a href="https://fontawesome.com" target="_blank" rel="noopener">Fonticons</a>, <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>).</p>
+    <p>Also used: <a href="https://github.com/yt-dlp/yt-dlp" target="_blank" rel="noopener">yt-dlp</a>, <a href="https://www.electronjs.org" target="_blank" rel="noopener">Electron</a> / <a href="https://www.chromium.org" target="_blank" rel="noopener">Chromium</a> on Linux, <a href="https://github.com/emersion/mpris-service" target="_blank" rel="noopener">mpris-service</a>, <a href="https://github.com/dbusjs/node-dbus-next" target="_blank" rel="noopener">dbus-next</a>, <a href="https://www.psycopg.org" target="_blank" rel="noopener">psycopg</a>, <a href="https://github.com/web-push-libs/pywebpush" target="_blank" rel="noopener">pywebpush</a>, <a href="https://developer.android.com/jetpack/androidx" target="_blank" rel="noopener">AndroidX</a>. Lyrics lookups use <a href="https://lrclib.net" target="_blank" rel="noopener">LRCLIB</a>, <a href="https://lyrics.ovh" target="_blank" rel="noopener">lyrics.ovh</a>, <a href="https://textyl.co" target="_blank" rel="noopener">textyl</a>, and <a href="https://music.163.com" target="_blank" rel="noopener">NetEase Cloud Music</a>.</p>
+
+    <h2 id="dmca">Copyright</h2>
+    <p>getmuse.eu is not registered as a US designated agent under 17 U.S.C. § 512 and does not claim that safe harbour.</p>
+    <p>To report copyrighted material that Muse actually hosts (avatar, playlist cover, or chat upload), write to <a href="mailto:hello@getmuse.eu">hello@getmuse.eu</a> with:</p>
+    <ul>
+      <li>Your contact details</li>
+      <li>A description of the work</li>
+      <li>The URL on getmuse.eu</li>
+      <li>A statement that you are authorised to act for the rights holder</li>
+    </ul>
+    <p>Hosted user files that can be deleted will be removed. Muse cannot take down a stream that was never stored on its disk as a catalog. There is no US statutory counter-notice process on this instance.</p>
   </main>
+  <script>
+    (function () {
+      var map = { '/privacy': 'privacy', '/gdpr': 'gdpr', '/terms': 'terms', '/cookies': 'cookies', '/dpa': 'dpa', '/subprocessors': 'subprocessors', '/sla': 'sla', '/credits': 'credits', '/dmca': 'dmca' };
+      var id = map[location.pathname];
+      if (id && !location.hash) {
+        var el = document.getElementById(id);
+        if (el) el.scrollIntoView();
+      }
+      document.querySelectorAll('nav a').forEach(function (a) {
+        if (a.getAttribute('href') === '#' + (location.hash || '').slice(1) || (id && a.getAttribute('href') === '#' + id)) a.classList.add('on');
+      });
+      fetch('/api/status', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) {
+        var el = document.getElementById('slaLive');
+        if (!el || !j) return;
+        var pct = (j.month_pct == null) ? 'n/a' : (j.month_pct.toFixed(2) + '%');
+        el.innerHTML = '<b>This UTC month:</b> ' + pct + ' up · ' + (j.month_up_min || 0) + ' minutes ticked / ' + (j.month_expect_min || 0) + ' expected · process up ' + Math.floor((j.uptime_s || 0) / 3600) + 'h · build ' + (j.build || '?');
+      }).catch(function () {
+        var el = document.getElementById('slaLive');
+        if (el) el.textContent = 'Status feed is unreachable right now.';
+      });
+    })();
+  </script>
 </body>
 </html>

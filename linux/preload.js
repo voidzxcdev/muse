@@ -4,6 +4,10 @@ const listeners = new Set();
 
 contextBridge.exposeInMainWorld("__museDesktop", 1);
 contextBridge.exposeInMainWorld("__muselyChat", ipcRenderer.sendSync("musely-seed"));
+contextBridge.exposeInMainWorld("__musePushMpris", (state) => {
+  if (!state || typeof state !== "object") return;
+  ipcRenderer.send("mpris-state", state);
+});
 contextBridge.exposeInMainWorld("chrome", {
   webview: {
     postMessage(msg) {
@@ -73,6 +77,14 @@ function absUrl(u) {
   try { return new URL(u, "https://getmuse.eu").href; } catch { return ""; }
 }
 
+function artistOf(title, uploader) {
+  const up = String(uploader || "").replace(/\s*-\s*Topic$/i, "").replace(/VEVO$/i, "").trim();
+  const t = String(title || "");
+  const m = t.match(/^(.{2,80}?)\s+[-–—]\s+(.{2,})$/);
+  if (m && m[1].trim().length > 1) return m[1].trim();
+  return up;
+}
+
 function snapshot() {
   const bar = document.getElementById("player");
   const play = document.getElementById("bPlay");
@@ -85,16 +97,21 @@ function snapshot() {
   const title = ((titleEl && titleEl.textContent) || "").trim();
   const blank = !title || title === "—" || title === "-" || title === "–" || title === "Loading…";
   const stopped = hidden || blank;
+  const id = ((bar && bar.dataset && bar.dataset.id) || "").trim();
+  const artist = artistOf(title, (bar && bar.dataset && bar.dataset.artist) || "");
   let artUrl = "";
   try { artUrl = art && art.currentSrc ? art.currentSrc : (art && art.src) || ""; } catch { artUrl = ""; }
+  const dsDur = bar && bar.dataset ? Number(bar.dataset.duration) : 0;
   return {
+    id,
     title: stopped ? "" : title,
-    artist: stopped ? "" : "Muse",
-    art: absUrl(artUrl),
+    artist: stopped ? "" : artist,
+    art: stopped ? "" : absUrl(artUrl),
+    url: (!stopped && id) ? ("https://www.youtube.com/watch?v=" + id) : "",
     playing: !stopped && !!(play && play.classList.contains("playing")),
     stopped,
     position: parseClock(pos && pos.textContent),
-    duration: parseClock(dur && dur.textContent),
+    duration: parseClock(dur && dur.textContent) || (Number.isFinite(dsDur) ? dsDur : 0),
     volume: vol ? Number(vol.value) / 100 : 0.85,
   };
 }
@@ -103,14 +120,16 @@ let lastJson = "";
 function tick() {
   const state = snapshot();
   const json = JSON.stringify({
+    id: state.id,
     title: state.title,
     artist: state.artist,
     art: state.art,
+    url: state.url,
     playing: state.playing,
     stopped: state.stopped,
-    duration: state.duration,
+    duration: Math.round(state.duration || 0),
     volume: Math.round(state.volume * 100),
-    position: Math.floor(state.position),
+    position: Math.round((state.position || 0) * 2) / 2,
   });
   if (json === lastJson) return;
   lastJson = json;
@@ -168,5 +187,5 @@ ipcRenderer.on("mpris-cmd", (_event, msg) => {
   try { applyCmd(msg.type, msg.value); } catch { /* page not ready */ }
 });
 
-setInterval(tick, 1000);
+setInterval(tick, 400);
 document.addEventListener("DOMContentLoaded", tick);

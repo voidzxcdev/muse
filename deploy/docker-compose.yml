@@ -29,6 +29,18 @@ services:
       - wal_compression=on
     security_opt:
       - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - FOWNER
+      - SETGID
+      - SETUID
+      - DAC_OVERRIDE
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/run/postgresql
 
   muse:
     build:
@@ -36,6 +48,7 @@ services:
       dockerfile: Dockerfile
     container_name: muse
     restart: unless-stopped
+    user: "10001:10001"
     env_file:
       - .env
     environment:
@@ -46,6 +59,7 @@ services:
       PUBLIC_URL: "${PUBLIC_URL:-http://127.0.0.1:8090}"
       DENO_HEAP: "400"
       DATABASE_URL: postgresql://muse:${POSTGRES_PASSWORD}@postgres:5432/muse
+      HOME: /home/muse
     expose:
       - "8090"
     volumes:
@@ -58,9 +72,12 @@ services:
       - muse
     security_opt:
       - no-new-privileges:true
-    read_only: false
+    cap_drop:
+      - ALL
+    read_only: true
     tmpfs:
-      - /tmp:size=256m
+      - /tmp:size=256m,mode=1777
+      - /home/muse:size=32m,uid=10001,gid=10001,mode=0755
 
   cloudflared:
     image: cloudflare/cloudflared:latest
@@ -73,6 +90,11 @@ services:
       - muse
     security_opt:
       - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp
 
 volumes:
   muse-cache:
@@ -82,3 +104,4 @@ volumes:
 networks:
   muse:
     driver: bridge
+    internal: false

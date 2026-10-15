@@ -173,11 +173,13 @@ async function handle(req: Request): Promise<Response> {
         SELECT video_id, MAX(title) AS title, MAX(thumb) AS thumb, MAX(duration) AS duration, COUNT(*)::int AS c
         FROM muse.plays
         WHERE COALESCE(title, '') <> ''
+          AND video_id <> '4NRXx6U8ABQ'
         GROUP BY video_id
         ORDER BY c DESC, MAX(played_at) DESC
-        LIMIT ${n}`;
+        LIMIT ${n + 4}`;
+      const hiddenTitle = (title) => /blinding\s*lights/i.test(title || "") && /official(?:\s+music)?\s+video/i.test(title || "");
       return json({
-        tracks: rows.map((r) => ({
+        tracks: rows.filter((r) => !hiddenTitle(r.title)).slice(0, n).map((r) => ({
           id: r.video_id,
           title: r.title || r.video_id,
           thumbnail: r.thumb || `https://i.ytimg.com/vi/${r.video_id}/hqdefault.jpg`,

@@ -23,6 +23,12 @@ Returns stream metadata the player needs: title, duration, thumbnail, and either
 
 `GET /api/audio?v=` is a Range-aware same-origin audio response when the adapter uses files or proxied audio.
 
+## Lyrics
+
+`GET /api/lyrics?title=&artist=&duration=`
+
+Returns `{ lines: [{ t, text }], synced: bool }`. `t` is seconds from the start when the adapter has synced lines; otherwise `t` is 0 and the client may pace by duration. Empty `lines` is a valid miss. The client never talks to a lyrics vendor directly. The stock origin uses LRCLIB first. Other lyrics hosts run only if LRCLIB has no lines.
+
 ## Library
 
 Accounts, playlists, likes, and For You are Muse application data. They live in the operator's database. They are not a music license.

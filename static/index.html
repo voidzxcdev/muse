@@ -40,10 +40,8 @@
   <title>Muse</title>
   <link rel="preconnect" href="https://api.fontshare.com" />
   <link rel="preconnect" href="https://i.ytimg.com" crossorigin />
-  <link rel="dns-prefetch" href="https://www.youtube.com" />
-  <link rel="dns-prefetch" href="https://music.youtube.com" />
   <link href="https://api.fontshare.com/v2/css?f[]=clash-display@500,600,700&f[]=satoshi@400,500,700,900&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />
-  <link rel="stylesheet" href="/style.css?v=311" />
+  <link rel="stylesheet" href="/style.css?v=323" />
   <link rel="icon" type="image/png" href="/favicon.png?v=172" sizes="32x32" />
   <link rel="icon" href="/favicon.ico?v=172" sizes="any" />
 </head>
@@ -91,34 +89,8 @@
     </nav>
     <div class="side-head"><span>Playlists</span><button id="newPl" title="New playlist">+</button></div>
     <div id="plList"></div>
-    <div id="musely" class="is-closed">
-      <button type="button" class="musely-guy" id="muselyGuy" title="Musely" aria-label="Musely">
-        <span class="musely-sprite" id="muselySprite" data-mood="idle"></span>
-      </button>
-      <section class="musely-box" id="muselyBox" aria-label="Musely">
-        <header class="musely-hd">
-          <button type="button" id="muselyClose" aria-label="Close Musely">
-            <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-          </button>
-        </header>
-        <div class="musely-log" id="muselyLog">
-          <div class="musely-hi">
-            <p class="musely-hi-a">Привет, Я Musely <i class="musely-hand" aria-hidden="true"></i></p>
-            <p class="musely-hi-b">могу найти трендовую музыку.</p>
-          </div>
-        </div>
-        <form id="muselyForm" class="musely-form">
-          <input id="muselyQ" maxlength="200" placeholder="напиши…" autocomplete="off" spellcheck="false" />
-          <button type="submit" aria-label="Send">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
-          </button>
-        </form>
-      </section>
-      <button type="button" class="musely-scrim" id="muselyScrim" hidden aria-label="Close chat"></button>
-    </div>
     <div id="sideFoot">
       <button id="sideUser" title="Sign in" type="button"><span class="avatar">?</span></button>
-      <button type="button" class="musely-call is-on is-locked" id="muselyCall" aria-label="Sign in for Musely">Sign in for Musely</button>
     </div>
   </aside>
 
@@ -220,8 +192,22 @@
       <div class="acct-sep"></div>
       <button type="button" data-more="legal">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
-        <span><b>Legal</b><i>Terms and DMCA</i></span>
+        <span><b>Legal</b><i>Privacy, GDPR, terms</i></span>
       </button>
+    </div>
+  </div>
+  <div id="legalPop" class="acct-pop" hidden>
+    <div class="acct-card legal-card" role="menu">
+      <p class="legal-hd">Legal</p>
+      <button type="button" data-legal="/privacy"><span><b>Privacy</b><i>What I keep</i></span></button>
+      <button type="button" data-legal="/gdpr"><span><b>GDPR</b><i>Controller · France host</i></span></button>
+      <button type="button" data-legal="/terms"><span><b>Terms</b><i>Rules and liability</i></span></button>
+      <button type="button" data-legal="/cookies"><span><b>Cookies</b><i>Reject is a real choice</i></span></button>
+      <button type="button" data-legal="/dpa"><span><b>Processor</b><i>Not an Art. 28 contract</i></span></button>
+      <button type="button" data-legal="/subprocessors"><span><b>Who else</b><i>Cloudflare, Contabo, Groq</i></span></button>
+      <button type="button" data-legal="/sla"><span><b>Uptime</b><i>Measured, not a sticker</i></span></button>
+      <button type="button" data-legal="/credits"><span><b>Credits</b><i>YouTube, authors, art</i></span></button>
+      <button type="button" data-legal="/dmca"><span><b>Copyright</b><i>Hosted files only</i></span></button>
     </div>
   </div>
   <div id="fxPop" class="fx-pop" hidden>
@@ -294,9 +280,17 @@
   </div>
 
   <div id="bigplayer" hidden>
-    <button id="bpClose" title="Close">
+    <button id="bpClose" title="Close" type="button">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
     </button>
+    <div id="bpNow">
+      <img id="bpCover" alt="" />
+      <div id="bpNowTitle"></div>
+      <div id="bpNowArtist"></div>
+    </div>
+    <div id="bpLyrics" class="is-void">
+      <div id="bpLyricsPad"></div>
+    </div>
     <div id="bpStage"></div>
   </div>
 
@@ -316,9 +310,20 @@
       <input type="text" id="obUser" maxlength="24" autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="next" />
       <label class="fl" for="obPass">Password</label>
       <input type="password" id="obPass" autocomplete="new-password" enterkeyhint="go" />
+      <label class="tos-row" id="obTosWrap">
+        <input type="checkbox" id="obTos" />
+        <span>I agree to the <a href="/terms" target="_blank" rel="noopener">Terms</a> and <a href="/privacy" target="_blank" rel="noopener">Privacy Policy</a>.</span>
+      </label>
       <div class="merr" id="obErr"></div>
       <button class="ob-go" id="obGo">Create account</button>
       <button class="ob-alt" id="obSwitch" type="button">I already have one</button>
+    </div>
+  </div>
+  <div id="cookieBar" hidden>
+    <p>Muse uses a session cookie if you sign in. Optional: desktop can load YouTube cookies for the embed player. No ads. <a href="/cookies" target="_blank" rel="noopener">Cookies</a> · <a href="/gdpr" target="_blank" rel="noopener">GDPR</a></p>
+    <div class="cb-row">
+      <button type="button" class="mbtn ghost" id="cbReject">Reject</button>
+      <button type="button" class="mbtn primary" id="cbAccept">Accept all</button>
     </div>
   </div>
   <div id="toast" class="toast" hidden></div>
@@ -342,7 +347,7 @@
   /* Failsafe: runs with zero dependencies. If the main script ever dies,
      the intro still lifts at 3.2s and the real error gets toasted. */
   window.__museErr = [];
-  window.__museBuild = 276;
+  window.__museBuild = 279;
   window.addEventListener('error', function (e) {
     try {
       window.__museErr.push(String((e && e.message) || 'script error'));
@@ -358,6 +363,6 @@
   }, 5000);
   </script>
   <script src="/ytplayer.js?v=218"></script>
-  <script src="/app.js?v=309"></script>
+  <script src="/app.js?v=325"></script>
 </body>
 </html>

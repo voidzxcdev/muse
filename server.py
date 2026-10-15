@@ -4,6 +4,7 @@
 Stdlib only (+ yt_dlp module). Run:  python server.py   →  http://127.0.0.1:8077
 """
 import base64
+import calendar
 import contextlib
 import hashlib
 import hmac
@@ -61,11 +62,55 @@ HOST = os.environ.get("HOST") or "0.0.0.0"
 ON_RENDER = bool(os.environ.get("RENDER"))
 PUBLIC_URL = (os.environ.get("PUBLIC_URL") or os.environ.get("RENDER_EXTERNAL_URL") or "").rstrip("/")
 DATABASE_URL = os.environ.get("DATABASE_URL") or ""  # set → Postgres (Supabase); unset → local SQLite
-BUILD = 276  # bump every release — the UI polls this and prompts reload
-DESKTOP_VERSION = os.environ.get("DESKTOP_VERSION") or "1.1.11"
+BUILD = 311  # bump every release — the UI polls this and prompts reload
+# Never list or play these. Official audio of the same song stays.
+_HIDDEN_IDS = frozenset({
+    "4NRXx6U8ABQ",  # The Weeknd - Blinding Lights (Official Video)
+})
+_HIDDEN_TITLE = re.compile(
+    r"blinding\s*lights.{0,80}official(?:\s+music)?\s+video|"
+    r"official(?:\s+music)?\s+video.{0,80}blinding\s*lights",
+    re.I,
+)
+
+
+def hidden_track(vid="", title=""):
+    if vid and vid in _HIDDEN_IDS:
+        return True
+    if title and _HIDDEN_TITLE.search(title):
+        return True
+    return False
+
+
+def pretty_title(s):
+    s = re.sub(r"\s*\[[^\[\]]*\]", "", s or "")
+    s = re.sub(r"\s*［[^］]*］", "", s)
+    s = re.sub(r"\s*【[^】]*】", "", s)
+    s = re.sub(r"\s{2,}", " ", s).strip(" -–—")
+    return s
+
+
+def visible_tracks(rows):
+    out = []
+    for t in rows or []:
+        if not t:
+            continue
+        item = dict(t)
+        raw = item.get("title") or ""
+        item["title"] = pretty_title(raw)
+        vid = item.get("id") or item.get("video_id") or ""
+        if hidden_track(vid, raw) or hidden_track(vid, item["title"]):
+            continue
+        out.append(item)
+    return out
+
+
+TOS_VER = 1
+STARTED_AT = time.time()
+DESKTOP_VERSION = os.environ.get("DESKTOP_VERSION") or "2.0.3"
 DESKTOP_DIR = os.environ.get("DESKTOP_DIR") or os.path.join(HERE, "desktop-dist")
 DESKTOP_AUTHOR = "https://github.com/voidzxcdev"
-LINUX_VERSION = os.environ.get("LINUX_VERSION") or "1.0.4"
+LINUX_VERSION = os.environ.get("LINUX_VERSION") or "1.0.6"
 ANDROID_VERSION = os.environ.get("ANDROID_VERSION") or "1.0.3"
 try:
         ANDROID_CODE = int(os.environ.get("ANDROID_CODE") or "7")
@@ -80,6 +125,594 @@ _search_inflight = {}  # key -> Event, coalesce identical in-flight searches
 _search_inflight_lock = threading.Lock()
 _url_cache = {}       # video_id -> (ts, payload)
 CACHE_MAX = 400
+
+LRCLIB = "https://lrclib.net/api"
+_lyrics_cache = {}
+_lyrics_lock = threading.Lock()
+_LRC_STAMP = re.compile(r"\[(\d{1,2}):(\d{2})(?:[.:](\d{1,3}))?\]")
+_LRC_OFFSET = re.compile(r"\[offset\s*:\s*([+-]?\d+)\]", re.I)
+_LYRIC_NOISE = re.compile(
+    r"\s*[\(\[][^)\]]*(official|lyric|audio|video|visualizer|\bmv\b|\bhd\b|\b4k\b|"
+    r"slowed|sped\s*up|nightcore|topic|remaster(?:ed)?|radio\s*edit|live|performance|"
+    r"color\s*coded|karaoke|instrumental|explicit)[^)\]]*[\)\]]",
+    re.I,
+)
+_LYRIC_SUFFIX = re.compile(
+    r"\s*[-–—:|]*\s*(official(\s+\w+){0,4}|lyrics?|audio|visualizer|video|live|"
+    r"vevo|topic|hq|hd|4k)\s*$",
+    re.I,
+)
+_LYRIC_FEAT = re.compile(
+    r"\s*[\(\[]?\s*(feat\.?|ft\.?|featuring)\s+.+$",
+    re.I,
+)
+# Minimum match quality before we trust a lyrics hit (wrong song > no lyrics).
+_LYRIC_MIN_SCORE = 30
+def _lyric_ua():
+    return f"Muse/{DESKTOP_VERSION} (https://getmuse.eu; lyrics)"
+
+
+def _norm_lyric_dashes(s):
+    """Collapse en/em dashes so 'Artist — Song' splits like 'Artist - Song'."""
+    return re.sub(r"\s*[–—―]\s*", " - ", s or "")
+
+
+def _clean_lyric_title(s):
+    s = _norm_lyric_dashes(s)
+    s = _LYRIC_NOISE.sub("", (s or "").strip())
+    s = _LYRIC_SUFFIX.sub("", s)
+    s = re.sub(r"\s{2,}", " ", s).strip(" -–—|: ")
+    return s[:180]
+
+
+def _strip_feat(s):
+    return _LYRIC_FEAT.sub("", s or "").strip(" -–—|: ")
+
+
+def _strip_trailing_parens(s):
+    return re.sub(r"\s*[\(\[][^)\]]+[\)\]]\s*$", "", s or "").strip(" -–—|: ")
+
+
+def _split_lyric_title(title, artist):
+    title = _norm_lyric_dashes((title or "").strip())
+    artist = _norm_lyric_dashes((artist or "").strip())
+    if artist:
+        low = title.lower()
+        for sep in (" - ", ": "):
+            prefix = (artist + sep).lower()
+            if low.startswith(prefix):
+                title = title[len(prefix):].strip()
+                break
+            # "Title - Artist" on some uploads
+            suffix = (sep + artist).lower()
+            if low.endswith(suffix) and len(title) > len(suffix) + 2:
+                title = title[:len(title) - len(suffix)].strip()
+                break
+        return title, artist
+    if " - " in title:
+        left, right = title.split(" - ", 1)
+        if left.strip() and right.strip():
+            return right.strip(), left.strip()
+    return title, artist
+
+
+def _norm_words(s):
+    s = (s or "").lower()
+    s = re.sub(r"['’]", "", s)
+    s = re.sub(r"[^\w\s]", " ", s)
+    drop = {"the", "a", "an", "and", "official", "video", "audio", "lyrics",
+            "lyric", "hd", "mv", "hq", "vevo", "topic", "live"}
+    return [w for w in s.split() if w and w not in drop]
+
+
+def _name_score(got, want):
+    a, b = _norm_words(got), _norm_words(want)
+    if not a or not b:
+        return 0
+    if a == b:
+        return 40
+    sa, sb = set(a), set(b)
+    inter = len(sa & sb)
+    if not inter:
+        return 0
+    # One-word titles ("Hello", "Stay") are collision magnets — demand the
+    # wanted token dominate the candidate, not just appear somewhere in it.
+    if len(sb) == 1:
+        token = next(iter(sb))
+        if token not in sa:
+            return 0
+        if len(sa) == 1:
+            return 40
+        if len(sa) <= 2:
+            return 22
+        return 8
+    return int(32 * inter / max(len(sa | sb), 1))
+
+
+def _split_collab_title(title):
+    """'Дофамин x Oohc' / 'A х B' → (A, B)."""
+    parts = re.split(r"\s+(?:x|х|×|&|\+)\s+", title or "", maxsplit=1, flags=re.I)
+    if len(parts) != 2:
+        return None
+    left, right = parts[0].strip(), parts[1].strip()
+    if len(left) < 1 or len(right) < 1:
+        return None
+    return left, right
+
+
+def _artist_aliases(artist):
+    """'Big Baby Tape and Молодой Платон' → primary + full."""
+    artist = _clean_lyric_title(artist)
+    if not artist:
+        return []
+    out = [artist]
+    for part in re.split(r"\s*(?:,|/|&|\band\b|\bи\b|\bfeat\.?\b|\bft\.?\b)\s*", artist, flags=re.I):
+        part = _clean_lyric_title(part)
+        if part and part.lower() not in {x.lower() for x in out}:
+            out.append(part)
+    return out[:4]
+
+
+def _lyric_candidates(title, artist):
+    title = _clean_lyric_title(title)
+    artist = _clean_lyric_title(artist)
+    title, artist = _split_lyric_title(title, artist)
+    out, seen = [], set()
+
+    def add(t, a):
+        t = _clean_lyric_title(t)
+        a = _clean_lyric_title(a)
+        if len(t) < 1:
+            return
+        key = (t.lower(), a.lower())
+        if key in seen:
+            return
+        seen.add(key)
+        out.append((t, a))
+
+    artists = _artist_aliases(artist) or [""]
+    bare = _strip_trailing_parens(title)
+    for a in artists:
+        add(title, a)
+        add(_strip_feat(title), _strip_feat(a) or a)
+        add(_strip_feat(title), a)
+        if bare and bare.lower() != title.lower():
+            add(bare, a)
+            add(_strip_feat(bare), a)
+    # "Big Baby Tape, Aarne - Training Day" (uploader may be only the primary).
+    if " - " in title:
+        left, right = title.split(" - ", 1)
+        left, right = left.strip(), right.strip()
+        add(right, left)
+        add(_strip_trailing_parens(right), left)
+        for a in artists:
+            add(right, a)
+            add(_strip_trailing_parens(right), a)
+            add(left, a)
+        # Primary artist + song when left is a comma-list starting with uploader.
+        for a in artists:
+            if a and left.lower().startswith(a.lower()):
+                add(right, a)
+                add(_strip_trailing_parens(right), a)
+                collab_artists = _artist_aliases(left)
+                for ca in collab_artists:
+                    add(right, ca)
+                    add(_strip_trailing_parens(right), ca)
+    collab = _split_collab_title(title)
+    if collab:
+        left, right = collab
+        # LRCLIB often stores track=left, artist="right x uploader"
+        # (e.g. Дофамин / oohc x YungMeechy).
+        add(left, right)
+        for a in artists:
+            if a:
+                add(left, f"{right} x {a}")
+                add(left, f"{a} x {right}")
+                add(left, a)
+        add(right, left)
+    # Only search title-only when the upload had no artist — otherwise ambiguous
+    # one-word titles ("Дофамин") steal random synced songs.
+    if not artist:
+        add(title, "")
+        if bare:
+            add(bare, "")
+    return out[:12]
+
+
+def _parse_lrc(text):
+    rows = []
+    offset_sec = 0.0
+    for raw in (text or "").splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        off = _LRC_OFFSET.search(line)
+        if off:
+            try:
+                # LRC: positive offset delays lyrics → add to timestamps.
+                offset_sec = int(off.group(1)) / 1000.0
+            except ValueError:
+                pass
+            continue
+        stamps = list(_LRC_STAMP.finditer(line))
+        if not stamps:
+            continue
+        words = _LRC_STAMP.sub("", line).strip()
+        if not words or re.fullmatch(r"[♪♫\s.·…\-–—]+", words):
+            continue
+        # Skip meta / credit lines that wreck sync feel.
+        if re.match(r"^(by|compos(?:er|ed)|written|produced|album|title|artist)\b", words, re.I):
+            continue
+        for m in stamps:
+            frac = m.group(3) or "0"
+            if len(frac) == 1:
+                frac = frac + "00"
+            elif len(frac) == 2:
+                frac = frac + "0"
+            t = int(m.group(1)) * 60 + int(m.group(2)) + int(frac[:3]) / 1000.0
+            rows.append((t + offset_sec, words[:240]))
+    rows.sort(key=lambda x: x[0])
+    out = []
+    for t, words in rows:
+        if t < 0:
+            t = 0.0
+        if out and abs(out[-1]["t"] - t) < 0.04 and out[-1]["text"] == words:
+            continue
+        out.append({"t": round(t, 3), "text": words})
+    return out[:500]
+
+
+def _plain_lines(text):
+    return [{"t": 0, "text": ln.strip()[:240]}
+            for ln in (text or "").splitlines() if ln.strip() and not re.fullmatch(r"[♪♫\s.·…]+", ln.strip())][:400]
+
+
+def _lyrics_quality_ok(lines, synced):
+    """Reject stub / vandalized LRCLIB rows (e.g. a single 'probe' line)."""
+    if not lines:
+        return False
+    texts = [str(l.get("text") or "").strip() for l in lines]
+    texts = [t for t in texts if t]
+    if not texts:
+        return False
+    joined = " ".join(texts)
+    if len(joined) < 48:
+        return False
+    if synced and len(texts) < 5:
+        return False
+    if not synced and len(texts) < 4:
+        return False
+    # One repeated nonsense token
+    if len(set(t.lower() for t in texts)) == 1 and len(texts) < 8:
+        return False
+    return True
+
+
+def _pack_lyrics(data, audio_dur=0):
+    """Keep LRC timestamps as written — duration is only for picking the row.
+
+    Linear stretch against YouTube length made sync worse: MV outros, radio
+    edits, and LRCLIB's last-line vs declared duration rarely match tempo.
+    """
+    if not isinstance(data, dict):
+        return [], False, 0
+    raw = data.get("syncedLyrics") or data.get("lrc") or ""
+    lines = _parse_lrc(raw)
+    try:
+        lrc_dur = float(data.get("duration") or 0)
+    except (TypeError, ValueError):
+        lrc_dur = 0
+    if lines:
+        return lines, True, lrc_dur
+    plain = data.get("plainLyrics") or data.get("lyrics") or ""
+    return _plain_lines(plain), False, lrc_dur
+
+
+def _http_json(url, timeout=6, headers=None):
+    h = {
+        "User-Agent": _lyric_ua(),
+        "Accept": "application/json",
+    }
+    if headers:
+        h.update(headers)
+    req = urllib.request.Request(url, headers=h)
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return json.loads(resp.read().decode("utf-8", "replace"))
+    except HTTPError as e:
+        if e.code == 404:
+            return None
+        return None
+    except Exception:
+        return None
+
+
+def _lrclib_get(path_q, timeout=7):
+    return _http_json(LRCLIB + path_q, timeout=timeout)
+
+
+def _score_lyric_row(row, title, artist, dur):
+    title_s = _name_score(row.get("trackName") or row.get("name") or "", title)
+    artist_s = _name_score(row.get("artistName") or "", artist) if artist else 18
+    # Wrong song is worse than no lyrics — hard-reject weak names.
+    if title_s < 14:
+        return -999
+    if artist and artist_s < 10:
+        return -999
+    score = title_s + artist_s
+    # Exact-ish title bonus
+    if title_s >= 36:
+        score += 6
+    if artist and artist_s >= 36:
+        score += 4
+    if dur and row.get("duration"):
+        try:
+            delta = abs(float(row["duration"]) - float(dur))
+            if delta <= 2:
+                score += 16
+            elif delta <= 5:
+                score += 10
+            elif delta <= 10:
+                score += 4
+            elif delta <= 20:
+                score -= 4
+            elif delta <= 35:
+                score -= 14
+            elif delta <= 60:
+                # Soft penalty only — YouTube length often disagrees with LRCLIB
+                # (album vs radio, intros). Hard-reject used to wipe Big Baby Tape.
+                score -= 22
+            else:
+                score -= 30
+        except (TypeError, ValueError):
+            pass
+    # Synced must beat a duration-matched plain row. Plain can get +16 for
+    # duration; without a larger synced bonus, Дофамин x Oohc (and similar)
+    # returned static t=0 lines whenever the client sent audio duration.
+    if row.get("syncedLyrics") or row.get("lrc"):
+        score += 40
+    elif row.get("plainLyrics") or row.get("lyrics"):
+        score += 2
+    if row.get("instrumental"):
+        score -= 20
+    return score
+
+
+def _lrclib_search_rows(title, artist):
+    q = {"track_name": title}
+    if artist:
+        q["artist_name"] = artist
+    found = _lrclib_get("/search?" + urllib.parse.urlencode(q))
+    if not isinstance(found, list) or not found:
+        found = _lrclib_get("/search?" + urllib.parse.urlencode(
+            {"q": f"{artist} {title}".strip()}))
+    return found if isinstance(found, list) else []
+
+
+def _from_lrclib(candidates, dur):
+    """Synced LRC across all candidates first; plain only if none timed.
+
+    Search rows are fetched once per candidate (not doubled across passes).
+    """
+    best_plain = None  # (score, lines)
+    searched = []  # (title, artist, rows)
+
+    for title, artist in candidates:
+        rows = _lrclib_search_rows(title, artist)[:12]
+        searched.append((title, artist, rows))
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            if not (row.get("syncedLyrics") or row.get("lrc")):
+                continue
+            score = _score_lyric_row(row, title, artist, dur)
+            if score < _LYRIC_MIN_SCORE:
+                continue
+            lines, synced, _ld = _pack_lyrics(row, dur)
+            if synced and _lyrics_quality_ok(lines, True):
+                return lines, True
+        params = {"track_name": title}
+        if artist:
+            params["artist_name"] = artist
+        if dur:
+            params["duration"] = int(dur)
+        data = _lrclib_get("/get?" + urllib.parse.urlencode(params))
+        if isinstance(data, dict) and (data.get("syncedLyrics") or data.get("lrc")):
+            score = _score_lyric_row(data, title, artist, dur)
+            if score >= _LYRIC_MIN_SCORE:
+                lines, synced, _ld = _pack_lyrics(data, dur)
+                if synced and _lyrics_quality_ok(lines, True):
+                    return lines, True
+
+    for title, artist, rows in searched:
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            if row.get("syncedLyrics") or row.get("lrc"):
+                continue
+            if not (row.get("plainLyrics") or row.get("lyrics")):
+                continue
+            score = _score_lyric_row(row, title, artist, dur)
+            if score < _LYRIC_MIN_SCORE:
+                continue
+            lines, synced, _ld = _pack_lyrics(row, dur)
+            if (not synced) and lines and _lyrics_quality_ok(lines, False) and (
+                    best_plain is None or score > best_plain[0]):
+                best_plain = (score, lines)
+
+    if best_plain:
+        return best_plain[1], False
+    return None
+
+
+def _from_textyl(candidates, dur=0):
+    # Textyl has no artist/title fields on the hit — only use when query is specific.
+    for title, artist in candidates:
+        if not artist or len(title) < 4:
+            continue
+        q = f"{artist} {title}".strip()
+        if len(q) < 8:
+            continue
+        data = _http_json(
+            "https://api.textyl.co/api/lyrics?" + urllib.parse.urlencode({"q": q}),
+            timeout=6,
+        )
+        if not isinstance(data, list) or not data:
+            continue
+        lines = []
+        synced = False
+        for row in data:
+            if not isinstance(row, dict):
+                continue
+            text = str(row.get("lyrics") or "").strip()
+            if not text:
+                continue
+            try:
+                t = float(row.get("seconds") or 0)
+            except (TypeError, ValueError):
+                t = 0
+            if t > 0.2:
+                synced = True
+            lines.append({"t": round(t, 3), "text": text[:240]})
+        if synced and len(lines) >= 4:
+            return lines[:500], True
+    return None
+
+
+def _from_netease(candidates, dur=0):
+    headers = {
+        "Referer": "https://music.163.com/",
+        "User-Agent": _lyric_ua(),
+    }
+    for title, artist in candidates:
+        q = f"{artist} {title}".strip()
+        if len(q) < 2 or not artist:
+            continue
+        data = _http_json(
+            "https://music.163.com/api/search/get/web?" + urllib.parse.urlencode({
+                "s": q, "type": 1, "offset": 0, "limit": 8,
+            }),
+            timeout=6,
+            headers=headers,
+        )
+        result = (data or {}).get("result") if isinstance(data, dict) else None
+        # NetEase encrypts `result` for abroad IPs (string blob) — skip.
+        if not isinstance(result, dict):
+            continue
+        songs = result.get("songs")
+        if not isinstance(songs, list):
+            continue
+        pick = None
+        for song in songs:
+            if not isinstance(song, dict):
+                continue
+            artists = song.get("artists") or []
+            an = " ".join((a.get("name") or "") for a in artists if isinstance(a, dict))
+            # Reuse lyric scorer shape via fake row.
+            fake = {
+                "trackName": song.get("name") or "",
+                "artistName": an,
+                "duration": (song.get("duration") or 0) / 1000.0,
+                "syncedLyrics": "x",
+            }
+            score = _score_lyric_row(fake, title, artist, dur)
+            if pick is None or score > pick[0]:
+                pick = (score, song, fake.get("duration") or 0)
+        if not pick or pick[0] < _LYRIC_MIN_SCORE:
+            continue
+        sid = pick[1].get("id")
+        if not sid:
+            continue
+        lyr = _http_json(
+            "https://music.163.com/api/song/lyric?" + urllib.parse.urlencode({
+                "id": str(sid), "lv": -1, "kv": -1, "tv": -1,
+            }),
+            timeout=6,
+            headers=headers,
+        )
+        if not isinstance(lyr, dict):
+            continue
+        raw = ((lyr.get("lrc") or {}).get("lyric") or "")
+        lines = _parse_lrc(raw)
+        if lines and _lyrics_quality_ok(lines, True):
+            return lines, True
+        if raw.strip():
+            plain = _plain_lines(raw)
+            if plain and _lyrics_quality_ok(plain, False):
+                return plain, False
+    return None
+
+
+def _from_ovh(candidates):
+    # Plain unsynced only — never preferred over a wrong synced hit.
+    for title, artist in candidates:
+        if not artist or not title or len(title) < 3:
+            continue
+        url = "https://api.lyrics.ovh/v1/{}/{}".format(
+            urllib.parse.quote(artist, safe=""),
+            urllib.parse.quote(title, safe=""),
+        )
+        data = _http_json(url, timeout=6)
+        if not isinstance(data, dict):
+            continue
+        lines = _plain_lines(data.get("lyrics") or "")
+        if lines and len(lines) >= 4:
+            return lines, False
+    return None
+
+
+def lyrics_lookup(title, artist, duration):
+    candidates = _lyric_candidates(title, artist)
+    if not candidates:
+        return {"lines": [], "synced": False}
+    try:
+        dur = int(float(duration)) if duration and float(duration) > 5 else 0
+    except (TypeError, ValueError):
+        dur = 0
+    # Cache bust key includes score logic version so old wrong hits expire.
+    key = (candidates[0][0].lower(), candidates[0][1].lower(), dur, "v8")
+    now = time.time()
+    with _lyrics_lock:
+        hit = _lyrics_cache.get(key)
+        if hit and now - hit[0] < 6 * 3600:
+            # Plain/static hits expire fast — LRCLIB flaps and a 6h poison
+            # cache made Дофамин x Oohc never karaoke after one bad minute.
+            if hit[1].get("synced") or now - hit[0] < 90:
+                return hit[1]
+    # LRCLIB first. Textyl is intentionally skipped: it returns timed lines with
+    # no artist/title metadata, so ambiguous queries get the wrong song.
+    backends = (
+        lambda: _from_lrclib(candidates, dur),
+        lambda: _from_netease(candidates, dur),
+        lambda: _from_ovh(candidates),
+    )
+    lines, synced = [], False
+    plain_fallback = None
+    for run in backends:
+        try:
+            got = run()
+        except Exception:
+            got = None
+        if not got:
+            continue
+        found, is_synced = got
+        if not found:
+            continue
+        if is_synced:
+            lines, synced = found, True
+            break
+        if plain_fallback is None:
+            plain_fallback = found
+    if not synced and plain_fallback:
+        lines, synced = plain_fallback, False
+    out = {"lines": lines, "synced": synced}
+    if lines:
+        with _lyrics_lock:
+            if len(_lyrics_cache) > 500:
+                _lyrics_cache.clear()
+            _lyrics_cache[key] = (now, out)
+    return out
+
 
 # The free instance has 512 MB; a full extract can spawn a ~100 MB deno
 # challenge solver, so only a couple may run at once.
@@ -384,7 +1017,7 @@ def _openaiish_chat(url, key, model, messages, extra_headers=None, timeout=40, e
         payload.update(extra_body)
     headers = {
         "Content-Type": "application/json",
-        "User-Agent": "Muse/1.1.11",
+        "User-Agent": f"Muse/{DESKTOP_VERSION}",
     }
     if key:
         headers["Authorization"] = f"Bearer {key}"
@@ -689,7 +1322,7 @@ def _musely_live_three(query, ip=""):
             batch = []
         for h in batch:
             vid = h.get("id") or ""
-            if vid in seen_id:
+            if vid in seen_id or hidden_track(vid, h.get("title") or ""):
                 continue
             if vid:
                 seen_id.add(vid)
@@ -842,23 +1475,9 @@ def musely_reply(message, history, ip=""):
 MUSELY_NEED = 3  # unique songs listened ~30s — earn Groq, no money
 
 
-def musely_gate(user):
-    """Earn Musely by signing in and actually listening. Not a paywall."""
-    if not user:
-        return {"unlocked": False, "have": 0, "need": MUSELY_NEED, "login": True}
-    with _db_lock, db() as con:
-        row = con.execute(
-            "SELECT COUNT(DISTINCT video_id) AS c FROM plays "
-            "WHERE user_id=? AND (completed=1 OR COALESCE(position,0) >= 30)",
-            (user["id"],),
-        ).fetchone()
-    have = int((row["c"] if row else 0) or 0)
-    return {
-        "unlocked": have >= MUSELY_NEED,
-        "have": min(have, MUSELY_NEED),
-        "need": MUSELY_NEED,
-        "login": False,
-    }
+def musely_gate(u=None):
+    """Musely removed — keep stub for older clients."""
+    return {"enabled": False, "unlocked": False, "login": False, "remaining": 0, "needed": 0, "heard": 0}
 
 
 _file_hashes = {}  # path -> (mtime_ns, sha256, size)
@@ -1402,6 +2021,10 @@ def init_db():
             except Exception as e:
                 print(f"privacy migrate: {e}", flush=True)
             try:
+                _ensure_legal_schema(con, True)
+            except Exception as e:
+                print(f"legal schema: {e}", flush=True)
+            try:
                 _ensure_social(con, True)
             except Exception as e:
                 print(f"social schema: {e}", flush=True)
@@ -1472,7 +2095,9 @@ def init_db():
                           ("hide_playlists", "INTEGER DEFAULT 0"),
                           ("hide_likes", "INTEGER DEFAULT 0"),
                           ("hide_badges", "INTEGER DEFAULT 0"),
-                          ("hide_avatar", "INTEGER DEFAULT 0")):
+                          ("hide_avatar", "INTEGER DEFAULT 0"),
+                          ("tos_at", "REAL"),
+                          ("tos_ver", "INTEGER")):
             if name not in cols:
                 con.execute(f"ALTER TABLE users ADD COLUMN {name} {ddl}")
         try:
@@ -1510,6 +2135,10 @@ def init_db():
             _ensure_pl_origin(con, False)
         except Exception as e:
             print(f"playlist origin: {e}", flush=True)
+        try:
+            _ensure_legal_schema(con, False)
+        except Exception as e:
+            print(f"legal schema: {e}", flush=True)
 
 
 COVERS_DIR = os.path.join(HERE, "covers")
@@ -1577,6 +2206,134 @@ _PRIV_COLS = (
     "profile_hidden", "profile_anon", "hide_playlists",
     "hide_likes", "hide_badges", "hide_avatar",
 )
+
+
+def _ensure_legal_schema(con, pg=False):
+    con.execute(
+        "CREATE TABLE IF NOT EXISTS sla_days("
+        "day TEXT PRIMARY KEY, up INTEGER NOT NULL DEFAULT 0)")
+    if pg:
+        con.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS tos_at DOUBLE PRECISION")
+        con.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS tos_ver INTEGER")
+        return
+    cols = {r[1] for r in con.execute("PRAGMA table_info(users)")}
+    if "tos_at" not in cols:
+        con.execute("ALTER TABLE users ADD COLUMN tos_at REAL")
+    if "tos_ver" not in cols:
+        con.execute("ALTER TABLE users ADD COLUMN tos_ver INTEGER")
+
+
+def sla_tick():
+    day = time.strftime("%Y-%m-%d", time.gmtime())
+    with _db_lock, db() as con:
+        row = con.execute("SELECT up FROM sla_days WHERE day=?", (day,)).fetchone()
+        if row:
+            con.execute("UPDATE sla_days SET up=up+1 WHERE day=?", (day,))
+        else:
+            con.execute("INSERT INTO sla_days(day, up) VALUES(?,1)", (day,))
+
+
+def sla_report():
+    now = time.gmtime()
+    prefix = time.strftime("%Y-%m", now)
+    today = time.strftime("%Y-%m-%d", now)
+    with _db_lock, db() as con:
+        rows = con.execute(
+            "SELECT day, up FROM sla_days WHERE day LIKE ?", (prefix + "%",)).fetchall()
+    by = {r["day"]: int(r["up"] or 0) for r in rows}
+    if not by:
+        expect = max(1, now.tm_hour * 60 + now.tm_min)
+        return {"month": prefix, "month_up_min": 0, "month_expect_min": expect, "month_pct": 0.0}
+    first = min(by)
+    first_tuple = time.strptime(first, "%Y-%m-%d")
+    start = calendar.timegm((first_tuple.tm_year, first_tuple.tm_mon, first_tuple.tm_mday, 0, 0, 0, 0, 0, 0))
+    expect = max(1, int((time.time() - start) // 60) + 1)
+    up = sum(by.values())
+    pct = min(100.0, 100.0 * up / expect)
+    return {
+        "month": prefix,
+        "month_up_min": up,
+        "month_expect_min": expect,
+        "month_pct": round(pct, 2),
+        "days": len(by),
+        "today": today,
+        "today_up": by.get(today, 0),
+    }
+
+
+def export_user(uid):
+    with _db_lock, db() as con:
+        u = con.execute("SELECT * FROM users WHERE id=?", (uid,)).fetchone()
+        if not u:
+            return None
+        playlists = []
+        for p in con.execute("SELECT * FROM playlists WHERE user_id=? ORDER BY id", (uid,)).fetchall():
+            items = con.execute(
+                "SELECT video_id, title, thumb, duration, pos FROM playlist_items "
+                "WHERE playlist_id=? ORDER BY pos, id", (p["id"],)).fetchall()
+            playlists.append({
+                "id": p["id"], "name": p["name"], "created": p["created"],
+                "tracks": [dict(r) for r in items],
+            })
+        likes = [dict(r) for r in con.execute(
+            "SELECT video_id, title, thumb, duration, created, pos FROM likes "
+            "WHERE user_id=? ORDER BY pos, created", (uid,)).fetchall()]
+        plays = [dict(r) for r in con.execute(
+            "SELECT video_id, title, uploader, thumb, duration, position, completed, played_at "
+            "FROM plays WHERE user_id=? ORDER BY played_at DESC LIMIT 500", (uid,)).fetchall()]
+        friends = []
+        for r in con.execute(
+            "SELECT b AS other FROM friends WHERE a=? UNION "
+            "SELECT a AS other FROM friends WHERE b=?", (uid, uid)).fetchall():
+            ou = con.execute("SELECT handle, display FROM users WHERE id=?", (r["other"],)).fetchone()
+            if ou:
+                friends.append({"handle": ou["handle"], "display": ou["display"]})
+        chats = [dict(r) for r in con.execute(
+            "SELECT id, lo, hi, sender_id, kind, body, payload, created FROM chat_msgs "
+            "WHERE lo=? OR hi=? ORDER BY id DESC LIMIT 1000", (uid, uid)).fetchall()]
+    ru = row_user(u)
+    ru.pop("handle_in", None)
+    return {
+        "exported_at": time.time(),
+        "user": ru,
+        "playlists": playlists,
+        "likes": likes,
+        "plays": plays,
+        "friends": friends,
+        "chat": chats,
+    }
+
+
+def delete_user(uid):
+    keys, names = [], []
+    with _db_lock, db() as con:
+        for r in con.execute("SELECT key, name FROM chat_files WHERE user_id=?", (uid,)).fetchall():
+            keys.append(str(r["key"] or ""))
+            names.append(str(r["name"] or ""))
+        try:
+            con.execute("DELETE FROM chat_reacts WHERE user_id=?", (uid,))
+        except Exception:
+            pass
+        try:
+            con.execute(
+                "DELETE FROM chat_reacts WHERE msg_id IN "
+                "(SELECT id FROM chat_msgs WHERE sender_id=?)", (uid,))
+        except Exception:
+            pass
+        try:
+            con.execute("UPDATE notifs SET from_id=NULL WHERE from_id=?", (uid,))
+        except Exception:
+            pass
+        con.execute("DELETE FROM users WHERE id=?", (uid,))
+    prefixes = {k for k in keys if re.fullmatch(r"[0-9a-f]{32}", k)}
+    exact = {os.path.basename(n) for n in names if n and n not in (".", "..")}
+    if (not prefixes and not exact) or not os.path.isdir(CHAT_DIR):
+        return
+    with contextlib.suppress(OSError):
+        for fn in os.listdir(CHAT_DIR):
+            if fn in exact or any(fn.startswith(p) for p in prefixes):
+                with contextlib.suppress(OSError):
+                    os.remove(os.path.join(CHAT_DIR, fn))
 
 
 def _ensure_privacy_cols(con, pg=False):
@@ -1827,9 +2584,9 @@ def public_playlist(handle, slug, viewer_id=None):
                 "cover": first or "",
                 "custom_cover": cover_url(pl["cover"] or ""),
                 "count": len(items),
-                "tracks": [{"item_id": t["id"], "id": t["video_id"],
+                "tracks": visible_tracks([{"item_id": t["id"], "id": t["video_id"],
                             "title": t["title"], "thumbnail": t["thumb"],
-                            "duration": t["duration"]} for t in items],
+                            "duration": t["duration"]} for t in items]),
             },
         }
 
@@ -2693,8 +3450,10 @@ BASE_YDL = {
     "quiet": True,
     "no_warnings": not ON_RENDER,
     "noplaylist": True,
-    "socket_timeout": 10,
-    "retries": 2,
+    # WARP + YouTube bot checks routinely need >10s; short timeouts abort the
+    # one client combo (ios+android) that still succeeds.
+    "socket_timeout": 25,
+    "retries": 3,
     # Audio comes from direct https formats; the HLS/DASH manifests are extra
     # round-trips to googlevideo that sometimes hang for the full timeout.
     "extractor_args": {"youtube": {"skip": ["hls", "dash"]},
@@ -2719,10 +3478,13 @@ if YT_PROXY:
 else:
     _yt_open = urllib.request.urlopen
 
-# Cookie-free Innertube clients. `web` is what throws "Sign in to confirm you're
-# not a bot"; android_vr / visionos / web_embedded need no cookies and no PO token.
+# Cookie-free yt-dlp clients. `web`/`ios`/`android` often hit "Sign in to
+# confirm you're not a bot" on WARP exits; mweb currently returns audio first.
 _ANON_CLIENTS = (
+    ("mweb",),
     ("ios", "android"),
+    ("tv",),
+    ("tv_embedded",),
     ("android_vr", "visionos", "web_embedded"),
 )
 
@@ -2826,10 +3588,10 @@ _YTM_UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
 
 # Cookie-free player JSON. Same Innertube path as YTM search — no watch-page,
 # so YouTube's "sign in to confirm you're not a bot" HTML challenge never runs.
+# ANDROID_VR first: plain googlevideo URLs without PO tokens; ANDROID/IOS often
+# bot-wall first on flagged WARP exits.
 _INNERTUBE_PLAYERS = (
     {
-        # ANDROID_VR still returns plain googlevideo URLs without PO tokens.
-        # https://github.com/JuanBindez/pytubefix — default client for bot checks.
         "client": {
             "clientName": "ANDROID_VR",
             "clientVersion": "1.60.19",
@@ -2872,6 +3634,18 @@ _INNERTUBE_PLAYERS = (
         "endpoint": "https://www.youtube.com/youtubei/v1/player?prettyPrint=false",
     },
     {
+        "client": {
+            "clientName": "TVHTML5",
+            "clientVersion": "7.20250312.16.00",
+            "hl": "en",
+            "gl": "US",
+        },
+        "ua": ("Mozilla/5.0 (ChromiumStylePlatform) Cobalt/Version"),
+        "name": "7",
+        "origin": "https://www.youtube.com",
+        "endpoint": "https://www.youtube.com/youtubei/v1/player?prettyPrint=false",
+    },
+    {
         "client": None,  # filled with YTM_CLIENT at call time
         "ua": _YTM_UA,
         "name": "67",
@@ -2887,6 +3661,7 @@ def _pick_player_audio(data, vid):
     if status and status != "OK":
         return None
     sd = data.get("streamingData") or {}
+    # Adaptive first — progressive formats are muxed video that <audio> rejects.
     formats = list(sd.get("adaptiveFormats") or []) + list(sd.get("formats") or [])
     audio = []
     for f in formats:
@@ -2895,8 +3670,6 @@ def _pick_player_audio(data, vid):
             continue
         mime = f.get("mimeType") or ""
         if f.get("audioQuality") or mime.startswith("audio/"):
-            audio.append(f)
-        elif mime.startswith("video/mp4") and "mp4a" in mime:
             audio.append(f)
     if not audio:
         return None
@@ -2947,14 +3720,14 @@ def _innertube_audio(vid):
                 },
                 method="POST",
             )
-            with _yt_open(req, timeout=12) as resp:
+            with _yt_open(req, timeout=10) as resp:
                 data = json.loads(resp.read().decode("utf-8", "replace"))
             picked = _pick_player_audio(data, vid)
             if picked and picked.get("audio_url"):
                 print(f"innertube {vid} {label}: ok", flush=True)
                 return picked
             st = (data.get("playabilityStatus") or {}).get("reason") or (
-                data.get("playabilityStatus") or {}).get("status")
+                data.get("playabilityStatus") or {}).get("status") or ""
             print(f"innertube {vid} {label}: {st or 'no formats'}", flush=True)
         except Exception as e:
             print(f"innertube {vid} {label}: {str(e)[:100]}", flush=True)
@@ -3012,6 +3785,8 @@ def _ytm_item(r):
         thumbs = r["thumbnail"]["musicThumbnailRenderer"]["thumbnail"]["thumbnails"]
     except Exception:
         thumbs = []
+    if hidden_track(vid, title):
+        return None
     thumb = _pick_thumb(thumbs, vid)
     return {"id": vid, "title": title, "uploader": uploader,
             "duration": dur, "thumbnail": thumb}
@@ -3053,6 +3828,8 @@ def _ytm_two_row(r):
             thumbs = r["thumbnail"]["musicThumbnailRenderer"]["thumbnail"]["thumbnails"]
         except Exception:
             thumbs = []
+    if hidden_track(vid, title):
+        return None
     return {"id": vid, "title": title or vid, "uploader": up,
             "duration": None, "thumbnail": _pick_thumb(thumbs, vid)}
 
@@ -3215,6 +3992,8 @@ def _yt_video_item(r):
         thumbs = r["thumbnail"]["thumbnails"]
     except Exception:
         pass
+    if hidden_track(vid, title):
+        return None
     return {"id": vid, "title": title or vid, "uploader": up,
             "duration": dur, "thumbnail": _pick_thumb(thumbs, vid)}
 
@@ -3334,7 +4113,7 @@ def ytm_tracks(query, n=12):
             except Exception:
                 pass
         if hits:
-            return hits[:n]
+            return visible_tracks(hits)[:n]
     except Exception:
         pass
     opts = dict(BASE_YDL, extract_flat=True)
@@ -3348,7 +4127,10 @@ def ytm_tracks(query, n=12):
         vid = (e or {}).get("id")
         if vid and re.fullmatch(r"[\w-]{11}", vid) and vid not in seen:
             seen.add(vid)
-            out.append({"id": vid, "title": (e or {}).get("title") or vid})
+            title = (e or {}).get("title") or vid
+            if hidden_track(vid, title):
+                continue
+            out.append({"id": vid, "title": pretty_title(title) or title})
             if len(out) >= n:
                 break
     return out
@@ -3373,7 +4155,10 @@ def regular_map(query, n=24):
         vid = e["id"]
         if not re.fullmatch(r"[\w-]{11}", vid) or vid in out:
             continue
-        out[vid] = {"title": e.get("title") or vid,
+        title = e.get("title") or vid
+        if hidden_track(vid, title):
+            continue
+        out[vid] = {"title": title,
                     "uploader": e.get("uploader") or e.get("channel") or "",
                     "duration": e.get("duration"),
                     "thumbnail": _thumb(e, vid)}
@@ -3392,7 +4177,7 @@ def enrich_one(vid):
     """Full metadata for one song; falls back to a playable stub on failure."""
     try:
         m = _cached_audio(vid) or _light_meta(vid)
-        return {"id": vid, "title": m.get("title") or vid,
+        return {"id": vid, "title": pretty_title(m.get("title") or vid) or vid,
                 "uploader": m.get("uploader") or "", "duration": m.get("duration"),
                 "categories": m.get("categories") or [],
                 "thumbnail": m.get("thumbnail") or _yt_thumb(vid)}
@@ -3422,11 +4207,14 @@ def regular_topup(query, have, need):
         vid = e["id"]
         if not re.fullmatch(r"[\w-]{11}", vid) or vid in have:
             continue
+        title = e.get("title") or vid
+        if hidden_track(vid, title):
+            continue
         if not _looks_like_music(e):
             continue
         out.append({
             "id": vid,
-            "title": e.get("title") or vid,
+            "title": title,
             "uploader": e.get("uploader") or e.get("channel") or "",
             "duration": e.get("duration"),
             "thumbnail": _thumb(e, vid),
@@ -3440,6 +4228,8 @@ def regular_topup(query, have, need):
 def _keep_song(m):
     """Drop non-music (podcasts, news, vlogs): not in Music category, very long,
     no music signals. Long mixes/radios/albums with music keywords survive."""
+    if hidden_track(m.get("id"), m.get("title")):
+        return False
     up = m.get("uploader") or ""
     if up.endswith("- Topic") or "VEVO" in up.upper():
         return True
@@ -3512,12 +4302,13 @@ def search_songs(query, n=10):
         seen = set()
         for t in ranked:
             vid = t.get("id")
-            if not vid or vid in seen:
+            title = t.get("title") or vid
+            if not vid or vid in seen or hidden_track(vid, title):
                 continue
             seen.add(vid)
             out.append({
                 "id": vid,
-                "title": t.get("title") or vid,
+                "title": title,
                 "uploader": t.get("uploader") or "",
                 "duration": t.get("duration"),
                 "thumbnail": t.get("thumbnail") or _yt_thumb(vid),
@@ -3531,6 +4322,7 @@ def search_songs(query, n=10):
                     ex.shutdown(wait=False, cancel_futures=True)
             except Exception:
                 out = []
+        out = visible_tracks(out)
         _cache_put(_search_cache, key, (time.time(), out))
         return out
     finally:
@@ -3585,6 +4377,8 @@ def enrich_ids(ids):
     """Phase 2 (background): full metadata + strict music filter + stream precache."""
     out, drop = [], []
     ids = [v for v in (ids or []) if re.fullmatch(r"[\w-]{11}", v or "")][:12]
+    drop = [v for v in ids if hidden_track(v)]
+    ids = [v for v in ids if not hidden_track(v)]
     if not ids:
         return out, drop
     done = {}
@@ -3632,7 +4426,7 @@ def _stream_works(stream):
     try:
         req = urllib.request.Request(stream, headers={"User-Agent": "Mozilla/5.0",
                                                       "Range": "bytes=0-1"})
-        with _yt_open(req, timeout=8) as r:
+        with _yt_open(req, timeout=15) as r:
             return r.status in (200, 206)
     except Exception as e:
         print(f"stream check failed: {str(e)[:120]}", flush=True)
@@ -3640,10 +4434,14 @@ def _stream_works(stream):
 
 
 _resolve_fail = {}   # video_id -> (ts, message)
-RESOLVE_FAIL_TTL = 600
+# Short TTL: YouTube bot-walls flap; a 10-minute poison cache made play look
+# permanently dead after one bad minute.
+RESOLVE_FAIL_TTL = 45
 
 
 def best_audio_url(video_id):
+    if hidden_track(video_id):
+        raise RuntimeError("unavailable")
     hit = _cached_audio(video_id)
     if hit:
         return hit
@@ -3682,10 +4480,14 @@ def best_audio_url(video_id):
 # IPs and rewrites googlevideo through pipedproxy, so a blocked VPS can
 # still get a playable URL without WARP. Public instances die; try several.
 _PIPED_APIS = (
+    "https://pipedapi.reallyaweso.me",
+    "https://pipedapi.syncpundit.io",
     "https://api.piped.private.coffee",
     "https://pipedapi.kavin.rocks",
     "https://piped-api.lunar.icu",
     "https://pipedapi.adminforge.de",
+    "https://pipedapi.nosebs.ru",
+    "https://pipedapi.leptons.xyz",
 )
 
 
@@ -3751,8 +4553,13 @@ def _resolve_audio(video_id):
 
 def _resolve_audio_locked(video_id):
     now = time.time()
+    url = f"https://www.youtube.com/watch?v={video_id}"
+    last_err = None
+
+    # Innertube first: yt-dlp ios/android currently only expose progressive
+    # format 18 (muxed video). Serving that as audio makes play() never start.
     picked = _innertube_audio(video_id)
-    if picked and picked.get("audio_url") and _stream_works(picked["audio_url"]):
+    if picked and picked.get("audio_url"):
         payload = {
             "id": video_id,
             "title": picked.get("title") or video_id,
@@ -3767,9 +4574,7 @@ def _resolve_audio_locked(video_id):
         _cache_put(_url_cache, video_id, (now, payload))
         print(f"resolve {video_id}: innertube {time.time() - now:.1f}s", flush=True)
         return payload
-    url = f"https://www.youtube.com/watch?v={video_id}"
-    info = None
-    last_err = None
+
     for clients in _ANON_CLIENTS:
         opts = _ydl_opts(clients=clients, cookies=False,
                          format="bestaudio/best", skip_download=True)
@@ -3777,67 +4582,55 @@ def _resolve_audio_locked(video_id):
             with yt_dlp.YoutubeDL(opts) as ydl:
                 info = ydl.extract_info(url, download=False)
             t_extract = time.time() - now
-            stream = info.get("url") or ""
+            audio_only = [f for f in (info.get("formats") or [])
+                          if f.get("url") and f.get("acodec") not in (None, "none")
+                          and f.get("vcodec") in (None, "none")]
+            audio_only.sort(key=lambda f: (f.get("ext") == "m4a",
+                                            f.get("abr") or 0), reverse=True)
+            stream = audio_only[0]["url"] if audio_only else ""
+            # Never fall back to info["url"] — that is often muxed format 18.
             ok = bool(stream) and _stream_works(stream)
-            if not ok:
-                audio_only = [f for f in (info.get("formats") or [])
-                              if f.get("url") and f.get("acodec") not in (None, "none")
-                              and f.get("vcodec") in (None, "none")]
-                if audio_only:
-                    audio_only.sort(key=lambda f: (f.get("ext") == "m4a",
-                                                    f.get("abr") or 0), reverse=True)
-                    ok = _stream_works(audio_only[0]["url"])
+            if not ok and stream and audio_only:
+                ok = True
+                print(f"resolve {video_id} {'+'.join(clients)}: probe soft-pass", flush=True)
             print(f"resolve {video_id} {'+'.join(clients)}: extract "
                   f"{t_extract:.1f}s ok={ok}", flush=True)
             if ok:
-                break
-            info = None
+                fmt = audio_only[0]
+                payload = {
+                    "id": video_id,
+                    "title": info.get("title") or video_id,
+                    "uploader": info.get("uploader") or info.get("channel") or "",
+                    "duration": info.get("duration"),
+                    "categories": info.get("categories") or [],
+                    "thumbnail": info.get("thumbnail") or _yt_thumb(video_id),
+                    "audio_url": stream,
+                    "ext": fmt.get("ext") or info.get("ext") or "",
+                    "abr": fmt.get("abr") or info.get("abr"),
+                }
+                _cache_put(_url_cache, video_id, (now, payload))
+                return payload
         except yt_dlp.utils.DownloadError as e:
             last_err = e
             print(f"anon {video_id} {'+'.join(clients)}: {str(e)[:120]}", flush=True)
-            info = None
-    if info is None:
-        piped = _piped_audio(video_id)
-        if piped and piped.get("audio_url"):
-            payload = {
-                "id": video_id,
-                "title": piped.get("title") or video_id,
-                "uploader": piped.get("uploader") or "",
-                "duration": piped.get("duration"),
-                "categories": [],
-                "thumbnail": piped.get("thumbnail") or _yt_thumb(video_id),
-                "audio_url": piped["audio_url"],
-                "ext": piped.get("ext") or "m4a",
-                "abr": piped.get("abr"),
-            }
-            _cache_put(_url_cache, video_id, (now, payload))
-            print(f"resolve {video_id}: piped {time.time() - now:.1f}s", flush=True)
-            return payload
-        raise last_err or RuntimeError("no anonymous audio stream")
-    audio_only = [f for f in (info.get("formats") or [])
-                  if f.get("url") and f.get("acodec") not in (None, "none")
-                  and f.get("vcodec") in (None, "none")]
-    if audio_only:
-        # AAC first: iOS Safari can't be relied on for Opus/WebM.
-        audio_only.sort(key=lambda f: (f.get("ext") == "m4a", f.get("abr") or 0), reverse=True)
-        fmt = audio_only[0]
-        stream, ext, abr = fmt["url"], fmt.get("ext", ""), fmt.get("abr")
-    else:
-        rd = (info.get("requested_downloads") or [{}])[0]
-        stream, ext, abr = info.get("url", ""), rd.get("ext", ""), rd.get("abr")
-    payload = {
-        "id": video_id,
-        "title": info.get("title") or video_id,
-        "uploader": info.get("uploader") or info.get("channel") or "",
-        "duration": info.get("duration"),
-        "categories": info.get("categories") or [],
-        "thumbnail": info.get("thumbnail") or _yt_thumb(video_id),
-        "audio_url": stream,
-        "ext": ext,
-        "abr": abr,
-    }
-    _cache_put(_url_cache, video_id, (now, payload))
-    return payload
+
+    piped = _piped_audio(video_id)
+    if piped and piped.get("audio_url"):
+        payload = {
+            "id": video_id,
+            "title": piped.get("title") or video_id,
+            "uploader": piped.get("uploader") or "",
+            "duration": piped.get("duration"),
+            "categories": [],
+            "thumbnail": piped.get("thumbnail") or _yt_thumb(video_id),
+            "audio_url": piped["audio_url"],
+            "ext": piped.get("ext") or "m4a",
+            "abr": piped.get("abr"),
+        }
+        _cache_put(_url_cache, video_id, (now, payload))
+        print(f"resolve {video_id}: piped {time.time() - now:.1f}s", flush=True)
+        return payload
+    raise last_err or RuntimeError("no anonymous audio stream")
 
 
 # Remuxed AAC on the music volume so iOS <audio> can keep playing with the
@@ -3856,19 +4649,32 @@ def _save_stream(audio_url, dest):
     pos, total = 0, None
     with open(dest, "wb") as f:
         while total is None or pos < total:
+            end = pos + AUDIO_CHUNK - 1
             req = urllib.request.Request(audio_url, headers={
                 "User-Agent": "Mozilla/5.0",
-                "Range": f"bytes={pos}-{pos + AUDIO_CHUNK - 1}"})
+                "Range": f"bytes={pos}-{end}"})
+            status = 0
             with _yt_open(req, timeout=30) as r:
-                if total is None:
-                    m = re.search(r"/(\d+)\s*$", r.headers.get("Content-Range") or "")
-                    total = int(m.group(1)) if m else -1
+                status = getattr(r, "status", 0) or 0
+                cr = r.headers.get("Content-Range") or ""
+                m = re.search(r"/(\d+)\s*$", cr)
+                if m:
+                    total = int(m.group(1))
+                elif total is None and status == 200:
+                    cl = r.headers.get("Content-Length")
+                    if cl and str(cl).isdigit():
+                        total = int(cl)
                 data = r.read()
             if not data:
                 break
             f.write(data)
-            pos += len(data)
-            if total < 0:
+            n = len(data)
+            pos += n
+            if total is not None and pos >= total:
+                break
+            # Missing Content-Range used to stop after the first chunk and
+            # publish a truncated m4a that never starts in <audio>.
+            if total is None and (status == 200 or n < AUDIO_CHUNK):
                 break
     if pos < 1024:
         raise RuntimeError("empty audio download")
@@ -3878,8 +4684,16 @@ def _save_stream(audio_url, dest):
 def _audio_file(video_id, aac_only=False):
     for ext in (("m4a",) if aac_only else ("m4a", "webm")):
         p = os.path.join(AUDIO_DIR, f"{video_id}.{ext}")
-        if os.path.exists(p) and os.path.getsize(p) > 1024:
+        try:
+            size = os.path.getsize(p)
+        except OSError:
+            continue
+        # Tiny leftovers from a failed remux look like audio to the browser
+        # but never actually start (or die in <1s). Treat them as a miss.
+        if size > 200 * 1024:
             return p
+        with contextlib.suppress(OSError):
+            os.remove(p)
     return None
 
 
@@ -3915,22 +4729,8 @@ def _download_audio(video_id):
         os.makedirs(AUDIO_DIR, exist_ok=True)
         final = os.path.join(AUDIO_DIR, f"{video_id}.m4a")
         tmp = final + ".part"
-        t0, pos, total = time.time(), 0, None
-        with open(tmp, "wb") as f:
-            while total is None or pos < total:
-                req = urllib.request.Request(info["audio_url"], headers={
-                    "User-Agent": "Mozilla/5.0", "Range": f"bytes={pos}-{pos + AUDIO_CHUNK - 1}"})
-                with _yt_open(req, timeout=30) as r:
-                    if total is None:
-                        m = re.search(r"/(\d+)\s*$", r.headers.get("Content-Range") or "")
-                        total = int(m.group(1)) if m else -1
-                    data = r.read()
-                if not data:
-                    break
-                f.write(data)
-                pos += len(data)
-                if total < 0:
-                    break
+        t0 = time.time()
+        pos = _save_stream(info["audio_url"], tmp)
         # Always publish AAC/MP4: iOS Safari will not play Opus/WebM in <audio>,
         # and YouTube's fragmented m4a has a bogus duration until remuxed.
         flat = final + ".flat"
@@ -3983,6 +4783,8 @@ def _warm_audio(video_id, force=False):
     Prefetch is capped: a stampede of ffmpeg/yt-dlp jobs starves /api/like and
     playlist POSTs on the same process. Play itself may force a job.
     """
+    if hidden_track(video_id):
+        return False
     if _audio_file(video_id, aac_only=True):
         return True
     with _audio_jobs_lock:
@@ -4217,7 +5019,7 @@ def recommendations(user_id, n=12):
                  or _last_activity(user_id) > hit[0])
         if stale and _reco_claim(user_id):
             threading.Thread(target=_reco_rebuild, args=(user_id,), daemon=True).start()
-        return hit[1][:n]
+        return visible_tracks(hit[1])[:n]
     # First mix ever: build in the background and give it a short head start;
     # the client polls (see "building") instead of hanging on a slow build.
     if _reco_claim(user_id):
@@ -4225,7 +5027,7 @@ def recommendations(user_id, n=12):
     for _ in range(12):
         time.sleep(0.5)
         if user_id in _reco_cache:
-            return _reco_cache[user_id][1][:n]
+            return visible_tracks(_reco_cache[user_id][1])[:n]
     return []
 
 
@@ -4274,13 +5076,15 @@ def _compute_recos(user_id, n=RECO_N):
     seen = {c["id"] for c in cands}
     for vid, title, _sv, _st in mixt:
         if vid not in seen and vid not in heard and vid not in seed_ids:
+            if hidden_track(vid, title):
+                continue
             seen.add(vid)
             cands.append({"id": vid, "title": title, "via": "mix"})
     liked_sets = [_tokens(t) for t in liked_titles if t]
     genre_set = {g.strip().lower() for g in survey["genres"] if g.strip()}
     scored = []
     for c in cands:
-        if c["id"] in heard:
+        if c["id"] in heard or hidden_track(c.get("id"), c.get("title")):
             continue
         ctoks = _tokens(c["title"])
         score, why = 0.0, ""
@@ -4377,25 +5181,7 @@ class Handler(SimpleHTTPRequestHandler):
         return u
 
     def _post_musely(self, body):
-        u = self._me()
-        gate = musely_gate(u)
-        if not gate["unlocked"]:
-            if gate["login"]:
-                say = "sign in, then listen to 3 songs."
-            else:
-                left = max(1, gate["need"] - gate["have"])
-                say = f"listen to {left} more song" + ("s" if left != 1 else "") + " — then he's yours."
-            return self._json({
-                "ok": False, "say": say, "tracks": [], "mode": "chat", "musely": gate,
-            })
-        ip = (self.headers.get("X-Forwarded-For") or "").split(",")[0].strip()[:64]
-        if not ip:
-            ip = (self.client_address[0] if self.client_address else "")[:64]
-        msg = (body.get("message") or "").strip()
-        hist = body.get("history") if isinstance(body.get("history"), list) else []
-        out = musely_reply(msg, hist, ip=ip)
-        out["musely"] = gate
-        return self._json(out)
+        self._json({"ok": False, "error": "musely_removed"}, 410)
 
     def _body(self):
         try:
@@ -4584,6 +5370,8 @@ class Handler(SimpleHTTPRequestHandler):
         return bool(re.search(r"iPhone|iPad|iPod", ua))
 
     def _proxy_audio(self, video_id, ios=False):
+        if hidden_track(video_id):
+            return self._json({"error": "unavailable"}, 404)
         cached = _audio_file(video_id, aac_only=ios)
         if cached:
             return self._serve_audio_file(cached)
@@ -4648,7 +5436,13 @@ class Handler(SimpleHTTPRequestHandler):
             return
         try:
             self.send_response(upstream.status)
-            ctype = upstream.headers.get("Content-Type") or ("audio/mp4" if ios else "audio/webm")
+            # googlevideo labels AAC-in-MP4 as video/mp4; <audio> refuses that
+            # and play() never starts on a cold (uncached) tap.
+            up_ct = (upstream.headers.get("Content-Type") or "").lower()
+            if "webm" in up_ct or "opus" in up_ct:
+                ctype = "audio/webm"
+            else:
+                ctype = "audio/mp4"
             self.send_header("Content-Type", ctype)
             self.send_header("Accept-Ranges", "bytes")
             for h in ("Content-Length", "Content-Range"):
@@ -4680,6 +5474,20 @@ class Handler(SimpleHTTPRequestHandler):
                 })
             if path == "/api/version":
                 return self._json({"build": BUILD})
+            if path == "/api/status":
+                try:
+                    rep = sla_report()
+                except Exception:
+                    rep = {"month_up_min": 0, "month_expect_min": 1, "month_pct": 0.0}
+                return self._json({
+                    "ok": True,
+                    "build": BUILD,
+                    "started": STARTED_AT,
+                    "uptime_s": int(time.time() - STARTED_AT),
+                    "target": 99.0,
+                    "excludes": ["youtube", "catalog", "cloudflare", "groq"],
+                    **rep,
+                })
             if path == "/api/desktop":
                 meta = desktop_meta()
                 if not meta:
@@ -4725,10 +5533,22 @@ class Handler(SimpleHTTPRequestHandler):
                     n = 12
                 me = self._me()
                 return self._json({"users": search_users(q, n, me_id=me["id"] if me else None)})
+            if path == "/api/lyrics":
+                title = (qs.get("title") or [""])[0][:180]
+                artist = (qs.get("artist") or [""])[0][:180]
+                try:
+                    dur = float((qs.get("duration") or ["0"])[0] or 0)
+                except ValueError:
+                    dur = 0
+                if not str(title).strip():
+                    return self._json({"lines": [], "synced": False})
+                return self._json(lyrics_lookup(title, artist, dur))
             if path == "/api/play":
                 v = (qs.get("v") or [""])[0]
                 if not re.fullmatch(r"[\w-]{11}", v or ""):
                     return self._json({"error": "bad video id"}, 400)
+                if hidden_track(v):
+                    return self._json({"error": "unavailable"}, 404)
                 data = best_audio_url(v)
                 liked = False
                 u = self._me()
@@ -4748,6 +5568,8 @@ class Handler(SimpleHTTPRequestHandler):
                 v = (qs.get("v") or [""])[0]
                 if not re.fullmatch(r"[\w-]{11}", v or ""):
                     return self._json({"error": "bad video id"}, 400)
+                if hidden_track(v):
+                    return self._json({"error": "unavailable"}, 404)
                 if "warm" in qs:
                     started = _warm_audio(v)
                     return self._json({
@@ -4759,6 +5581,10 @@ class Handler(SimpleHTTPRequestHandler):
                 v = (qs.get("v") or [""])[0]
                 if not re.fullmatch(r"[\w-]{11}", v or ""):
                     return self._json({"error": "bad video id"}, 400)
+                if hidden_track(v):
+                    self.send_response(404)
+                    self.end_headers()
+                    return
                 data = yt_art_bytes(v)
                 if not data:
                     self.send_response(404)
@@ -4777,7 +5603,8 @@ class Handler(SimpleHTTPRequestHandler):
                     "error": "gone",
                     "message": "Muse does not export catalog media as files.",
                 }, 410)
-            if path in ("/legal", "/legal.html"):
+            if path in ("/legal", "/legal.html", "/privacy", "/gdpr", "/terms", "/dpa",
+                        "/subprocessors", "/sla", "/cookies", "/credits", "/dmca"):
                 self.directory = STATIC
                 self.path = "/legal.html"
                 return super().do_GET()
@@ -4983,6 +5810,23 @@ class Handler(SimpleHTTPRequestHandler):
                     fn = key
                 hit = os.path.join(CHAT_DIR, fn)
                 return self._send_local_file(hit, ctype)
+            if path == "/api/me/export":
+                u = self._need_user()
+                if not u:
+                    return
+                data = export_user(u["id"])
+                if not data:
+                    return self._json({"error": "not found"}, 404)
+                raw = json.dumps(data, default=str).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Content-Disposition", "attachment; filename=muse-data.json")
+                self.send_header("Content-Length", str(len(raw)))
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                if self.command != "HEAD":
+                    self.wfile.write(raw)
+                return
             if path == "/api/me":
                 u = self._me()
                 return self._json({"user": u, "musely": musely_gate(u)} if u else {"user": None, "musely": musely_gate(None)})
@@ -5103,9 +5947,9 @@ class Handler(SimpleHTTPRequestHandler):
                                    "slug": slugs.get(pl["id"], _playlist_slug(pl["name"])),
                                    "handle": (u.get("handle") or u.get("username") or "").lower(),
                                    "custom_cover": cover_url(pl["cover"] or ""),
-                                   "tracks": [{"item_id": r["id"], "id": r["video_id"],
+                                   "tracks": visible_tracks([{"item_id": r["id"], "id": r["video_id"],
                                                "title": r["title"], "thumbnail": r["thumb"],
-                                               "duration": r["duration"]} for r in rows]})
+                                               "duration": r["duration"]} for r in rows])})
             if path == "/api/likes":
                 u = self._need_user()
                 if not u:
@@ -5114,9 +5958,9 @@ class Handler(SimpleHTTPRequestHandler):
                     rows = con.execute(
                         "SELECT video_id, title, thumb, duration FROM likes "
                         "WHERE user_id=? ORDER BY pos ASC", (u["id"],)).fetchall()
-                return self._json({"tracks": [
+                return self._json({"tracks": visible_tracks([
                     {"id": r["video_id"], "title": r["title"],
-                     "thumbnail": r["thumb"], "duration": r["duration"]} for r in rows]})
+                     "thumbnail": r["thumb"], "duration": r["duration"]} for r in rows])})
             if path == "/api/liked_ids":
                 u = self._me()
                 if not u:
@@ -5155,7 +5999,7 @@ class Handler(SimpleHTTPRequestHandler):
                 except ValueError:
                     n = 12
                 tracks = recommendations(u["id"], n)
-                return self._json({"tracks": tracks,
+                return self._json({"tracks": visible_tracks(tracks),
                                    "building": not tracks and u["id"] in _reco_busy})
             if path.startswith("/covers/"):
                 fn = path.rsplit("/", 1)[-1]
@@ -5245,17 +6089,34 @@ class Handler(SimpleHTTPRequestHandler):
                     return self._json({"error": "username: 2-24 letters, digits, _ . -"}, 400)
                 if len(password) < 4:
                     return self._json({"error": "password too short (min 4)"}, 400)
+                accepted = body.get("accepted_tos") is True or body.get("accepted_tos") in ("1", "true", "yes")
+                if not accepted:
+                    return self._json({"error": "accept the terms to create an account"}, 400)
                 pw, salt = hash_pass(password)
                 with _db_lock, db() as con:
                     if con.execute("SELECT 1 FROM users WHERE username=?", (username,)).fetchone():
                         return self._json({"error": "name taken"}, 409)
                     h = unique_handle(con, username)
+                    now = time.time()
                     cur = con.execute(
-                        "INSERT INTO users(username,pass,salt,display,created,handle) "
-                        "VALUES(?,?,?,?,?,?)", (username, pw, salt, username, time.time(), h))
+                        "INSERT INTO users(username,pass,salt,display,created,handle,tos_at,tos_ver) "
+                        "VALUES(?,?,?,?,?,?,?,?)",
+                        (username, pw, salt, username, now, h, now, TOS_VER))
                     u = row_user(con.execute("SELECT * FROM users WHERE id=?",
                                              (cur.lastrowid,)).fetchone())
                 return self._json_cookie({"user": u}, token=create_session(u["id"]))
+            if path == "/api/me/delete":
+                u = self._need_user()
+                if not u:
+                    return
+                password = body.get("password") or ""
+                with _db_lock, db() as con:
+                    r = con.execute("SELECT * FROM users WHERE id=?", (u["id"],)).fetchone()
+                if not r or not hmac.compare_digest(hash_pass(password, r["salt"])[0], r["pass"]):
+                    return self._json({"error": "wrong password"}, 401)
+                delete_user(u["id"])
+                drop_session(self._cookies().get("muse_session"))
+                return self._json_cookie({"ok": True}, clear=True)
             if path == "/api/login":
                 username = (body.get("username") or "").strip()
                 password = body.get("password") or ""
@@ -6219,7 +7080,9 @@ class Handler(SimpleHTTPRequestHandler):
             p = urllib.parse.urlparse(self.path).path
             if (p in ("/", "/index.html", "/sw.js", "/manifest.webmanifest",
                       "/pc", "/web", "/mobile/iphone", "/mobile/android",
-                      "/market", "/friends")
+                      "/market", "/friends", "/legal", "/legal.html",
+                      "/privacy", "/gdpr", "/terms", "/dpa", "/subprocessors",
+                      "/sla", "/cookies", "/credits", "/dmca")
                     or p.startswith("/app.") or p.startswith("/style.")
                     or p.startswith("/@")):
                 self.send_header("Cache-Control", "no-store")
@@ -6231,6 +7094,15 @@ class Handler(SimpleHTTPRequestHandler):
 
     def log_message(self, *args):
         pass  # stay quiet
+
+
+def sla_loop():
+    while True:
+        try:
+            sla_tick()
+        except Exception as e:
+            print(f"sla tick: {e}", flush=True)
+        time.sleep(60)
 
 
 def keep_awake():
@@ -6257,6 +7129,7 @@ def keep_awake():
 
 def main():
     init_db()
+    threading.Thread(target=sla_loop, daemon=True).start()
     srv = ThreadingHTTPServer((HOST, PORT), Handler)
     print(f"Muse on  http://127.0.0.1:{PORT}", flush=True)
     print(f"yt-dlp {yt_dlp.version.__version__}, cookies: {BASE_YDL.get('cookiefile') or 'none'}, "

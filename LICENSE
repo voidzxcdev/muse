@@ -19,3 +19,27 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+-------------------------------------------------------------------------------
+Credits (not a grant of third-party rights)
+
+This MIT license covers Muse source code by voidzxcdev only. It does not cover
+songs, artwork, names, or trademarks that appear while using Muse.
+
+YouTube and YouTube Music are trademarks of Google LLC. Muse is not affiliated
+with, endorsed by, or sponsored by Google LLC, YouTube, or YouTube Music.
+Search metadata, video thumbnails, and (on desktop, if you allow media cookies)
+the YouTube IFrame Player API may be provided by those services under Google's
+terms. Muse does not sublicense that content.
+
+Image providers: thumbnails from Google/YouTube (i.ytimg.com, ytimg.com, googleusercontent.com, ggpht.com).
+User avatars, playlist covers, and chat images remain the user's. The Muse logo
+is used by this project.
+
+Authors: voidzxcdev (https://github.com/voidzxcdev).
+
+Type: Clash Display and Satoshi (Fontshare / Indian Type Foundry).
+Icons: Feather (MIT, Cole Bemis); Font Awesome Free play/pause (CC BY 4.0,
+Fonticons, Inc.).
+
+Other software: see NOTICE.

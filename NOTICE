@@ -4,10 +4,37 @@ Copyright 2026 voidzxcdev
 This product includes software developed for Muse (https://getmuse.eu).
 The MIT license applies to Muse source code only, not to third-party media.
 
-Third-party notices:
-- yt-dlp, where used by an operator, is Unlicense. See that project for its terms.
-- Electron and Chromium licenses ship inside the Linux package.
-- Feather icons: MIT. Font Awesome Free play/pause: CC BY 4.0.
+YouTube and YouTube Music are trademarks of Google LLC.
+Muse is not affiliated with, endorsed by, or sponsored by Google LLC,
+YouTube, or YouTube Music.
 
-YouTube, YouTube Music, and Google are trademarks of Google LLC.
-Muse is not affiliated with Google LLC.
+Image providers
+- Video thumbnails: Google/YouTube (i.ytimg.com, ytimg.com, googleusercontent.com, ggpht.com)
+- User avatars, playlist covers, chat media: the uploading user
+- Muse mark / muselogo.png: this project
+
+Type and icons
+- Clash Display, Satoshi: Fontshare (Indian Type Foundry)
+- Feather icons: MIT, Cole Bemis
+- Font Awesome Free 6 play/pause: CC BY 4.0, Fonticons, Inc.
+
+Python (getmuse.eu server)
+- yt-dlp: Unlicense
+- bgutil-ytdlp-pot-provider: see that project (Apache-2.0/MIT as published)
+- psycopg / psycopg-pool / psycopg-binary: LGPL-3.0
+- pywebpush: MPL-2.0
+- cryptography (via pywebpush): Apache-2.0 or BSD
+
+Linux desktop package
+- Electron 33 / Chromium: Electron MIT; Chromium BSD and other notices inside the app
+- electron-builder: MIT
+- mpris-service: MIT
+- dbus-next: MIT
+- call-bind, call-bind-apply-helpers: MIT
+
+Android
+- AndroidX AppCompat 1.7.0: Apache-2.0
+- AndroidX WebKit 1.12.1: Apache-2.0
+- Kotlin stdlib (forced 1.8.22): Apache-2.0
+
+Full table: docs/LICENSES.md
