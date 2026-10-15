@@ -116,9 +116,9 @@ DESKTOP_VERSION = os.environ.get("DESKTOP_VERSION") or "2.0.4"
 DESKTOP_DIR = os.environ.get("DESKTOP_DIR") or os.path.join(HERE, "desktop-dist")
 DESKTOP_AUTHOR = "https://github.com/voidzxcdev"
 LINUX_VERSION = os.environ.get("LINUX_VERSION") or "1.0.6"
-ANDROID_VERSION = os.environ.get("ANDROID_VERSION") or "1.0.3"
+ANDROID_VERSION = os.environ.get("ANDROID_VERSION") or "1.0.5"
 try:
-        ANDROID_CODE = int(os.environ.get("ANDROID_CODE") or "7")
+        ANDROID_CODE = int(os.environ.get("ANDROID_CODE") or "9")
 except ValueError:
     ANDROID_CODE = 7
 

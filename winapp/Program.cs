@@ -12,7 +12,7 @@ namespace Muse;
 static class Program
 {
     public const string Home = "https://getmuse.eu/pc";
-    public const string DesktopVersion = "2.0.3";
+    public const string DesktopVersion = "2.0.4";
     public const string MutexName = @"Local\MuseDesktop.1";
     public static readonly int WmShow = Native.RegisterWindowMessage("MuseDesktop.Show");
 
