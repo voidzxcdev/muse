@@ -13,7 +13,7 @@ SRC="$(cd "$(dirname "$0")" && pwd)"
 WORK="$HOME/muse-linux-build"
 rm -rf "$WORK"
 mkdir -p "$WORK"
-cp "$SRC/package.json" "$SRC/main.js" "$SRC/preload.js" "$SRC/mpris.js" "$SRC/updater.js" "$WORK/"
+cp "$SRC/package.json" "$SRC/main.js" "$SRC/preload.js" "$SRC/mpris.js" "$SRC/updater.js" "$SRC/update.html" "$WORK/"
 mkdir -p "$WORK/build"
 cp "$SRC/build/icon.png" "$WORK/build/icon.png"
 

@@ -1,8 +1,9 @@
 FROM python:3.13-slim
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ffmpeg ca-certificates curl git \
-    && rm -rf /var/lib/apt/lists/*
+    && apt-get install -y --no-install-recommends ffmpeg ca-certificates curl git gosu \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --system --uid 10001 --create-home --home-dir /home/muse --shell /usr/sbin/nologin muse
 # yt-dlp needs a JavaScript runtime to solve YouTube's player challenges.
 COPY --from=denoland/deno:bin /deno /usr/local/bin/deno-real
 # Cap the V8 heap so one challenge solve can't take the 512 MB instance down.
@@ -33,6 +34,10 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
+RUN mkdir -p /app/music /app/covers \
+    && chown -R muse:muse /app /opt/bgutil /home/muse \
+    && chmod +x /app/docker-entrypoint.sh /app/docker-start.sh
 
 ENV PYTHONUNBUFFERED=1
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
 CMD ["sh", "/app/docker-start.sh"]

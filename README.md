@@ -16,11 +16,11 @@
   <img alt="Platforms" src="https://img.shields.io/badge/web%20·%20windows%20·%20linux%20·%20android%20·%20ios-0a0a0b?style=flat-square" />
 </p>
 
-Muse is an independent music player. Search a song. Press play. Stay out of the way. Matte black. No clutter. An account is optional. With one, you get likes, playlists, Friends, badges, and a For You page that trains on what you actually play.
+Muse is an independent music player project. Search a song. Press play. Stay out of the way. Matte black. No clutter. An account is optional. With one, you get likes, playlists, Friends, badges, and a For You page that trains on what you actually play.
 
 Muse is not affiliated with YouTube, Google, or any record label. The MIT license covers this source code, not the songs you hear. See [LEGAL.md](LEGAL.md).
 
-The live product is [getmuse.eu](https://getmuse.eu). This repository is that product: the Python server, the vanilla web UI, the Windows WebView2 shell, the Linux Electron shell, and the Android WebView shell.
+The public instance is [getmuse.eu](https://getmuse.eu). This repository is the project: the Python server, the vanilla web UI, the Windows WebView2 shell, the Linux Electron shell, and the Android WebView shell.
 
 ## Features
 
@@ -108,9 +108,25 @@ Optional fronts (Cloudflare Pages, a hosted Postgres) belong in those product da
 
 Muse source is MIT. That is a software license, not a music license.
 
+The server is in France. Live pages: [getmuse.eu/legal](https://getmuse.eu/legal)
+
+- [Privacy](https://getmuse.eu/privacy)
+- [GDPR](https://getmuse.eu/gdpr)
+- [Terms](https://getmuse.eu/terms)
+- [Cookies](https://getmuse.eu/cookies)
+- [Processor](https://getmuse.eu/dpa)
+- [Who else](https://getmuse.eu/subprocessors)
+- [Uptime](https://getmuse.eu/sla)
+- [Credits](https://getmuse.eu/credits)
+- [Copyright](https://getmuse.eu/dmca)
+
+Accounts have no email. There is no password-reset mail. Contact **hello@getmuse.eu**.
+
+Third-party licenses we ship: [docs/LICENSES.md](docs/LICENSES.md). Trademarks and image providers: [NOTICE](NOTICE), [LICENSE](LICENSE).
+
 The UI and desktop shells speak only Muse's own HTTP API ([docs/CATALOG.md](docs/CATALOG.md)). A second implementer can write a new catalog adapter from that spec without reading the stock server. That is clean-room structure for Muse's API. It does not license third-party media.
 
-If you self-host, you are the operator. Prefer an official player embed or a catalog you are licensed to stream. Muse does not export catalog media as MP3 files.
+If you take the source from GitHub and run your own version, that copy is yours. You are the operator. voidzxcdev is not liable for it. Prefer an official player embed or a catalog you are licensed to stream. Muse does not export catalog media as MP3 files.
 
 Copyright reports for user files stored on getmuse.eu: **hello@getmuse.eu**. Full text: [LEGAL.md](LEGAL.md), [NOTICE](NOTICE).
 

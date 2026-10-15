@@ -8,7 +8,7 @@
     <ApplicationIcon>icon.ico</ApplicationIcon>
     <AssemblyName>Muse</AssemblyName>
     <RootNamespace>Muse</RootNamespace>
-    <Version>1.1.11</Version>
+    <Version>2.0.3</Version>
     <Product>Muse</Product>
     <AssemblyTitle>Muse</AssemblyTitle>
     <Company>https://github.com/voidzxcdev</Company>

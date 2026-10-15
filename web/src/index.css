@@ -1,0 +1,209 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "@fontsource-variable/geist";
+@import "@fontsource-variable/geist-mono";
+
+@custom-variant dark (&:is(.dark *));
+
+/* Vercel theme (21st.dev @serafimcloud/themes/vercel = tweakcn "vercel") */
+:root {
+  --background: oklch(0.99 0 0);
+  --foreground: oklch(0 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0 0 0);
+  --popover: oklch(0.99 0 0);
+  --popover-foreground: oklch(0 0 0);
+  --primary: oklch(0 0 0);
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.94 0 0);
+  --secondary-foreground: oklch(0 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.44 0 0);
+  --accent: oklch(0.94 0 0);
+  --accent-foreground: oklch(0 0 0);
+  --destructive: oklch(0.63 0.19 23.03);
+  --destructive-foreground: oklch(1 0 0);
+  --border: oklch(0.92 0 0);
+  --input: oklch(0.94 0 0);
+  --ring: oklch(0 0 0);
+  --chart-1: oklch(0.81 0.17 75.35);
+  --chart-2: oklch(0.55 0.22 264.53);
+  --sidebar: oklch(0.99 0 0);
+  --sidebar-foreground: oklch(0 0 0);
+  --sidebar-accent: oklch(0.94 0 0);
+  --sidebar-border: oklch(0.94 0 0);
+  --radius: 0.5rem;
+  --shadow-sm: 0px 1px 2px 0px hsl(0 0% 0% / 0.18), 0px 1px 2px -1px hsl(0 0% 0% / 0.18);
+  --shadow-lg: 0px 1px 2px 0px hsl(0 0% 0% / 0.18), 0px 4px 6px -1px hsl(0 0% 0% / 0.18);
+  --shadow-xl: 0px 1px 2px 0px hsl(0 0% 0% / 0.18), 0px 8px 10px -1px hsl(0 0% 0% / 0.18);
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+}
+.dark {
+  --background: oklch(0 0 0);
+  --foreground: oklch(1 0 0);
+  --card: oklch(0.14 0 0);
+  --card-foreground: oklch(1 0 0);
+  --popover: oklch(0.18 0 0);
+  --popover-foreground: oklch(1 0 0);
+  --primary: oklch(1 0 0);
+  --primary-foreground: oklch(0 0 0);
+  --secondary: oklch(0.25 0 0);
+  --secondary-foreground: oklch(1 0 0);
+  --muted: oklch(0.23 0 0);
+  --muted-foreground: oklch(0.72 0 0);
+  --accent: oklch(0.32 0 0);
+  --accent-foreground: oklch(1 0 0);
+  --destructive: oklch(0.69 0.2 23.91);
+  --destructive-foreground: oklch(0 0 0);
+  --border: oklch(0.26 0 0);
+  --input: oklch(0.32 0 0);
+  --ring: oklch(0.72 0 0);
+  --chart-1: oklch(0.81 0.17 75.35);
+  --chart-2: oklch(0.58 0.21 260.84);
+  --sidebar: oklch(0.18 0 0);
+  --sidebar-foreground: oklch(1 0 0);
+  --sidebar-accent: oklch(0.32 0 0);
+  --sidebar-border: oklch(0.32 0 0);
+}
+
+@theme inline {
+  --font-sans: "Geist Variable", Geist, ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono Variable", "Geist Mono", ui-monospace, monospace;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-border: var(--sidebar-border);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --shadow-sm: var(--shadow-sm);
+  --shadow-lg: var(--shadow-lg);
+  --shadow-xl: var(--shadow-xl);
+}
+
+@layer base {
+  * { @apply border-border outline-ring/50; }
+  html, body, #root { height: 100%; }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "ss01", "cv11";
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior: none;
+  }
+  ::selection { background: color-mix(in oklch, var(--foreground) 22%, transparent); }
+  button { cursor: pointer; }
+  input[type="range"] { accent-color: var(--foreground); }
+}
+
+/* Vercel-like subtle grid behind the hero */
+.bg-grid {
+  background-image:
+    linear-gradient(to right, color-mix(in oklch, var(--foreground) 6%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in oklch, var(--foreground) 6%, transparent) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: radial-gradient(ellipse at top, black 30%, transparent 75%);
+}
+/* Layout: html/body never scroll; only inner panes do. */
+html, body { height: 100%; overflow: hidden; overscroll-behavior: none; }
+#root { height: 100%; }
+/* Radix/react-remove-scroll must not shift layout when modals open */
+html body[data-scroll-locked] { overflow: hidden !important; margin-right: 0 !important; padding-right: 0 !important; --removed-body-scroll-bar-size: 0px !important; }
+.scroll-pane { overflow-y: auto; overflow-x: hidden; scrollbar-gutter: stable; overscroll-behavior: contain; }
+
+/* Vercel-style thin scrollbars */
+:root { --sb-thumb: color-mix(in oklch, var(--foreground) 14%, transparent); --sb-thumb-hover: color-mix(in oklch, var(--foreground) 32%, transparent); }
+* { scrollbar-width: thin; scrollbar-color: var(--sb-thumb) transparent; }
+*:hover { scrollbar-color: var(--sb-thumb-hover) transparent; }
+::-webkit-scrollbar { width: 6px; height: 6px; background: transparent; }
+::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--sb-thumb); border-radius: 9999px; }
+::-webkit-scrollbar-thumb:hover, *:hover::-webkit-scrollbar-thumb { background: var(--sb-thumb-hover); }
+::-webkit-scrollbar-button { display: none; }
+.scrollbar-thin { scrollbar-width: thin; }
+/* horizontal carousels + explicit opt-out */
+.no-scrollbar, .overflow-x-auto, .snap-x { scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar, .overflow-x-auto::-webkit-scrollbar, .snap-x::-webkit-scrollbar { display: none; }
+/* touch devices: no visible scrollbars */
+@media (hover: none) and (pointer: coarse) {
+  * { scrollbar-width: none; }
+  ::-webkit-scrollbar { display: none; width: 0; height: 0; }
+  .scroll-pane { scrollbar-gutter: auto; }
+}
+
+/* Spotlight card hover (Aceternity-style, transform/opacity only) */
+.spotlight { position: relative; isolation: isolate; }
+.spotlight::before {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: -1;
+  background: radial-gradient(240px circle at var(--mx, 50%) var(--my, 50%), color-mix(in oklch, var(--foreground) 9%, transparent), transparent 70%);
+  opacity: 0; transition: opacity 200ms var(--ease-out);
+}
+.spotlight:hover::before { opacity: 1; }
+
+/* Seek / volume range: native element kept for desktop bridges (#vol) */
+.range {
+  -webkit-appearance: none; appearance: none; background: transparent; height: 16px; cursor: pointer;
+}
+.range::-webkit-slider-runnable-track { height: 4px; border-radius: 999px;
+  background: linear-gradient(to right, var(--foreground) var(--val, 50%), var(--input) var(--val, 50%)); }
+.range::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; margin-top: -4px; border-radius: 999px;
+  background: var(--foreground); opacity: 0; transition: opacity 150ms; }
+.range:hover::-webkit-slider-thumb, .range:focus-visible::-webkit-slider-thumb { opacity: 1; }
+.range::-moz-range-track { height: 4px; border-radius: 999px; background: var(--input); }
+.range::-moz-range-progress { height: 4px; border-radius: 999px; background: var(--foreground); }
+.range::-moz-range-thumb { width: 12px; height: 12px; border: 0; border-radius: 999px; background: var(--foreground); }
+
+/* Lyrics */
+.ly-line { transition: opacity 250ms var(--ease-out), transform 250ms var(--ease-out), filter 250ms var(--ease-out);
+  transform-origin: left center; opacity: .32; }
+.ly-line.on { opacity: 1; transform: scale(1.02); }
+.ly-line.past { opacity: .5; }
+.ly-plain .ly-line { opacity: .85; }
+
+/* Equalizer bars for "now playing" rows */
+@keyframes eq { 0%,100% { transform: scaleY(.3) } 50% { transform: scaleY(1) } }
+.eq i { display: inline-block; width: 3px; height: 12px; margin: 0 1px; background: currentColor; border-radius: 1px;
+  transform-origin: bottom; animation: eq 900ms ease-in-out infinite; }
+.eq i:nth-child(2) { animation-delay: -300ms } .eq i:nth-child(3) { animation-delay: -600ms }
+.eq.paused i { animation-play-state: paused; }
+
+/* View Transitions for route swaps */
+::view-transition-old(main), ::view-transition-new(main) { animation-duration: 220ms; animation-timing-function: var(--ease-out); }
+::view-transition-old(main) { animation-name: vt-out; }
+::view-transition-new(main) { animation-name: vt-in; }
+@keyframes vt-out { to { opacity: 0; transform: translateY(-4px); } }
+@keyframes vt-in { from { opacity: 0; transform: translateY(6px); } }
+
+/* Desktop shell (WebView2) mini mode: only the player bar */
+.muse-mini #side, .muse-mini #topbar, .muse-mini #main, .muse-mini #tabbar { display: none !important; }
+.muse-mini #player { position: fixed; inset: 0; height: 100%; border: 0; }
+.muse-app *:focus { outline: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important; animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important; scroll-behavior: auto !important;
+  }
+  ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
+}

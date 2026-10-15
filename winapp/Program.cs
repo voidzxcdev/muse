@@ -12,7 +12,7 @@ namespace Muse;
 static class Program
 {
     public const string Home = "https://getmuse.eu/pc";
-    public const string DesktopVersion = "1.1.11";
+    public const string DesktopVersion = "2.0.3";
     public const string MutexName = @"Local\MuseDesktop.1";
     public static readonly int WmShow = Native.RegisterWindowMessage("MuseDesktop.Show");
 
@@ -41,6 +41,10 @@ sealed class MainForm : Form
     static readonly Color Ink = Color.FromArgb(244, 244, 245);
     const int BarH = 32;
     const int Grip = 8;
+    const int MinW = 1020;
+    const int MinH = 680;
+    const int MiniTriggerW = 700;
+    const int MiniTriggerH = 280;
 
     readonly TitleBar _bar;
     readonly Panel _stage;
@@ -51,6 +55,7 @@ sealed class MainForm : Form
     WebView2? _web;
     bool _exit;
     bool _updating;
+    bool _mini;
     FormWindowState _trayState = FormWindowState.Normal;
     Rectangle _trayBounds;
 
@@ -62,7 +67,7 @@ sealed class MainForm : Form
         FormBorderStyle = FormBorderStyle.None;
         ShowInTaskbar = true;
         ShowIcon = true;
-        MinimumSize = new Size(1020, 680);
+        MinimumSize = new Size(MinW, MinH);
         Size = new Size(1280, 820);
         BackColor = Bg;
         ForeColor = Ink;
@@ -126,6 +131,7 @@ sealed class MainForm : Form
         {
             _bar.SetMaximized(WindowState == FormWindowState.Maximized);
             Padding = WindowState == FormWindowState.Maximized ? Padding.Empty : new Padding(Grip);
+            UpdateMiniMode();
         };
         Load += async (_, _) =>
         {
@@ -360,22 +366,22 @@ sealed class MainForm : Form
               .muse-app ::selection { background: transparent; color: inherit; }
             `;
             document.documentElement.appendChild(css);
+            try {
+              const w = window.chrome && window.chrome.webview;
+              if (w && w.addEventListener) {
+                w.addEventListener('message', (e) => {
+                  let d = e && e.data;
+                  try { if (typeof d === 'string') d = JSON.parse(d); } catch { return; }
+                  if (!d || d.type !== 'muse-chrome') return;
+                  document.documentElement.classList.toggle('muse-mini', !!d.mini);
+                  if (d.mini) {
+                    const p = document.getElementById('player');
+                    if (p) p.hidden = false;
+                  }
+                });
+              }
+            } catch {}
             """);
-        try
-        {
-            await _web.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(SeedMuselyScript());
-        }
-        catch { }
-
-        _web.CoreWebView2.WebMessageReceived += (_, e) =>
-        {
-            string raw;
-            try { raw = e.TryGetWebMessageAsString(); }
-            catch { raw = e.WebMessageAsJson; }
-            if (string.IsNullOrWhiteSpace(raw)) return;
-            try { HandleMuselyHost(raw); }
-            catch { }
-        };
 
         _web.CoreWebView2.NewWindowRequested += (_, e) =>
         {
@@ -391,17 +397,29 @@ sealed class MainForm : Form
         };
         _web.CoreWebView2.NavigationCompleted += (_, e) =>
         {
-            if (!e.IsSuccess) return;
             BeginInvoke(() =>
             {
                 if (_web is null || _updating) return;
-                if (!_web.Visible)
+                if (e.IsSuccess)
                 {
                     _web.Visible = true;
                     _boot.Visible = false;
+                    _boot.Cursor = Cursors.Default;
                     StampIcon();
+                    PushMiniChrome(force: true);
+                    return;
                 }
+                _web.Visible = false;
+                _boot.Visible = true;
+                _boot.Text = "Muse is waking up.\nClick to retry.";
+                _boot.Cursor = Cursors.Hand;
             });
+        };
+        _boot.Click += (_, _) =>
+        {
+            if (_updating || _web?.CoreWebView2 is null) return;
+            _boot.Text = "";
+            try { _web.CoreWebView2.Navigate(Program.Home); } catch { }
         };
 
         _web.CoreWebView2.Navigate(Program.Home);
@@ -433,72 +451,31 @@ sealed class MainForm : Form
         _bar.SetMaximized(WindowState == FormWindowState.Maximized);
     }
 
-    static string MuselyChatPath()
+    void UpdateMiniMode()
     {
-        var dir = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "Muse", "musely");
-        Directory.CreateDirectory(dir);
-        return Path.Combine(dir, "chat.json");
-    }
-
-    static string SeedMuselyScript()
-    {
-        var seed = "[]";
-        try
+        var mini = WindowState == FormWindowState.Normal
+            && (ClientSize.Width <= MiniTriggerW || ClientSize.Height <= MiniTriggerH);
+        if (mini == _mini)
         {
-            var p = MuselyChatPath();
-            if (File.Exists(p))
-            {
-                var t = File.ReadAllText(p, Encoding.UTF8).Trim();
-                if (!t.StartsWith('[')) t = "[]";
-                using var tmp = JsonDocument.Parse(t);
-                if (tmp.RootElement.ValueKind == JsonValueKind.Array)
-                    seed = tmp.RootElement.GetRawText();
-            }
-        }
-        catch { }
-        return "window.__muselyChat=" + seed + ";";
-    }
-
-    void HandleMuselyHost(string raw)
-    {
-        if (_web?.CoreWebView2 is null) return;
-        using var doc = JsonDocument.Parse(raw);
-        var root = doc.RootElement;
-        if (!root.TryGetProperty("type", out var typeEl)) return;
-        var type = typeEl.GetString();
-        var path = MuselyChatPath();
-        if (type == "musely-load")
-        {
-            var histJson = "[]";
-            if (File.Exists(path))
-            {
-                try
-                {
-                    var t = File.ReadAllText(path, Encoding.UTF8).Trim();
-                    if (t.StartsWith('[')) histJson = t;
-                    else if (t.StartsWith('{'))
-                    {
-                        using var file = JsonDocument.Parse(t);
-                        if (file.RootElement.TryGetProperty("messages", out var m)
-                            && m.ValueKind == JsonValueKind.Array)
-                            histJson = m.GetRawText();
-                    }
-                }
-                catch { }
-            }
-            _web.CoreWebView2.PostWebMessageAsJson(
-                "{\"type\":\"musely-chat\",\"history\":" + histJson + "}");
+            PushMiniChrome();
             return;
         }
-        if (type == "musely-save" && root.TryGetProperty("history", out var hist)
-            && hist.ValueKind == JsonValueKind.Array)
+        _mini = mini;
+        _bar.Height = mini ? 26 : BarH;
+        _bar.SetMini(mini);
+        PushMiniChrome(force: true);
+    }
+
+    void PushMiniChrome(bool force = false)
+    {
+        _ = force;
+        if (_web?.CoreWebView2 is null) return;
+        try
         {
-            var text = hist.GetRawText();
-            if (text.Length > 1_500_000) return;
-            File.WriteAllText(path, text, new UTF8Encoding(false));
+            _web.CoreWebView2.PostWebMessageAsJson(
+                "{\"type\":\"muse-chrome\",\"mini\":" + (_mini ? "true" : "false") + "}");
         }
+        catch { }
     }
 
     string BoundsPath()
@@ -517,7 +494,7 @@ sealed class MainForm : Form
             if (!File.Exists(p)) return;
             var w = JsonSerializer.Deserialize<WinBounds>(File.ReadAllText(p));
             if (w is null) return;
-            var r = new Rectangle(w.X, w.Y, Math.Max(w.W, 1020), Math.Max(w.H, 680));
+            var r = new Rectangle(w.X, w.Y, Math.Max(w.W, MinW), Math.Max(w.H, MinH));
             if (Screen.AllScreens.Any(s => s.WorkingArea.IntersectsWith(r)))
             {
                 StartPosition = FormStartPosition.Manual;
@@ -555,7 +532,7 @@ sealed class MainForm : Form
             info.ptMaxPosition = new Native.Point(wa.X, wa.Y);
             info.ptMaxSize = new Native.Point(wa.Width, wa.Height);
             info.ptMinTrackSize = new Native.Point(
-                LogicalToDeviceUnits(1020), LogicalToDeviceUnits(680));
+                LogicalToDeviceUnits(MinW), LogicalToDeviceUnits(MinH));
             Marshal.StructureToPtr(info, m.LParam, true);
             m.Result = IntPtr.Zero;
             return;
@@ -863,28 +840,44 @@ sealed class TitleBar : Panel
     public TitleBar()
     {
         DoubleBuffered = true;
+        SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint
+            | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
         BackColor = Bg;
-        Height = 32;
 
-        _min = new CaptionBtn(CaptionKind.Min) { Width = 46, Height = 32 };
-        _max = new CaptionBtn(CaptionKind.Max) { Width = 46, Height = 32 };
-        _close = new CaptionBtn(CaptionKind.Close) { Width = 46, Height = 32 };
+        // Anchor right so buttons never sit on the title before the bar gets its real width.
+        // Create buttons BEFORE Height= — setting Height triggers OnLayout/LayoutBtns.
+        _min = new CaptionBtn(CaptionKind.Min) { Width = 46, Height = 32, Anchor = AnchorStyles.Top | AnchorStyles.Right };
+        _max = new CaptionBtn(CaptionKind.Max) { Width = 46, Height = 32, Anchor = AnchorStyles.Top | AnchorStyles.Right };
+        _close = new CaptionBtn(CaptionKind.Close) { Width = 46, Height = 32, Anchor = AnchorStyles.Top | AnchorStyles.Right };
         _min.Click += (_, _) => Minimize?.Invoke(this, EventArgs.Empty);
         _max.Click += (_, _) => Maximize?.Invoke(this, EventArgs.Empty);
         _close.Click += (_, _) => CloseClicked?.Invoke(this, EventArgs.Empty);
         Controls.Add(_min);
         Controls.Add(_max);
         Controls.Add(_close);
+        Height = 32;
 
         LoadLogo();
         MouseDown += OnBarMouseDown;
-        Resize += (_, _) => LayoutBtns();
+        HandleCreated += (_, _) => LayoutBtns();
+        LayoutBtns();
+    }
+
+    protected override void OnLayout(LayoutEventArgs levent)
+    {
+        base.OnLayout(levent);
         LayoutBtns();
     }
 
     public void SetMaximized(bool max)
     {
         _max.SetKind(max ? CaptionKind.Restore : CaptionKind.Max);
+    }
+
+    public void SetMini(bool mini)
+    {
+        _max.Visible = !mini;
+        LayoutBtns();
     }
 
     void LoadLogo()
@@ -894,9 +887,20 @@ sealed class TitleBar : Panel
 
     void LayoutBtns()
     {
-        _close.Location = new Point(Width - 46, 0);
-        _max.Location = new Point(Width - 92, 0);
-        _min.Location = new Point(Width - 138, 0);
+        // Height= in ctor fires OnLayout before caption buttons exist — bail until ready.
+        if (_close is null || _max is null || _min is null) return;
+        // Before dock assigns a real width, keep caption glyphs off the title text.
+        var w = Width > 160 ? Width : 1600;
+        _close.Location = new Point(w - 46, 0);
+        if (_max.Visible)
+        {
+            _max.Location = new Point(w - 92, 0);
+            _min.Location = new Point(w - 138, 0);
+        }
+        else
+        {
+            _min.Location = new Point(w - 92, 0);
+        }
         _close.Height = Height;
         _max.Height = Height;
         _min.Height = Height;
@@ -920,17 +924,17 @@ sealed class TitleBar : Panel
             x += sz + 7;
         }
 
+        var title = "Muse Desktop " + Program.DesktopVersion;
+        var maxW = Math.Max(8, Width - 146 - x);
+        if (maxW < 8) return;
         using var sf = new StringFormat
         {
             Alignment = StringAlignment.Near,
             LineAlignment = StringAlignment.Center,
-            Trimming = StringTrimming.EllipsisCharacter,
             FormatFlags = StringFormatFlags.NoWrap,
+            Trimming = StringTrimming.EllipsisCharacter,
         };
-        var title = "Muse Desktop Version " + Program.DesktopVersion;
-        var titleSz = g.MeasureString(title, _labelFont);
-        var titleRect = new RectangleF(x, 0, titleSz.Width + 2, Height);
-        g.DrawString(title, _labelFont, _labelBrush, titleRect, sf);
+        g.DrawString(title, _labelFont, _labelBrush, new RectangleF(x, 0, maxW, Height), sf);
     }
 
     void OnBarMouseDown(object? sender, MouseEventArgs e)

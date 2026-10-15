@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="utf-8" />
+  <script>
+  (function () {
+    var p = location.pathname || '/';
+    var lane = null;
+    if (/^\/pc(\/|$)/.test(p)) lane = 'pc';
+    else if (/^\/web(\/|$)/.test(p)) lane = 'web';
+    else if (/^\/mobile\/iphone(\/|$)/.test(p)) lane = 'iphone';
+    else if (/^\/mobile\/android(\/|$)/.test(p)) lane = 'android';
+    try {
+      if (window.chrome && window.chrome.webview) {
+        document.documentElement.classList.add('muse-app');
+        window.__museDesktop = 1;
+        if (!lane) lane = 'pc';
+      }
+      if (/MuseAndroid/i.test(navigator.userAgent || '')) {
+        document.documentElement.classList.add('muse-android');
+        window.__museAndroid = 1;
+        if (!lane) lane = 'android';
+      }
+    } catch (e) {}
+    if (lane) {
+      window.__museLane = lane;
+      document.documentElement.setAttribute('data-lane', lane);
+      try { sessionStorage.setItem('muse:lane', lane); } catch (e) {}
+    }
+    try {
+      var t = localStorage.getItem('muse:theme') || 'dark';
+      var dark = t === 'dark' || (t === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
+      document.documentElement.classList.toggle('dark', dark);
+    } catch (e) {}
+  })();
+  </script>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#000000" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Muse" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png?v=3" />
+  <link rel="preconnect" href="https://i.ytimg.com" crossorigin />
+  <link rel="icon" type="image/png" href="/favicon.png?v=172" sizes="32x32" />
+  <link rel="icon" href="/favicon.ico?v=172" sizes="any" />
+  <title>Muse</title>
+    <script src="/ytplayer.js?v=218"></script>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="module" src="/src/main.tsx"></script>
+</body>
+</html>
