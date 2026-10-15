@@ -36,10 +36,10 @@ except ImportError:
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 STATIC = os.path.join(HERE, "static")
-# React UI (web/, Vite build). Opt-in until parity review: MUSE_UI=react.
+# React UI (web/, Vite build) is the default. Old UI only with MUSE_UI=legacy.
 # Anything not in web/dist (ytplayer.js, icons, legal pages, sw.js) still comes from static/.
 WEB_DIST = os.path.join(HERE, "web", "dist")
-USE_REACT_UI = (os.environ.get("MUSE_UI", "").strip().lower() == "react"
+USE_REACT_UI = (os.environ.get("MUSE_UI", "").strip().lower() != "legacy"
                 and os.path.isfile(os.path.join(WEB_DIST, "index.html")))
 
 
@@ -67,7 +67,7 @@ HOST = os.environ.get("HOST") or "0.0.0.0"
 ON_RENDER = bool(os.environ.get("RENDER"))
 PUBLIC_URL = (os.environ.get("PUBLIC_URL") or os.environ.get("RENDER_EXTERNAL_URL") or "").rstrip("/")
 DATABASE_URL = os.environ.get("DATABASE_URL") or ""  # set → Postgres (Supabase); unset → local SQLite
-BUILD = 311  # bump every release — the UI polls this and prompts reload
+BUILD = 312  # bump every release — the UI polls this and prompts reload
 # Never list or play these. Official audio of the same song stays.
 _HIDDEN_IDS = frozenset({
     "4NRXx6U8ABQ",  # The Weeknd - Blinding Lights (Official Video)
@@ -112,7 +112,7 @@ def visible_tracks(rows):
 
 TOS_VER = 1
 STARTED_AT = time.time()
-DESKTOP_VERSION = os.environ.get("DESKTOP_VERSION") or "2.0.3"
+DESKTOP_VERSION = os.environ.get("DESKTOP_VERSION") or "2.0.4"
 DESKTOP_DIR = os.environ.get("DESKTOP_DIR") or os.path.join(HERE, "desktop-dist")
 DESKTOP_AUTHOR = "https://github.com/voidzxcdev"
 LINUX_VERSION = os.environ.get("LINUX_VERSION") or "1.0.6"
