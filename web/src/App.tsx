@@ -72,11 +72,11 @@ export default function App() {
 
   const chat = route.view === 'friends';
   return <TooltipProvider>
-    <div className="flex min-h-dvh">
+    <div className="flex h-dvh overflow-hidden">
       <Sidebar />
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <TopBar />
-        <main id="main" className={chat ? 'flex-1' : 'flex-1 pb-[calc(57px+env(safe-area-inset-bottom))] md:pb-0'} style={{ viewTransitionName: 'main' }}>
+        <main id="main" className={chat ? 'scroll-pane min-h-0 flex-1' : 'scroll-pane min-h-0 flex-1 pb-[calc(57px+env(safe-area-inset-bottom))] md:pb-0'} style={{ viewTransitionName: 'main' }}>
           <View />
           {!chat && <div className={hasPlayer ? 'h-[68px] md:h-20' : ''} />}
         </main>

@@ -118,7 +118,7 @@ export function Sidebar() {
   const unseen = useSession((s) => s.unseen);
   const open = useUI((s) => s.open);
   return (
-    <aside id="side" className="sticky top-0 hidden h-dvh w-64 shrink-0 flex-col border-r bg-sidebar/40 md:flex">
+    <aside id="side" className="hidden h-dvh w-64 shrink-0 flex-col border-r bg-sidebar/40 md:flex">
       <button id="sideBrand" type="button" onClick={() => nav({ view: 'home' })} className="flex items-center gap-2.5 px-5 pb-4 pt-5 outline-none">
         <img src="/muselogo.png?v=172" alt="" className="size-7 rounded-md" />
         <span className="text-[15px] font-semibold tracking-tight">Muse</span>
@@ -138,7 +138,7 @@ export function Sidebar() {
           <Tip label="New playlist"><button id="newPl" type="button" onClick={() => me ? open({ kind: 'newPlaylist' }) : open({ kind: 'auth', tab: 'signin' })} className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground"><Plus className="size-3.5" /></button></Tip>
         </div>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-3 scrollbar-thin">
+      <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-3 [scrollbar-gutter:stable]">
         {me ? <PlaylistLinks /> : <p className="px-2 text-xs leading-relaxed text-muted-foreground">Sign in to save likes and playlists.</p>}
       </div>
       <div className="border-t p-3">

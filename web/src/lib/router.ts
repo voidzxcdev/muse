@@ -59,7 +59,7 @@ export const useRouter = create<RouterState>((set, get) => ({
     if (JSON.stringify(prev) === JSON.stringify(r)) return;
     const swap = () => set({ route: r });
     if (r.view === 'search' && prev.view === 'search') swap(); else withTransition(swap);
-    if (r.view !== 'search') window.scrollTo({ top: 0 });
+    if (r.view !== 'search') document.getElementById('main')?.scrollTo({ top: 0 });
   },
 }));
 

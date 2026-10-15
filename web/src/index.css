@@ -125,9 +125,32 @@
   background-size: 48px 48px;
   mask-image: radial-gradient(ellipse at top, black 30%, transparent 75%);
 }
-.scrollbar-thin { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
-.no-scrollbar { scrollbar-width: none; }
-.no-scrollbar::-webkit-scrollbar { display: none; }
+/* Layout: html/body never scroll; only inner panes do. */
+html, body { height: 100%; overflow: hidden; overscroll-behavior: none; }
+#root { height: 100%; }
+/* Radix/react-remove-scroll must not shift layout when modals open */
+html body[data-scroll-locked] { overflow: hidden !important; margin-right: 0 !important; padding-right: 0 !important; --removed-body-scroll-bar-size: 0px !important; }
+.scroll-pane { overflow-y: auto; overflow-x: hidden; scrollbar-gutter: stable; overscroll-behavior: contain; }
+
+/* Vercel-style thin scrollbars */
+:root { --sb-thumb: color-mix(in oklch, var(--foreground) 14%, transparent); --sb-thumb-hover: color-mix(in oklch, var(--foreground) 32%, transparent); }
+* { scrollbar-width: thin; scrollbar-color: var(--sb-thumb) transparent; }
+*:hover { scrollbar-color: var(--sb-thumb-hover) transparent; }
+::-webkit-scrollbar { width: 6px; height: 6px; background: transparent; }
+::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--sb-thumb); border-radius: 9999px; }
+::-webkit-scrollbar-thumb:hover, *:hover::-webkit-scrollbar-thumb { background: var(--sb-thumb-hover); }
+::-webkit-scrollbar-button { display: none; }
+.scrollbar-thin { scrollbar-width: thin; }
+/* horizontal carousels + explicit opt-out */
+.no-scrollbar, .overflow-x-auto, .snap-x { scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar, .overflow-x-auto::-webkit-scrollbar, .snap-x::-webkit-scrollbar { display: none; }
+/* touch devices: no visible scrollbars */
+@media (hover: none) and (pointer: coarse) {
+  * { scrollbar-width: none; }
+  ::-webkit-scrollbar { display: none; width: 0; height: 0; }
+  .scroll-pane { scrollbar-gutter: auto; }
+}
 
 /* Spotlight card hover (Aceternity-style, transform/opacity only) */
 .spotlight { position: relative; isolation: isolate; }
