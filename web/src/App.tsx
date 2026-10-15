@@ -11,10 +11,15 @@ import { NowPlaying, PlayerBar } from '@/components/player';
 import { AppPrompt, CookieBar, ModalHost, Onboarding } from '@/components/dialogs';
 import { TooltipProvider } from '@/components/ui/misc';
 import { HomeView } from '@/views/home';
-import { SearchView } from '@/views/search';
-import { LikedView, OwnPlaylistView, SharedView } from '@/views/library';
-import { MarketView, UserView } from '@/views/social';
-import { FriendsView } from '@/views/friends';
+import { useKeyboardInset } from '@/hooks/viewport';
+// Heavy routes are code-split; Home stays in the main chunk for first paint.
+const SearchView = React.lazy(() => import('@/views/search').then((m) => ({ default: m.SearchView })));
+const LikedView = React.lazy(() => import('@/views/library').then((m) => ({ default: m.LikedView })));
+const OwnPlaylistView = React.lazy(() => import('@/views/library').then((m) => ({ default: m.OwnPlaylistView })));
+const SharedView = React.lazy(() => import('@/views/library').then((m) => ({ default: m.SharedView })));
+const MarketView = React.lazy(() => import('@/views/social').then((m) => ({ default: m.MarketView })));
+const UserView = React.lazy(() => import('@/views/social').then((m) => ({ default: m.UserView })));
+const FriendsView = React.lazy(() => import('@/views/friends').then((m) => ({ default: m.FriendsView })));
 
 function View() {
   const r = useRouter((s) => s.route);
@@ -36,6 +41,8 @@ export default function App() {
   const theme = useTheme((s) => s.theme);
   const hasPlayer = usePlayer((s) => !!s.current);
   const route = useRouter((s) => s.route);
+  useKeyboardInset();
+  React.useEffect(() => { const r = document.documentElement.style; r.setProperty('--player-h', hasPlayer ? '68px' : '0px'); r.setProperty('--player-h-md', hasPlayer ? '80px' : '0px'); }, [hasPlayer]);
 
   React.useEffect(() => {
     useSession.getState().refreshMe();
@@ -72,13 +79,14 @@ export default function App() {
 
   const chat = route.view === 'friends';
   return <TooltipProvider>
-    <div className="flex h-dvh overflow-hidden">
+    <div className="flex h-[var(--app-h,100dvh)] overflow-hidden">
       <Sidebar />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <TopBar />
-        <main id="main" className={chat ? 'scroll-pane min-h-0 flex-1' : 'scroll-pane min-h-0 flex-1 pb-[calc(57px+env(safe-area-inset-bottom))] md:pb-0'} style={{ viewTransitionName: 'main' }}>
-          <View />
-          {!chat && <div className={hasPlayer ? 'h-[68px] md:h-20' : ''} />}
+        <main id="main" className={chat ? 'nav-pad flex min-h-0 flex-1 flex-col overflow-hidden' : 'scroll-pane nav-pad min-h-0 flex-1'} style={{ viewTransitionName: 'main' }}>
+          <React.Suspense fallback={<div className="flex h-40 items-center justify-center" aria-busy="true"><span className="size-5 animate-spin rounded-full border-2 border-muted border-t-foreground" /></div>}>
+            <View />
+          </React.Suspense>
         </main>
       </div>
     </div>

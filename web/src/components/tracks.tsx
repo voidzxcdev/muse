@@ -1,6 +1,8 @@
 import * as React from 'react';
 import { motion, useReducedMotion } from 'motion/react';
-import { Heart, ListEnd, ListPlus, MoreHorizontal, Play, Plus, Share2, Trash2, Search, ListMusic, GripVertical } from 'lucide-react';
+import { Heart, ListEnd, ListPlus, MoreHorizontal, Play, Plus, Share2, Trash2, Search, ListMusic, GripVertical, ChevronLeft } from 'lucide-react';
+import { Slot } from '@radix-ui/react-slot';
+import { Dialog } from './ui/dialog';
 import { cn, fmt, prettyTitle, ytThumb } from '@/lib/utils';
 import type { Track } from '@/lib/types';
 import { usePlayer } from '@/player/store';
@@ -34,6 +36,8 @@ export function TrackMenu({ t, children, onRemove, align = 'end' }: { t: Track; 
   const me = useSession((s) => s.me);
   const open = useUI((s) => s.open);
   const nav = useRouter((s) => s.navigate);
+  const coarse = useCoarse();
+  if (coarse) return <TrackSheet t={t} onRemove={onRemove}>{children}</TrackSheet>;
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>{children}</DropdownMenuTrigger>
@@ -63,6 +67,59 @@ export function TrackMenu({ t, children, onRemove, align = 'end' }: { t: Track; 
       </DropdownMenuContent>
     </DropdownMenu>
   );
+}
+
+/* Touch devices: secondary track actions in a bottom sheet (drag handle to dismiss) instead of a dropdown. */
+function useCoarse() {
+  const q = '(pointer: coarse)';
+  const [c, setC] = React.useState(() => typeof matchMedia === 'function' && matchMedia(q).matches);
+  React.useEffect(() => { const m = matchMedia(q); const f = () => setC(m.matches); m.addEventListener('change', f); return () => m.removeEventListener('change', f); }, []);
+  return c;
+}
+
+function TrackSheet({ t, children, onRemove }: { t: Track; children: React.ReactNode; onRemove?: () => void }) {
+  const [on, setOn] = React.useState(false);
+  const [pl, setPl] = React.useState(false);
+  const playlists = useSession((s) => s.playlists);
+  const liked = useSession((s) => s.likedIds.has(t.id));
+  const me = useSession((s) => s.me);
+  const open = useUI((s) => s.open);
+  const nav = useRouter((s) => s.navigate);
+  const run = (f: () => void) => () => { setOn(false); setPl(false); setTimeout(f, 0); };
+  const Item = ({ icon: Icon, label, onClick, danger }: { icon: any; label: React.ReactNode; onClick: () => void; danger?: boolean }) => (
+    <button type="button" onClick={onClick} className={cn('flex min-h-12 w-full items-center gap-3 rounded-lg px-3 text-left text-base transition-[background-color,transform] active:scale-[0.98] active:bg-accent', danger && 'text-destructive')}>
+      <Icon className={cn('size-5 shrink-0', danger ? '' : 'text-muted-foreground')} /><span className="min-w-0 flex-1 truncate">{label}</span>
+    </button>
+  );
+  return <>
+    <Slot onClick={(e: React.MouseEvent) => { e.preventDefault(); e.stopPropagation(); setOn(true); }}>{children as any}</Slot>
+    <Dialog open={on} onOpenChange={(o) => { setOn(o); if (!o) setPl(false); }} side="bottom" hideClose>
+      <div className="flex items-center gap-3 border-b pb-3">
+        <img src={ytThumb(t.id, t.thumbnail)} alt="" className="size-12 shrink-0 rounded-md object-cover" />
+        <div className="min-w-0"><div className="truncate text-base font-medium">{prettyTitle(t.title)}</div>{t.uploader && <div className="truncate text-sm text-muted-foreground">{t.uploader}</div>}</div>
+      </div>
+      <div className="mt-2 flex flex-col">
+        {!pl ? <>
+          <Item icon={Play} label="Play" onClick={run(() => usePlayer.getState().play(t, [t], 'single'))} />
+          <Item icon={ListEnd} label="Play next" onClick={run(() => { usePlayer.getState().playNext(t); toast.success('Plays next'); })} />
+          <Item icon={ListMusic} label="Add to queue" onClick={run(() => { usePlayer.getState().addToQueue(t); toast.success('Added to queue'); })} />
+          <Item icon={Heart} label={liked ? 'Remove from Liked' : 'Like'} onClick={run(() => toggleLike(t))} />
+          <Item icon={ListPlus} label="Add to playlist" onClick={() => (me ? setPl(true) : run(() => needAuth())())} />
+          <Item icon={Search} label="More from artist" onClick={run(() => {
+            const parts = prettyTitle(t.title).split(/\s[-–—|]\s/);
+            const artist = parts.length > 1 ? parts[0] : String(t.uploader || '').replace(/\s*-\s*Topic$/i, '');
+            if (artist) nav({ view: 'search', q: artist, mode: 'songs' });
+          })} />
+          <Item icon={Share2} label="Share" onClick={run(() => shareTrack(t))} />
+          {onRemove && <Item icon={Trash2} label="Remove" danger onClick={run(onRemove)} />}
+        </> : <>
+          <Item icon={ChevronLeft} label="Back" onClick={() => setPl(false)} />
+          <Item icon={Plus} label="New playlist" onClick={run(() => open({ kind: 'newPlaylist', pending: t }))} />
+          {playlists.map((p) => <Item key={p.id} icon={ListMusic} label={p.name} onClick={run(() => addToPlaylist(p.id, t))} />)}
+        </>}
+      </div>
+    </Dialog>
+  </>;
 }
 
 function spot(e: React.PointerEvent<HTMLElement>) {
@@ -98,13 +155,13 @@ export function TrackCard({ t, i, list, source, sourceId, reason }: { t: Track; 
         <h3 className={cn('mt-2.5 line-clamp-2 text-sm font-medium leading-snug', isCur && 'text-foreground underline decoration-foreground/30 underline-offset-4')}>{prettyTitle(t.title)}</h3>
         {(reason || t.uploader) && <p className="mt-0.5 truncate text-xs text-muted-foreground">{reason || t.uploader}</p>}
       </button>
-      <div className="absolute right-3.5 top-3.5 flex gap-1 opacity-0 transition-opacity duration-150 group-hover:opacity-100 focus-within:opacity-100 max-md:opacity-100">
+      <div className="absolute right-3.5 top-3.5 flex gap-1 pointer-coarse:gap-2 opacity-0 transition-opacity duration-150 group-hover:opacity-100 focus-within:opacity-100 max-md:opacity-100">
         <button type="button" onClick={() => toggleLike(t)} aria-label="Like"
-          className={cn('flex size-7 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur-sm transition-transform active:scale-90', liked && 'opacity-100')}>
+          className={cn('tap flex size-7 pointer-coarse:size-9 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur-sm transition-transform active:scale-90', liked && 'opacity-100')}>
           <Heart className={cn('size-3.5', liked && 'fill-current')} />
         </button>
         <TrackMenu t={t}>
-          <button type="button" aria-label="More" className="flex size-7 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur-sm active:scale-90"><MoreHorizontal className="size-4" /></button>
+          <button type="button" aria-label="More" className="tap flex size-7 pointer-coarse:size-9 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur-sm active:scale-90"><MoreHorizontal className="size-4" /></button>
         </TrackMenu>
       </div>
       {liked && <Heart className="pointer-events-none absolute right-4 top-4 size-3.5 fill-white text-white drop-shadow group-hover:opacity-0 max-md:hidden" />}
@@ -144,14 +201,14 @@ export function TrackRow({ t, i, list, source, sourceId, onRemove, drag }: {
           {t.uploader && <div className="truncate text-xs text-muted-foreground">{t.uploader}</div>}
         </div>
       </button>
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-1 pointer-coarse:gap-2">
         <button type="button" aria-label="Like" onClick={() => toggleLike(t)}
-          className={cn('flex size-8 items-center justify-center rounded-md text-muted-foreground transition-[opacity,color] hover:text-foreground', liked ? 'text-foreground' : 'opacity-0 group-hover:opacity-100 max-md:opacity-100')}>
+          className={cn('tap flex size-8 pointer-coarse:size-11 items-center justify-center rounded-md text-muted-foreground transition-[opacity,color] hover:text-foreground', liked ? 'text-foreground' : 'opacity-0 group-hover:opacity-100 max-md:opacity-100')}>
           <Heart className={cn('size-4', liked && 'fill-current')} />
         </button>
         <span className="hidden w-12 text-right font-mono text-xs text-muted-foreground sm:block">{t.duration ? fmt(t.duration) : ''}</span>
         <TrackMenu t={t} onRemove={onRemove}>
-          <button type="button" aria-label="More" className="flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"><MoreHorizontal className="size-4" /></button>
+          <button type="button" aria-label="More" className="tap flex size-8 pointer-coarse:size-11 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"><MoreHorizontal className="size-4" /></button>
         </TrackMenu>
       </div>
     </div>

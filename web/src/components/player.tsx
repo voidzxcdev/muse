@@ -129,7 +129,7 @@ export function PlayerBar() {
   const artist = cur ? String(cur.uploader || '').replace(/\s*-\s*Topic$/i, '').replace(/VEVO$/i, '').trim() : '';
   return (
     <footer id="player" hidden={!cur} data-id={cur?.id || ''} data-artist={artist} data-duration={duration ? String(duration) : ''}
-      className="fixed inset-x-0 bottom-[calc(57px+env(safe-area-inset-bottom))] z-40 border-t bg-background/85 backdrop-blur-xl md:bottom-0">
+      className="kb-hide fixed inset-x-0 bottom-[calc(56px+env(safe-area-inset-bottom))] z-40 border-t pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] bg-background/85 backdrop-blur-xl md:bottom-0">
       {cur && <motion.div initial={reduce ? false : { y: 24, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ type: 'spring', stiffness: 380, damping: 34 }}
         className="grid h-[68px] grid-cols-[1fr_auto] items-center gap-3 px-3 md:h-20 md:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_minmax(0,1fr)] md:px-5">
         <div className="flex min-w-0 items-center gap-3">
@@ -150,8 +150,8 @@ export function PlayerBar() {
         </div>
         <div className="hidden flex-col items-center gap-1 md:flex"><Transport /><SeekBar /></div>
         <div className="flex items-center justify-end gap-1">
-          <div className="flex items-center gap-1 md:hidden">
-            <button type="button" aria-label="Like" onClick={() => toggleLike(cur)} className={cn('flex size-9 items-center justify-center', liked ? 'text-foreground' : 'text-muted-foreground')}><Heart className={cn('size-5', liked && 'fill-current')} /></button>
+          <div className="flex items-center gap-2 md:hidden">
+            <button type="button" aria-label="Like" onClick={() => toggleLike(cur)} className={cn('flex size-11 items-center justify-center transition-transform active:scale-90', liked ? 'text-foreground' : 'text-muted-foreground')}><Heart className={cn('size-5', liked && 'fill-current')} /></button>
             <PlayButton />
           </div>
           <div className="hidden items-center gap-1 md:flex">
@@ -258,13 +258,13 @@ export function NowPlaying() {
         <div className="absolute inset-0 bg-gradient-to-b from-background/40 via-background/80 to-background" />
       </div>
       <div className="relative flex items-center justify-between px-4 pt-[max(1rem,env(safe-area-inset-top))] md:px-8">
-        <button id="bpClose" type="button" aria-label="Close" onClick={() => set(false)} className="flex size-9 items-center justify-center rounded-full border bg-background/40 backdrop-blur hover:bg-accent"><ChevronDown className="size-5" /></button>
+        <button id="bpClose" type="button" aria-label="Close" onClick={() => set(false)} className="flex size-9 pointer-coarse:size-11 items-center justify-center rounded-full border bg-background/40 backdrop-blur hover:bg-accent"><ChevronDown className="size-5" /></button>
         <div className="flex rounded-lg border bg-background/40 p-0.5 backdrop-blur md:hidden">
-          {(['lyrics', 'queue'] as const).map((k) => <button key={k} type="button" onClick={() => setTab(k)} className={cn('relative rounded-md px-3 py-1 text-xs font-medium capitalize', tab === k ? 'text-foreground' : 'text-muted-foreground')}>
+          {(['lyrics', 'queue'] as const).map((k) => <button key={k} type="button" onClick={() => setTab(k)} className={cn('relative rounded-md px-4 py-1 text-xs pointer-coarse:py-2 pointer-coarse:text-sm font-medium capitalize', tab === k ? 'text-foreground' : 'text-muted-foreground')}>
             {tab === k && <motion.span layoutId="np-tab" className="absolute inset-0 rounded-md bg-accent" />}<span className="relative">{k}</span></button>)}
         </div>
         <span className="hidden text-xs font-medium uppercase tracking-wider text-muted-foreground md:block">Now playing</span>
-        <span className="size-9" />
+        <span className="size-9 pointer-coarse:size-11" />
       </div>
       <div className="relative mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col gap-5 md:grid md:gap-8 px-5 pb-6 pt-4 md:grid-cols-[minmax(0,420px)_1fr] md:px-10 md:pt-8">
         <div className="flex shrink-0 flex-col justify-center gap-5" id="bpNow">
@@ -277,7 +277,7 @@ export function NowPlaying() {
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0"><h2 id="bpNowTitle" className="truncate text-xl font-semibold tracking-tight md:text-2xl">{prettyTitle(cur.title)}</h2>
               <p id="bpNowArtist" className="truncate text-sm text-muted-foreground">{String(cur.uploader || '').replace(/\s*-\s*Topic$/i, '')}</p></div>
-            <div className="flex shrink-0 items-center gap-1">
+            <div className="flex shrink-0 items-center gap-1 pointer-coarse:gap-3">
               <button type="button" aria-label="Like" onClick={() => toggleLike(cur)} className={cn('flex size-9 items-center justify-center rounded-full transition-transform active:scale-90', liked ? 'text-foreground' : 'text-muted-foreground hover:text-foreground')}><Heart className={cn('size-5', liked && 'fill-current')} /></button>
               <AddButton t={cur} />
             </div>

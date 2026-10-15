@@ -309,7 +309,7 @@ export function CookieBar() {
   const [show, setShow] = React.useState(!cookiesChoice());
   const reduce = useReducedMotion();
   return <AnimatePresence>{show && <motion.div id="cookieBar" initial={reduce ? false : { y: 40, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 40, opacity: 0 }} transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-    className="fixed bottom-[calc(140px+env(safe-area-inset-bottom))] left-1/2 z-[60] w-[calc(100%-1.5rem)] max-w-xl -translate-x-1/2 rounded-xl border bg-popover p-4 shadow-xl md:bottom-24">
+    className="kb-hide fixed bottom-[calc(56px+env(safe-area-inset-bottom)+var(--player-h,0px)+12px)] left-1/2 z-[45] w-[calc(100%-1.5rem-env(safe-area-inset-left)-env(safe-area-inset-right))] max-w-xl -translate-x-1/2 rounded-xl border bg-popover p-4 shadow-xl md:bottom-[calc(var(--player-h-md,0px)+16px)]">
     <p className="text-sm text-muted-foreground">Muse uses a session cookie if you sign in. Optional: desktop can load YouTube cookies for the embed player. No ads. <a href="/cookies" target="_blank" rel="noopener" className="text-foreground underline">Cookies</a> · <a href="/gdpr" target="_blank" rel="noopener" className="text-foreground underline">GDPR</a></p>
     <div className="mt-3 flex justify-end gap-2">
       <Button variant="outline" size="sm" id="cbReject" onClick={() => { setCookies('needed'); setShow(false); }}>Reject</Button>

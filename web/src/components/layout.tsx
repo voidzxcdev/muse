@@ -22,7 +22,7 @@ export const LEGAL = [
 function NavItem({ active, icon: Icon, label, onClick, count, id }: { active: boolean; icon: any; label: string; onClick: () => void; count?: React.ReactNode; id?: string }) {
   return (
     <button id={id} type="button" onClick={onClick}
-      className={cn('relative flex w-full items-center gap-3 rounded-md px-2.5 py-2 text-sm font-medium transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
+      className={cn('relative flex w-full items-center gap-3 rounded-md px-2.5 py-2 pointer-coarse:py-3 text-sm font-medium transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
         active ? 'text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-accent/50')}>
       {active && <motion.span layoutId="nav-pill" className="absolute inset-0 rounded-md bg-accent" transition={{ type: 'spring', stiffness: 500, damping: 38 }} />}
       <Icon className="relative size-4" />
@@ -124,7 +124,7 @@ export function Sidebar() {
         <span className="text-[15px] font-semibold tracking-tight">Muse</span>
         <span className="ml-auto rounded-full border px-1.5 py-px font-mono text-[10px] text-muted-foreground">beta</span>
       </button>
-      <nav className="flex flex-col gap-0.5 px-3">
+      <nav className="flex flex-col gap-0.5 pointer-coarse:gap-2 px-3">
         <NavItem active={route.view === 'home' || route.view === 'search'} icon={Home} label="Home" onClick={() => nav({ view: 'home' })} />
         <NavItem active={route.view === 'liked'} icon={Heart} label="Liked Songs" count={likeCount || undefined} onClick={() => nav({ view: 'liked' })} />
         <NavItem active={route.view === 'market'} icon={LayoutGrid} label="Marketplace" onClick={() => nav({ view: 'market' })} />
@@ -133,7 +133,7 @@ export function Sidebar() {
       </nav>
       <div className="mt-6 flex items-center justify-between px-5 pb-2">
         <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Playlists</span>
-        <div className="flex gap-0.5">
+        <div className="flex gap-0.5 pointer-coarse:gap-3">
           <Tip label="Mix everything"><button type="button" onClick={() => mixAll(usePlayer.getState().play)} className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground"><Shuffle className="size-3.5" /></button></Tip>
           <Tip label="New playlist"><button id="newPl" type="button" onClick={() => me ? open({ kind: 'newPlaylist' }) : open({ kind: 'auth', tab: 'signin' })} className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground"><Plus className="size-3.5" /></button></Tip>
         </div>
@@ -178,16 +178,16 @@ export function TopBar() {
     timer.current = setTimeout(() => nav({ view: 'search', q: s, mode: m }), 260);
   };
   return (
-    <header id="topbar" className="sticky top-0 z-30 border-b bg-background/75 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60">
-      <div className="flex h-14 items-center gap-3 px-4 md:px-8">
-        <button type="button" onClick={() => nav({ view: 'home' })} className="shrink-0 md:hidden"><img src="/muselogo.png?v=172" alt="Muse" className="size-7 max-w-none rounded-md" /></button>
-        <form id="searchForm" role="search" className="relative flex max-w-xl flex-1 items-center" onSubmit={(e) => { e.preventDefault(); clearTimeout(timer.current); if (q.trim().length >= 1) nav({ view: 'search', q: q.trim(), mode }); }}>
-          <div className="relative flex h-9 w-full items-center rounded-lg border bg-muted/40 transition-[border-color,box-shadow] focus-within:border-ring/60 focus-within:ring-[3px] focus-within:ring-ring/20">
-            <div id="qSwitch" role="tablist" aria-label="Search type" className="relative ml-1 flex h-7 items-center rounded-md p-0.5">
+    <header id="topbar" className="sticky top-0 z-30 shrink-0 border-b pt-[env(safe-area-inset-top)] bg-background/75 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60">
+      <div className="flex h-14 items-center gap-3 pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] md:px-8">
+        <button type="button" onClick={() => nav({ view: 'home' })} aria-label="Home" className="tap shrink-0 md:hidden"><img src="/muselogo.png?v=172" alt="Muse" className="size-7 max-w-none rounded-md" /></button>
+        <form id="searchForm" role="search" className="relative flex min-w-0 max-w-xl flex-1 items-center" onSubmit={(e) => { e.preventDefault(); clearTimeout(timer.current); if (q.trim().length >= 1) nav({ view: 'search', q: q.trim(), mode }); }}>
+          <div className="relative flex h-9 pointer-coarse:h-11 w-full items-center rounded-lg border bg-muted/40 transition-[border-color,box-shadow] focus-within:border-ring/60 focus-within:ring-[3px] focus-within:ring-ring/20">
+            <div id="qSwitch" role="tablist" aria-label="Search type" className="relative ml-1 flex h-7 items-center gap-0.5 rounded-md p-0.5 pointer-coarse:gap-2">
               {(['songs', 'people'] as const).map((m) => (
                 <button key={m} type="button" role="tab" aria-selected={mode === m} title={m === 'songs' ? 'Search songs' : 'Search people'}
                   onClick={() => { setMode(m); if (q.trim().length >= 2) nav({ view: 'search', q: q.trim(), mode: m }); inp.current?.focus(); }}
-                  className={cn('relative flex h-6 w-7 items-center justify-center rounded transition-colors', mode === m ? 'text-foreground' : 'text-muted-foreground hover:text-foreground')}>
+                  className={cn('tap relative flex h-6 w-7 items-center justify-center rounded transition-colors', mode === m ? 'text-foreground' : 'text-muted-foreground hover:text-foreground')}>
                   {mode === m && <motion.span layoutId="qpill" className="absolute inset-0 rounded bg-background shadow-sm dark:bg-accent" transition={{ type: 'spring', stiffness: 520, damping: 36 }} />}
                   {m === 'songs' ? <Search className="relative size-3.5" /> : <Users className="relative size-3.5" />}
                 </button>
@@ -197,13 +197,13 @@ export function TopBar() {
               placeholder={mode === 'people' ? 'Search people…' : 'Search a song…'}
               onChange={(e) => { setQ(e.target.value); run(e.target.value); }}
               className="h-full min-w-0 flex-1 bg-transparent px-2 text-sm outline-none placeholder:text-muted-foreground" />
-            {q ? <button id="qClear" type="button" aria-label="Clear search" onClick={() => { setQ(''); nav({ view: 'home' }); inp.current?.focus(); }} className="mr-2 rounded p-0.5 text-muted-foreground hover:text-foreground"><X className="size-3.5" /></button>
+            {q ? <button id="qClear" type="button" aria-label="Clear search" onClick={() => { setQ(''); nav({ view: 'home' }); inp.current?.focus(); }} className="tap mr-2 rounded p-0.5 text-muted-foreground hover:text-foreground"><X className="size-3.5" /></button>
               : <Kbd className="mr-2 hidden sm:inline-flex">/</Kbd>}
           </div>
         </form>
-        <div className="ml-auto flex items-center gap-2 md:hidden">
+        <div className="ml-auto flex shrink-0 items-center gap-2 md:hidden">
           <AccountMenu side="bottom" align="end">
-            <button type="button" aria-label="Account">{me ? <Avatar user={me} size={30} /> : <span className="flex size-[30px] items-center justify-center rounded-full border"><User className="size-4" /></span>}</button>
+            <button type="button" aria-label="Account" className="tap">{me ? <Avatar user={me} size={30} /> : <span className="flex size-[30px] items-center justify-center rounded-full border"><User className="size-4" /></span>}</button>
           </AccountMenu>
         </div>
       </div>
@@ -217,17 +217,17 @@ export function TabBar() {
   const setLib = useUI((s) => s.setLibrarySheet);
   const unseen = useSession((s) => s.unseen);
   const item = (key: string, active: boolean, Icon: any, label: string, onClick: () => void, extra?: React.ReactNode, id?: string) => (
-    <button key={key} id={id} type="button" onClick={onClick} className={cn('relative flex flex-1 flex-col items-center gap-1 py-2 text-[10px] font-medium transition-colors', active ? 'text-foreground' : 'text-muted-foreground')}>
+    <button key={key} id={id} type="button" onClick={onClick} className={cn('relative flex min-h-11 flex-1 flex-col items-center justify-center gap-1 text-[11px] font-medium transition-[color,transform] active:scale-95', active ? 'text-foreground' : 'text-muted-foreground')}>
       {active && <motion.span layoutId="tab-ind" className="absolute top-0 h-0.5 w-8 rounded-full bg-foreground" transition={{ type: 'spring', stiffness: 500, damping: 38 }} />}
       <Icon className="size-5" />{label}{extra}
     </button>
   );
   return (
-    <nav id="tabbar" aria-label="Primary" className="fixed inset-x-0 bottom-0 z-40 flex border-t bg-background/85 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden">
+    <nav id="tabbar" aria-label="Primary" className="kb-hide fixed inset-x-0 bottom-0 z-40 flex h-[calc(56px+env(safe-area-inset-bottom))] border-t bg-background/85 pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] backdrop-blur-xl md:hidden">
       {item('home', route.view === 'home' || route.view === 'search', Home, 'Home', () => nav({ view: 'home' }))}
       {item('liked', route.view === 'liked', Heart, 'Liked', () => nav({ view: 'liked' }))}
       {item('friends', route.view === 'friends', Users, 'Friends', () => nav({ view: 'friends', handle: '' }), unseen ? <span className="absolute right-[30%] top-1.5 size-2 rounded-full bg-foreground" /> : null)}
-      <MoreMenu side="top" align="center"><button id="tabMore" type="button" className="flex flex-1 flex-col items-center gap-1 py-2 text-[10px] font-medium text-muted-foreground"><MoreHorizontal className="size-5" />More</button></MoreMenu>
+      <MoreMenu side="top" align="center"><button id="tabMore" type="button" className="flex min-h-11 flex-1 flex-col items-center justify-center gap-1 text-[11px] font-medium text-muted-foreground transition-transform active:scale-95"><MoreHorizontal className="size-5" />More</button></MoreMenu>
       {item('lib', false, Library, 'Library', () => setLib(true), null, 'tabLib')}
     </nav>
   );
@@ -243,9 +243,9 @@ export function LibrarySheet() {
       <div className="mt-3 flex items-center justify-between">
         {me ? <div className="flex items-center gap-2"><Avatar user={me} size={28} /><span className="text-sm font-medium">{me.display}</span></div>
           : <button type="button" className="text-sm underline" onClick={() => { set(false); open({ kind: 'auth', tab: 'signin' }); }}>Sign in</button>}
-        <div className="flex gap-1">
-          <button type="button" onClick={() => { set(false); mixAll(usePlayer.getState().play); }} className="rounded-md border px-2.5 py-1 text-xs">Mix all</button>
-          <button id="sheetNew" type="button" onClick={() => { set(false); me ? open({ kind: 'newPlaylist' }) : open({ kind: 'auth', tab: 'signin' }); }} className="rounded-md border px-2.5 py-1 text-xs">+ New</button>
+        <div className="flex gap-2">
+          <button type="button" onClick={() => { set(false); mixAll(usePlayer.getState().play); }} className="min-h-11 rounded-md border px-4 text-sm active:scale-95">Mix all</button>
+          <button id="sheetNew" type="button" onClick={() => { set(false); me ? open({ kind: 'newPlaylist' }) : open({ kind: 'auth', tab: 'signin' }); }} className="min-h-11 rounded-md border px-4 text-sm active:scale-95">+ New</button>
         </div>
       </div>
       <div className="mt-4">{me ? <PlaylistLinks onPick={() => set(false)} /> : null}</div>

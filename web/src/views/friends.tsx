@@ -41,7 +41,7 @@ export function FriendsView({ handle }: { handle: string }) {
   if (!me) return <div className="mx-auto max-w-3xl px-4 py-10"><Empty icon={Lock} title="Друзья" sub="Sign in to add friends, chat and see what they're listening to."><Button onClick={() => open({ kind: 'auth', tab: 'signin' })}>Sign in</Button></Empty></div>;
   const act = async (path: string, h: string, ok: string) => { try { await post(path, { handle: h }); toast.success(ok); load(); } catch (e: any) { toast.error(e.message); } };
   const chatOpen = !!handle;
-  return <div className="mx-auto grid h-[calc(100dvh-3.5rem-68px-57px)] max-w-[1400px] grid-cols-1 md:h-[calc(100dvh-3.5rem-80px)] md:grid-cols-[320px_1fr]">
+  return <div className="mx-auto grid h-full min-h-0 w-full max-w-[1400px] grid-cols-1 md:grid-cols-[320px_1fr]">
     <aside className={cn('flex min-h-0 flex-col border-r', chatOpen && 'max-md:hidden')}>
       <div className="border-b p-4">
         <h1 className="text-xl font-semibold tracking-tight">Друзья</h1>
@@ -256,9 +256,9 @@ function Chat({ handle, meta, onRemoved }: { handle: string; meta?: PubUser; onR
     <div className="border-t p-2 md:p-3">
       <AnimatePresence>{(reply || editing) && <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 6 }} className="mb-2 flex items-center gap-2 rounded-md border-l-2 border-foreground bg-muted/60 px-3 py-1.5 text-xs">
         {editing ? <Pencil className="size-3.5" /> : <Reply className="size-3.5" />}<span className="min-w-0 flex-1 truncate">{editing ? 'Редактирование' : (reply!.body || KIND_LABEL[reply!.kind] || '…')}</span>
-        <button type="button" onClick={() => { setReply(null); setEditing(null); if (editing) setText(''); }} aria-label="Cancel"><X className="size-3.5" /></button></motion.div>}</AnimatePresence>
+        <button type="button" onClick={() => { setReply(null); setEditing(null); if (editing) setText(''); }} aria-label="Cancel" className="tap p-1"><X className="size-4" /></button></motion.div>}</AnimatePresence>
       {rec ? <RecordingBar rec={rec} onCancel={() => stop(false)} onSend={async () => { const r = await stop(true); if (r) sendFile(r.blob, r.kind, Math.round(r.dur)); }} />
-        : <div className="flex items-end gap-1.5">
+        : <div className="flex items-end gap-2">
           <input ref={fileRef} type="file" hidden accept="image/*,video/*,audio/*" onChange={(e) => { const f = e.target.files?.[0]; if (f) pickFile(f); e.target.value = ''; }} />
           <DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" aria-label="Attach"><Paperclip /></Button></DropdownMenuTrigger>
             <DropdownMenuContent side="top" align="start">

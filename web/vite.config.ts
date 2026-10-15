@@ -17,7 +17,15 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   define: { __MUSE_BUILD__: JSON.stringify(BUILD) },
   resolve: { alias: { '@': path.resolve(__dirname, './src') } },
-  build: { outDir: 'dist', emptyOutDir: true, sourcemap: false, target: 'es2022', chunkSizeWarningLimit: 900 },
+  build: {
+    outDir: 'dist', emptyOutDir: true, sourcemap: false, target: 'es2022', chunkSizeWarningLimit: 500,
+    rollupOptions: {
+      output: {
+        // Long-lived vendor chunk so app deploys keep the library cache (splitting React-dependent libs apart creates init-order cycles).
+        manualChunks(id) { if (id.includes('node_modules')) return 'vendor'; }
+      },
+    },
+  },
   server: {
     port: 5173,
     proxy: Object.fromEntries(proxied.map((p) => [p, { target: backend, changeOrigin: false }])),

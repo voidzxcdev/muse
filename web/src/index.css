@@ -207,3 +207,34 @@ html body[data-scroll-locked] { overflow: hidden !important; margin-right: 0 !im
   }
   ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
 }
+
+
+/* ---------- Mobile guide ---------- */
+html { touch-action: manipulation; -webkit-tap-highlight-color: transparent; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+/* 44px minimum hit area on touch without changing the visual size */
+@media (pointer: coarse) {
+  :where(button, [role="tab"], summary, .tap):not(.absolute):not(.fixed):not(.sticky) { position: relative; }
+  :where(button, [role="tab"], summary, .tap)::after { content: ''; position: absolute; left: 50%; top: 50%; width: max(100%, 44px); height: max(100%, 44px); transform: translate(-50%, -50%); }
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not(#q), select { min-height: 44px; }
+  input[type="checkbox"], input[type="radio"] { width: 20px; height: 20px; }
+  /* pressed feedback on touch (hover styles are already gated to (hover:hover) by Tailwind v4) */
+  :where(button, [role="tab"], [role="menuitem"], a) { transition-property: opacity, transform, color, background-color; transition-duration: 120ms; }
+  :where(button, [role="tab"], [role="menuitem"], a):active { opacity: 0.7; }
+}
+/* No iOS focus-zoom: inputs >= 16px on phones and any touch device */
+@media (max-width: 767px), (pointer: coarse) {
+  input, textarea, select { font-size: 16px !important; }
+}
+/* Keyboard open (visualViewport): hide bottom chrome so the composer sits on the keyboard */
+html.kb-open .kb-hide { display: none !important; }
+/* Bottom padding for scroll content: tab bar (56) + safe area + mini player */
+@media (max-width: 767px) {
+  .nav-pad { padding-bottom: calc(56px + env(safe-area-inset-bottom) + var(--player-h, 0px)); }
+  html.kb-open .nav-pad { padding-bottom: 0; }
+}
+@media (min-width: 768px) { .nav-pad { padding-bottom: var(--player-h-md, 0px); } }
+/* Toasts below the notch */
+[data-sonner-toaster] { --offset-top: max(24px, calc(env(safe-area-inset-top) + 12px)) !important; --mobile-offset-top: calc(env(safe-area-inset-top) + 12px) !important; --mobile-offset-left: max(16px, env(safe-area-inset-left)) !important; --mobile-offset-right: max(16px, env(safe-area-inset-right)) !important; }
+/* Never let a stray wide child cause sideways scrolling */
+#main, #root { max-width: 100vw; }
+img, video { max-width: 100%; }
