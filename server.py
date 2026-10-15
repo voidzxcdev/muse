@@ -36,6 +36,11 @@ except ImportError:
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 STATIC = os.path.join(HERE, "static")
+# React UI (web/, Vite build). Opt-in until parity review: MUSE_UI=react.
+# Anything not in web/dist (ytplayer.js, icons, legal pages, sw.js) still comes from static/.
+WEB_DIST = os.path.join(HERE, "web", "dist")
+USE_REACT_UI = (os.environ.get("MUSE_UI", "").strip().lower() == "react"
+                and os.path.isfile(os.path.join(WEB_DIST, "index.html")))
 
 
 def _env_file_get(name):
@@ -6060,6 +6065,14 @@ class Handler(SimpleHTTPRequestHandler):
                 self.end_headers()
                 return
             self.directory = STATIC
+            if USE_REACT_UI:
+                rel = path.lstrip("/")
+                if _SPA_PATH.match(path) or path == "/index.html":
+                    self.directory = WEB_DIST
+                    self.path = "/index.html"
+                elif rel and ".." not in rel and os.path.isfile(os.path.join(WEB_DIST, rel)):
+                    self.directory = WEB_DIST
+                return super().do_GET()
             if _SPA_PATH.match(path):
                 self.path = "/index.html"
             return super().do_GET()
@@ -7086,6 +7099,8 @@ class Handler(SimpleHTTPRequestHandler):
                     or p.startswith("/app.") or p.startswith("/style.")
                     or p.startswith("/@")):
                 self.send_header("Cache-Control", "no-store")
+            elif USE_REACT_UI and p.startswith("/assets/"):
+                self.send_header("Cache-Control", "public, max-age=31536000, immutable")
             self.send_header("Permissions-Policy", "camera=(self), microphone=(self)")
             self.send_header("Feature-Policy", "camera 'self'; microphone 'self'")
         except Exception:
