@@ -3,3 +3,5 @@ bgutil-ytdlp-pot-provider==2.0.1
 psycopg[binary]>=3.2
 psycopg-pool>=3.2
 pywebpush>=2.0.3
+pillow>=10.4
+pillow-heif>=0.18

@@ -177,14 +177,16 @@ function useLyrics(cur: Track | null, duration: number) {
     let dead = false;
     const { artist, song } = splitArtist(cur.title, cur.uploader);
     setState({ id: cur.id, lines: [], synced: false, loading: true });
-    const p = new URLSearchParams({ title: song || prettyTitle(cur.title), artist, duration: String(Math.round(duration || cur.duration || 0)) });
+    // Raw title + channel: the server identifies the real artist/title (strips VEVO, - Topic, Official Video…)
+    // and only accepts LRCLIB rows matching artist + title + duration.
+    const p = new URLSearchParams({ title: cur.title || song, artist: cur.uploader || artist, duration: String(Math.round(cur.duration || duration || 0)) });
     api<{ lines: LyricLine[]; synced: boolean }>(`/api/lyrics?${p}`).then((j) => {
       if (dead) return;
       const lines = (j.lines || []).filter((l) => l && typeof l.text === 'string');
       setState({ id: cur.id, lines, synced: !!j.synced && lines.some((l) => Number(l.t) > 0), loading: false });
     }).catch(() => !dead && setState((s) => ({ ...s, loading: false })));
     return () => { dead = true; };
-  }, [cur?.id, cur?.title, Math.round(duration / 5)]);
+  }, [cur?.id, cur?.title, cur?.duration ? 0 : Math.round(duration / 5)]);
   return state;
 }
 

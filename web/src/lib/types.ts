@@ -6,5 +6,5 @@ export interface Playlist { id: number; name: string; count: number; slug: strin
 export interface PlaylistDetail { id: number; name: string; slug: string; handle: string; custom_cover?: string; tracks: Track[] }
 export interface Listing { id: number; name: string; slug: string; count: number; likes: number; liked: boolean; cover?: string; custom_cover?: string; created: number; owner: PubUser; mine: boolean }
 export interface Notif { id: number; kind: string; title: string; body: string; payload: Record<string, any>; from: PubUser | null; created: number; seen: boolean }
-export interface ChatMsg { id: number; mine: boolean; kind: string; body: string; payload: Record<string, any>; created: number; reply: { id: number; kind?: string; body?: string; mine?: boolean } | null; edited: boolean; deleted: boolean; read: boolean; updated: number; reacts: { emoji: string; n?: number; count?: number; mine?: boolean }[]; pending?: boolean }
+export interface ChatMsg { id: number; mine: boolean; kind: string; body: string; payload: Record<string, any>; created: number; reply: { id: number; kind?: string; body?: string; mine?: boolean } | null; edited: boolean; deleted: boolean; read: boolean; updated: number; reacts: { e?: string; emoji?: string; n?: number; count?: number; mine?: boolean }[]; pending?: boolean }
 export interface LyricLine { t: number; text: string }

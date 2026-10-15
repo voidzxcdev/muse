@@ -67,7 +67,7 @@ HOST = os.environ.get("HOST") or "0.0.0.0"
 ON_RENDER = bool(os.environ.get("RENDER"))
 PUBLIC_URL = (os.environ.get("PUBLIC_URL") or os.environ.get("RENDER_EXTERNAL_URL") or "").rstrip("/")
 DATABASE_URL = os.environ.get("DATABASE_URL") or ""  # set → Postgres (Supabase); unset → local SQLite
-BUILD = 313  # bump every release — the UI polls this and prompts reload
+BUILD = 314  # bump every release — the UI polls this and prompts reload
 # Never list or play these. Official audio of the same song stays.
 _HIDDEN_IDS = frozenset({
     "4NRXx6U8ABQ",  # The Weeknd - Blinding Lights (Official Video)
@@ -666,56 +666,272 @@ def _from_ovh(candidates):
     return None
 
 
+# ---------- Lyrics: identify the real song, then accept only verified matches ----------
+# YouTube metadata is noisy: the "artist" is usually the uploading channel
+# ("DaftPunkVEVO", "convar HUN", "Dj Silviu M Official") and the title carries
+# "(Official Video)", "[Lyrics]", "ft. X", "| Prod. Y". We derive (artist, title)
+# from the title first, fall back to the channel only when it looks like an
+# artist, and reject any provider row whose artist/title/duration don't agree.
+# Wrong lyrics are worse than "no lyrics".
+LYRICS_CACHE_VER = "v9"
+_LY_BRACKET_NOISE = re.compile(
+    r"\s*[\(\[【［][^)\]】］]*(official|lyric|audio|video|visuali[sz]er|\bmv\b|\bm/v\b|\bhd\b|\bhq\b|\b4k\b|"
+    r"remaster|clip|клип|премьера|premiere|explicit|clean|color\s*coded|prod\.?|"
+    r"slowed|sped\s*up|reverb|nightcore|8d|bass\s*boost|full\s*album|tiktok)[^)\]】］]*[\)\]】］]", re.I)
+_LY_TRAIL_NOISE = re.compile(
+    r"\s*(?:[-–—|:]\s*)?(?:official\s+(?:music\s+)?(?:video|audio|lyric\s+video|visuali[sz]er)|"
+    r"music\s+video|lyric\s+video|lyrics?|audio|video|visuali[sz]er|hd|hq|4k|mv)\s*$", re.I)
+_LY_FEAT = re.compile(r"\s*[\(\[]?\s*\b(?:feat\.?|ft\.?|featuring|при\s+уч\.?)\s+[^)\]]+[\)\]]?", re.I)
+_LY_PIPE = re.compile(r"\s+[|｜/]{1,2}\s+.*$")
+_LY_CHANNEL_SUFFIX = re.compile(
+    r"(?:\s*-\s*topic|\s*vevo|\s+official(?:\s+(?:channel|music|artist|page|tv|youtube))?|\s+music|"
+    r"\s+records?|\s+tv|\s+channel|\s+lyrics?|\s+hd)\s*$", re.I)
+_LY_CHANNEL_JUNK = re.compile(
+    r"(?i)\b(records?|music|lyrics?|hits|mix(?:es)?|channel|tv|radio|official|entertainment|"
+    r"production|studios?|beats|vibes|sounds?|nation|world|club|top|charts?)\b")
+
+
+def _ly_norm(s):
+    s = unicodedata_normalize(s or "").lower()
+    s = re.sub(r"['’`´]", "", s)
+    s = s.replace("&", " and ").replace("$", "s")
+    s = re.sub(r"[^\w\s]", " ", s)
+    return [w for w in s.split() if w and w not in {"the", "a", "an", "and", "x", "и"}]
+
+
+def unicodedata_normalize(s):
+    import unicodedata
+    s = unicodedata.normalize("NFKC", s or "")
+    return "".join(c for c in unicodedata.normalize("NFKD", s) if not unicodedata.combining(c)) \
+        if re.search(r"[A-Za-z]", s) else s
+
+
+def ly_clean_title(raw):
+    """'Daft Punk - Get Lucky (Official Video) ft. Pharrell [HD] | Prod X' → 'Daft Punk - Get Lucky'."""
+    t = _norm_lyric_dashes(raw or "").strip()
+    t = re.sub(r"\s*[\[【［][^\]】］]*[\]】］]", "", t)          # [anything] is never part of a song name
+    for _ in range(3):
+        t = _LY_BRACKET_NOISE.sub("", t)
+        t = _LY_TRAIL_NOISE.sub("", t).strip(" -|:")
+    t = _LY_PIPE.sub("", t)
+    t = re.sub(r"\s*#\w+", "", t)                              # hashtags
+    t = re.sub(r"[\"“”«»]", "", t)
+    return re.sub(r"\s{2,}", " ", t).strip(" -|:")[:180]
+
+
+def ly_clean_channel(raw):
+    a = _norm_lyric_dashes(raw or "").strip()
+    prev = None
+    while prev != a:
+        prev = a
+        a = _LY_CHANNEL_SUFFIX.sub("", a).strip(" -|:")
+    a = re.sub(r"(?<=[a-z0-9])VEVO$", "", a).strip()           # DaftPunkVEVO
+    a = re.sub(r"(?<=[a-z])(?=[A-Z])", " ", a) if " " not in a and re.search(r"[a-z][A-Z]", a) else a
+    return a[:120]
+
+
+def _ly_strip_feat(s):
+    return re.sub(r"\s{2,}", " ", _LY_FEAT.sub("", s or "")).strip(" -|:,")
+
+
+def _ly_strip_parens(s):
+    return re.sub(r"\s*[\(\[][^)\]]*[\)\]]", "", s or "").strip(" -|:")
+
+
+def ly_identify(raw_title, channel):
+    """→ (artist, title, is_video). Artist may be '' when unknown."""
+    raw_title = raw_title or ""
+    is_video = bool(re.search(r"(?i)\b(official\s+(music\s+)?video|music\s+video|\bmv\b|clip|клип)\b", raw_title))
+    t = ly_clean_title(raw_title)
+    ch_raw = (channel or "").strip()
+    topic = bool(re.search(r"(?i)-\s*topic\s*$", ch_raw))
+    ch = ly_clean_channel(ch_raw)
+    artist, title = "", t
+    m = re.match(r"^(.+?)\s+-\s+(.+)$", t)
+    if m:
+        left, right = m.group(1).strip(), m.group(2).strip()
+        ch_tokens, left_tokens, right_tokens = set(_ly_norm(ch)), set(_ly_norm(left)), set(_ly_norm(right))
+        # "Song - Artist" uploads: the channel names the right side.
+        if ch_tokens and ch_tokens <= right_tokens and not (ch_tokens <= left_tokens):
+            artist, title = right, left
+        else:
+            artist, title = left, right
+    elif ch and (topic or not _LY_CHANNEL_JUNK.search(ch)):
+        artist = ch
+    if artist and title.lower().startswith(artist.lower() + " "):
+        title = title[len(artist):].strip(" -:")
+    return _ly_strip_feat(artist).strip(), _ly_strip_feat(title).strip(), is_video
+
+
+def _ly_title_match(got, want):
+    g, w = _ly_norm(_ly_strip_feat(got)), _ly_norm(_ly_strip_feat(want))
+    if not g or not w:
+        return 0.0
+    if g == w:
+        return 1.0
+    g2, w2 = _ly_norm(_ly_strip_parens(_ly_strip_feat(got))), _ly_norm(_ly_strip_parens(_ly_strip_feat(want)))
+    if g2 and g2 == w2:
+        return 0.95
+    sg, sw = set(g2 or g), set(w2 or w)
+    jac = len(sg & sw) / max(len(sg | sw), 1)
+    return jac if len(sw) > 1 else (1.0 if sg == sw else 0.0)
+
+
+def _ly_artist_match(got, want):
+    if not want:
+        return 0.5  # unknown artist: neutral, caller demands more elsewhere
+    g, w = set(_ly_norm(got)), set(_ly_norm(want))
+    if not g or not w:
+        return 0.0
+    if g == w:
+        return 1.0
+    # primary artist of a collab: "Daft Punk" vs "Daft Punk, Pharrell Williams"
+    if w <= g or g <= w:
+        return 0.9
+    parts = [set(_ly_norm(p)) for p in re.split(r"\s*(?:,|&|/|\bx\b|\bfeat\.?|\bft\.?|\band\b|\bи\b)\s*", got or "", flags=re.I) if p.strip()]
+    if any(p and (p <= w or w <= p) for p in parts):
+        return 0.85
+    return len(g & w) / max(len(g | w), 1)
+
+
+def ly_score(row, artist, title, dur, is_video=False):
+    """None = reject. Higher = better. Pure function (tested)."""
+    if not isinstance(row, dict) or row.get("instrumental"):
+        return None
+    ts = _ly_title_match(row.get("trackName") or row.get("name") or "", title)
+    as_ = _ly_artist_match(row.get("artistName") or "", artist)
+    if ts < 0.8:
+        return None
+    if artist and as_ < 0.85:
+        return None
+    exact = ts >= 0.95 and (as_ >= 0.9 if artist else False)
+    delta = None
+    try:
+        rd = float(row.get("duration") or 0)
+        if rd > 0 and dur:
+            delta = abs(rd - float(dur))
+    except (TypeError, ValueError):
+        delta = None
+    if delta is None:
+        if not exact:
+            return None
+        delta_pen = 12
+    else:
+        limit = 3 if not exact else (45 if is_video else 10)
+        if not artist:
+            limit = 3
+        if delta > limit:
+            return None
+        delta_pen = delta * (3 if delta <= 3 else 1.5)
+    synced = bool(row.get("syncedLyrics") or row.get("lrc"))
+    return round(100 * ts + 60 * as_ - delta_pen + (20 if synced else 0), 2)
+
+
+def _ly_pick(rows, artist, title, dur, is_video):
+    best = None
+    for row in rows or []:
+        sc = ly_score(row, artist, title, dur, is_video)
+        if sc is None:
+            continue
+        lines, synced, _ = _pack_lyrics(row, dur)
+        if not lines or not _lyrics_quality_ok(lines, synced):
+            continue
+        if best is None or sc > best[0]:
+            best = (sc, lines, synced)
+    return best
+
+
+def _ly_lrclib(artist, title, dur, is_video):
+    rows = []
+    if artist:
+        params = {"track_name": title, "artist_name": artist}
+        if dur:
+            params["duration"] = int(round(dur))
+        got = _lrclib_get("/get?" + urllib.parse.urlencode(params))
+        if isinstance(got, dict):
+            rows.append(got)
+        q = {"track_name": title, "artist_name": artist}
+    else:
+        q = {"track_name": title}
+    found = _lrclib_get("/search?" + urllib.parse.urlencode(q))
+    if isinstance(found, list):
+        rows.extend(found[:20])
+    if not rows and artist:
+        found = _lrclib_get("/search?" + urllib.parse.urlencode({"q": f"{artist} {title}"}))
+        if isinstance(found, list):
+            rows.extend(found[:20])
+    return _ly_pick(rows, artist, title, dur, is_video)
+
+
+def _ly_netease(artist, title, dur, is_video):
+    if not artist:
+        return None
+    headers = {"Referer": "https://music.163.com/", "User-Agent": _lyric_ua()}
+    data = _http_json("https://music.163.com/api/search/get/web?" + urllib.parse.urlencode(
+        {"s": f"{artist} {title}", "type": 1, "offset": 0, "limit": 8}), timeout=6, headers=headers)
+    result = (data or {}).get("result") if isinstance(data, dict) else None
+    if not isinstance(result, dict) or not isinstance(result.get("songs"), list):
+        return None
+    best = None
+    for song in result["songs"]:
+        if not isinstance(song, dict):
+            continue
+        an = ", ".join((x.get("name") or "") for x in (song.get("artists") or []) if isinstance(x, dict))
+        fake = {"trackName": song.get("name") or "", "artistName": an,
+                "duration": (song.get("duration") or 0) / 1000.0, "syncedLyrics": "x"}
+        sc = ly_score(fake, artist, title, dur, is_video)
+        if sc is not None and (best is None or sc > best[0]):
+            best = (sc, song)
+    if not best or not best[1].get("id"):
+        return None
+    lyr = _http_json("https://music.163.com/api/song/lyric?" + urllib.parse.urlencode(
+        {"id": str(best[1]["id"]), "lv": -1, "kv": -1, "tv": -1}), timeout=6, headers=headers)
+    lines = _parse_lrc(((lyr or {}).get("lrc") or {}).get("lyric") or "") if isinstance(lyr, dict) else []
+    if lines and _lyrics_quality_ok(lines, True):
+        return (best[0], lines, True)
+    return None
+
+
 def lyrics_lookup(title, artist, duration):
-    candidates = _lyric_candidates(title, artist)
-    if not candidates:
+    """title = raw YouTube title (or a clean song name), artist = channel / artist."""
+    a, t, is_video = ly_identify(title, artist)
+    if not t:
         return {"lines": [], "synced": False}
     try:
-        dur = int(float(duration)) if duration and float(duration) > 5 else 0
+        dur = float(duration) if duration and float(duration) > 5 else 0
     except (TypeError, ValueError):
         dur = 0
-    # Cache bust key includes score logic version so old wrong hits expire.
-    key = (candidates[0][0].lower(), candidates[0][1].lower(), dur, "v8")
+    key = (t.lower(), a.lower(), int(dur), LYRICS_CACHE_VER)
     now = time.time()
     with _lyrics_lock:
         hit = _lyrics_cache.get(key)
-        if hit and now - hit[0] < 6 * 3600:
-            # Plain/static hits expire fast — LRCLIB flaps and a 6h poison
-            # cache made Дофамин x Oohc never karaoke after one bad minute.
-            if hit[1].get("synced") or now - hit[0] < 90:
-                return hit[1]
-    # LRCLIB first. Textyl is intentionally skipped: it returns timed lines with
-    # no artist/title metadata, so ambiguous queries get the wrong song.
-    backends = (
-        lambda: _from_lrclib(candidates, dur),
-        lambda: _from_netease(candidates, dur),
-        lambda: _from_ovh(candidates),
-    )
-    lines, synced = [], False
-    plain_fallback = None
-    for run in backends:
-        try:
-            got = run()
-        except Exception:
-            got = None
-        if not got:
-            continue
-        found, is_synced = got
-        if not found:
-            continue
-        if is_synced:
-            lines, synced = found, True
+        if hit and now - hit[0] < (6 * 3600 if hit[1].get("lines") else 600):
+            return hit[1]
+    attempts = [(a, t)]
+    bare = _ly_strip_parens(t)
+    if bare and bare != t:
+        attempts.append((a, bare))
+    if a:
+        primary = re.split(r"\s*(?:,|&|/|\bx\b|\band\b|\bи\b)\s*", a, maxsplit=1, flags=re.I)[0].strip()
+        if primary and primary.lower() != a.lower():
+            attempts.append((primary, t))
+    best = None
+    for aa, tt in attempts:
+        for backend in (_ly_lrclib, _ly_netease):
+            try:
+                got = backend(aa, tt, dur, is_video)
+            except Exception:
+                got = None
+            if got and (best is None or got[0] > best[0]):
+                best = got
+        if best and best[2]:
             break
-        if plain_fallback is None:
-            plain_fallback = found
-    if not synced and plain_fallback:
-        lines, synced = plain_fallback, False
-    out = {"lines": lines, "synced": synced}
-    if lines:
-        with _lyrics_lock:
-            if len(_lyrics_cache) > 500:
-                _lyrics_cache.clear()
-            _lyrics_cache[key] = (now, out)
+    out = {"lines": best[1], "synced": bool(best[2]), "artist": a, "title": t} if best else \
+        {"lines": [], "synced": False, "artist": a, "title": t}
+    with _lyrics_lock:
+        if len(_lyrics_cache) > 500:
+            _lyrics_cache.clear()
+        _lyrics_cache[key] = (now, out)
     return out
 
 
@@ -2788,14 +3004,26 @@ CHAT_KINDS = frozenset({
     "voice", "audio", "video", "round", "gif", "image",
 })
 CHAT_REACTS = frozenset({"❤️", "🔥", "👍", "😂", "😮", "😢", "🎉"})
+_REACT_CANON = {e.replace("\ufe0f", ""): e for e in CHAT_REACTS}
+
+
+def chat_react_canon(raw):
+    """Map an emoji to its canonical CHAT_REACTS form (iOS/older clients may drop or add
+    the U+FE0F variation selector, e.g. "❤" vs "❤️"). Returns "" when not allowed."""
+    e = str(raw or "").strip()
+    if e in CHAT_REACTS:
+        return e
+    return _REACT_CANON.get(e.replace("\ufe0f", "").replace("\u200d", ""), "")
+
+
 CHAT_FILE_KINDS = frozenset({"voice", "audio", "video", "round", "gif", "image"})
 CHAT_MAX = {
     "voice": 8_000_000,
     "audio": 16_000_000,
-    "video": 40_000_000,
-    "round": 24_000_000,
-    "gif": 8_000_000,
-    "image": 8_000_000,
+    "video": 95_000_000,   # iPhone 4K clips; Cloudflare caps a request at 100 MB
+    "round": 40_000_000,
+    "gif": 12_000_000,
+    "image": 30_000_000,   # 48 MP iPhone JPEG/HEIC; re-encoded to <=2560px JPEG on save
 }
 _GIF_HOSTS = (
     "tenor.com", "c.tenor.com", "media.tenor.com",
@@ -2909,14 +3137,14 @@ def _chat_normalize(full, kind, ext, ctype):
         out = base + ".mp4"
         vf = ("crop=min(iw\\,ih):min(iw\\,ih),scale=480:480"
               if kind == "round"
-              else "scale=trunc(iw/2)*2:trunc(ih/2)*2")
+              else "scale='min(1280,iw)':-2")
         args = ["-i", full, "-vf", vf, "-c:v", "libx264", "-pix_fmt", "yuv420p",
                 "-preset", "veryfast", "-crf", "23", "-c:a", "aac", "-b:a", "96k",
                 "-movflags", "+faststart"]
         if kind == "round":
             args += ["-t", "60"]
         args.append(out)
-        if _run_ffmpeg(args):
+        if _run_ffmpeg(args, timeout=240):
             hit = take(out, ".mp4", "video/mp4")
             if hit:
                 return hit
@@ -2938,44 +3166,130 @@ def _chat_normalize(full, kind, ext, ctype):
             hit = take(out, ".m4a", "audio/mp4")
             if hit:
                 return hit
-    elif kind == "image" and (
-            ext in (".heic", ".heif") or "heic" in (ctype or "") or "heif" in (ctype or "")):
+    elif kind == "image" and ext not in (".gif",):
+        # HEIC/HEIF/AVIF → JPEG (only Safari renders HEIC), and shrink 48 MP photos.
+        # Pillow (+ pillow-heif) also applies the EXIF rotation iPhones rely on.
         out = base + ".jpg"
-        if _run_ffmpeg(["-i", full, "-q:v", "3", out]):
+        heavy = ext in (".heic", ".heif", ".avif") or os.path.getsize(full) > 3_000_000
+        if heavy and _pil_to_jpeg(full, out):
+            hit = take(out, ".jpg", "image/jpeg")
+            if hit:
+                return hit
+        if ext in (".heic", ".heif", ".avif") and _run_ffmpeg(["-i", full, "-frames:v", "1", "-q:v", "3", out]):
             hit = take(out, ".jpg", "image/jpeg")
             if hit:
                 return hit
     return full, ext, ctype
 
 
-def _media_sniff(data, kind=""):
+def _pil_to_jpeg(src, out, max_side=2560):
+    try:
+        from PIL import Image, ImageOps
+    except Exception:
+        return False
+    try:
+        try:
+            import pillow_heif  # type: ignore
+            pillow_heif.register_heif_opener()
+        except Exception:
+            pass
+        with Image.open(src) as im:
+            im = ImageOps.exif_transpose(im)
+            if im.mode not in ("RGB", "L"):
+                im = im.convert("RGB")
+            im.thumbnail((max_side, max_side))
+            im.save(out, "JPEG", quality=85, optimize=True, progressive=True)
+        return os.path.isfile(out) and os.path.getsize(out) > 64
+    except Exception as e:
+        print(f"chat image convert failed: {type(e).__name__}: {e}", flush=True)
+        return False
+
+
+# Declared types we accept when the bytes alone are ambiguous (iOS often sends
+# "" or application/octet-stream, or quicktime/x-m4a/x-caf flavours).
+CHAT_DECLARED = {
+    "image": {"image/heic": (".heic", "image/heic"), "image/heif": (".heif", "image/heif"),
+              "image/heic-sequence": (".heic", "image/heic"), "image/heif-sequence": (".heif", "image/heif"),
+              "image/avif": (".avif", "image/avif"), "image/jpeg": (".jpg", "image/jpeg"),
+              "image/jpg": (".jpg", "image/jpeg"), "image/pjpeg": (".jpg", "image/jpeg"),
+              "image/png": (".png", "image/png"), "image/webp": (".webp", "image/webp"),
+              "image/gif": (".gif", "image/gif")},
+    "video": {"video/quicktime": (".mov", "video/quicktime"), "video/mp4": (".mp4", "video/mp4"),
+              "video/x-m4v": (".m4v", "video/mp4"), "video/3gpp": (".3gp", "video/3gpp"),
+              "video/webm": (".webm", "video/webm")},
+    "audio": {"audio/mp4": (".m4a", "audio/mp4"), "audio/x-m4a": (".m4a", "audio/mp4"),
+              "audio/m4a": (".m4a", "audio/mp4"), "audio/aac": (".aac", "audio/aac"),
+              "audio/x-aac": (".aac", "audio/aac"), "audio/mpeg": (".mp3", "audio/mpeg"),
+              "audio/mp3": (".mp3", "audio/mpeg"), "audio/x-caf": (".caf", "audio/x-caf"),
+              "audio/wav": (".wav", "audio/wav"), "audio/x-wav": (".wav", "audio/wav"),
+              "audio/ogg": (".ogg", "audio/ogg"), "audio/webm": (".webm", "audio/webm"),
+              "audio/flac": (".flac", "audio/flac")},
+}
+CHAT_DECLARED["round"] = CHAT_DECLARED["video"]
+CHAT_DECLARED["voice"] = CHAT_DECLARED["audio"]
+CHAT_DECLARED["gif"] = {k: v for k, v in {**CHAT_DECLARED["image"], **CHAT_DECLARED["video"]}.items()}
+_AVIF_BRANDS = {b"avif", b"avis"}
+_M4A_BRANDS = {b"M4A ", b"M4B ", b"M4P ", b"F4A "}
+
+
+def _ftyp_brands(data):
+    at = data.find(b"ftyp", 0, 64)
+    if at < 4:
+        return None
+    try:
+        size = int.from_bytes(data[at - 4:at], "big")
+    except Exception:
+        size = 0
+    end = min(len(data), at - 4 + size) if 16 <= size <= 512 else at + 28
+    major = bytes(data[at + 4:at + 8])
+    compat = [bytes(data[i:i + 4]) for i in range(at + 12, max(at + 12, end), 4)]
+    return [major] + compat
+
+
+def _media_sniff(data, kind="", declared=""):
+    """Bytes first; the declared Content-Type only breaks ties for media kinds."""
     if not data or len(data) < 12:
         return None, None
     if data[:4] == b"\x1a\x45\xdf\xa3":
         mime = "audio/webm" if kind in ("voice", "audio") else "video/webm"
         return ".webm", mime
-    ftyp_at = data.find(b"ftyp", 0, 64)
-    if ftyp_at >= 4:
-        brand = bytes(data[ftyp_at + 4:ftyp_at + 8])
-        if brand.lower() in _HEIC_BRANDS:
-            return ".heic", "image/heic"
-        audio_brand = brand in (b"M4A ", b"M4B ", b"M4P ")
-        if kind in ("voice", "audio") or audio_brand:
+    brands = _ftyp_brands(data)
+    if brands:
+        low = {b.lower() for b in brands}
+        if kind in ("image", "gif") or brands[0].lower() in _HEIC_BRANDS | _AVIF_BRANDS:
+            if brands[0].lower() in _AVIF_BRANDS or (kind == "image" and low & _AVIF_BRANDS and not low & _HEIC_BRANDS):
+                return ".avif", "image/avif"
+            if low & _HEIC_BRANDS:
+                return ".heic", "image/heic"
+        if kind in ("voice", "audio") or brands[0] in _M4A_BRANDS:
             return ".m4a", "audio/mp4"
+        if brands[0] == b"qt  ":
+            return ".mov", "video/quicktime"
         return ".mp4", "video/mp4"
-    if data[4:8] == b"mdat" or data[4:8] == b"moov" or data[4:8] == b"wide":
+    if data[4:8] in (b"mdat", b"moov", b"wide", b"free", b"skip", b"pnot"):
         if kind in ("voice", "audio"):
             return ".m4a", "audio/mp4"
         return ".mov", "video/quicktime"
+    if data[:4] == b"caff":
+        return ".caf", "audio/x-caf"
     if data[:4] == b"OggS":
         return ".ogg", "audio/ogg"
     if data[:3] == b"ID3" or data[:2] in (b"\xff\xfb", b"\xff\xf3", b"\xff\xf2"):
         return ".mp3", "audio/mpeg"
+    if data[0] == 0xFF and (data[1] & 0xF6) == 0xF0:          # AAC ADTS
+        return ".aac", "audio/aac"
     if data[:4] == b"RIFF" and data[8:12] == b"WAVE":
         return ".wav", "audio/wav"
     if data[:4] == b"fLaC":
         return ".flac", "audio/flac"
-    return cover_info(data)
+    ext, ctype = cover_info(data)
+    if ext:
+        return ext, ctype
+    decl = (declared or "").split(";")[0].strip().lower()
+    hit = CHAT_DECLARED.get(kind, {}).get(decl)
+    if hit and kind in ("video", "round", "voice", "audio"):
+        return hit
+    return None, None
 
 
 def _gif_ok(url):
@@ -3041,7 +3355,8 @@ def _pack_reacts(con, mid, uid):
     out = []
     for row in rows:
         e = row["emoji"] if hasattr(row, "keys") else row[0]
-        if e not in CHAT_REACTS:
+        e = chat_react_canon(e)
+        if not e:
             continue
         n = int(_ug(row, "n", 0) or 0)
         if n <= 0:
@@ -3131,8 +3446,13 @@ def _file_payload(con, uid, kind, payload):
     if not row or int(row["user_id"]) != int(uid):
         return None
     if row["kind"] != kind and not (kind == "gif" and row["kind"] in ("gif", "image", "video")):
-        return None
+        # The upload decides the real kind (e.g. an iPhone "photo" that was a .mov):
+        # adopt it instead of failing the send with "bad file".
+        fam = {"image", "video", "gif"} if kind in ("image", "video", "gif") else {"voice", "audio"}
+        if row["kind"] not in fam:
+            return None
     return {
+        "_kind": row["kind"] if kind != "gif" else kind,
         "file": row["key"],
         "url": _chat_file_url(row["key"]),
         "ctype": row["ctype"],
@@ -5188,6 +5508,48 @@ class Handler(SimpleHTTPRequestHandler):
     def _post_musely(self, body):
         self._json({"ok": False, "error": "musely_removed"}, 410)
 
+    def _read_raw_body(self, cap):
+        """Raw upload bytes; None if over cap. Handles chunked bodies (some proxies /
+        HTTP/2→1.1 hops forward iOS uploads without Content-Length)."""
+        te = (self.headers.get("Transfer-Encoding") or "").lower()
+        if "chunked" in te:
+            out = bytearray()
+            while True:
+                line = self.rfile.readline(65537)
+                if not line:
+                    break
+                try:
+                    size = int(line.split(b";", 1)[0].strip() or b"0", 16)
+                except ValueError:
+                    return b""
+                if size == 0:
+                    while self.rfile.readline(65537) not in (b"\r\n", b"\n", b""):
+                        pass
+                    break
+                if len(out) + size > cap:
+                    return None
+                out += self.rfile.read(size)
+                self.rfile.readline(3)
+            return bytes(out)
+        try:
+            n = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            n = 0
+        if n > cap:
+            return None
+        if n <= 0:
+            return b""
+        try:
+            buf = bytearray()
+            while len(buf) < n:
+                chunk = self.rfile.read(min(1 << 20, n - len(buf)))
+                if not chunk:
+                    break
+                buf += chunk
+            return bytes(buf) if len(buf) == n else b""
+        except Exception:
+            return b""
+
     def _body(self):
         try:
             n = int(self.headers.get("Content-Length") or 0)
@@ -6355,24 +6717,29 @@ class Handler(SimpleHTTPRequestHandler):
                 kind = (self.headers.get("X-Muse-Kind") or "").strip()
                 if kind not in CHAT_FILE_KINDS:
                     return self._json({"error": "bad kind"}, 400)
-                try:
-                    n = int(self.headers.get("Content-Length") or 0)
-                except ValueError:
-                    n = 0
                 cap = CHAT_MAX.get(kind, 8_000_000)
-                if n <= 0 or n > cap:
-                    return self._json({"error": "file too big"}, 400)
-                try:
-                    data = self.rfile.read(n)
-                except Exception:
-                    return self._json({"error": "unreadable upload"}, 400)
-                ext, ctype = _media_sniff(data, kind)
+                data = self._read_raw_body(cap)
+                if data is None:
+                    return self._json({"error": "file too big", "max_mb": cap // 1_000_000}, 413)
+                if not data:
+                    return self._json({"error": "empty upload"}, 400)
+                declared = self.headers.get("Content-Type") or ""
+                ext, ctype = _media_sniff(data, kind, declared)
                 if not ext:
-                    return self._json({"error": "bad file"}, 400)
-                if kind in ("image",) and not (ctype or "").startswith("image/"):
-                    return self._json({"error": "not an image"}, 400)
+                    print(f"chat upload rejected kind={kind} declared={declared[:60]!r} size={len(data)} "
+                          f"head={data[:16].hex()} ua={(self.headers.get('User-Agent') or '')[:80]!r}", flush=True)
+                    return self._json({"error": "unsupported file type"}, 400)
+                if kind == "image" and not (ctype or "").startswith("image/"):
+                    if (ctype or "").startswith("video/"):
+                        kind = "video"   # Live Photo / mis-tagged clip: keep it, as a video
+                    else:
+                        return self._json({"error": "not an image"}, 400)
                 if kind in ("voice", "audio") and "webm" in (ctype or ""):
                     ctype = "audio/webm"
+                if kind == "video" and (ctype or "").startswith("image/"):
+                    kind = "image"
+                if kind in ("voice", "audio") and (ctype or "") == "video/quicktime":
+                    ctype = "audio/mp4"
                 if kind in ("voice", "audio") and "mp4" in (ctype or ""):
                     ctype = "audio/mp4"
                 if kind in ("video", "round") and ctype in ("audio/mp4", "audio/mpeg"):
@@ -6403,7 +6770,7 @@ class Handler(SimpleHTTPRequestHandler):
                         (u["id"], kind, key, name, ctype, n, dur, time.time()))
                 return self._json({
                     "ok": True, "file": key, "url": _chat_file_url(key),
-                    "ctype": ctype, "duration": dur,
+                    "ctype": ctype, "duration": dur, "kind": kind,
                 })
             m = re.fullmatch(r"/api/playlists/(\d+)/cover", path)
             if m:
@@ -6726,8 +7093,8 @@ class Handler(SimpleHTTPRequestHandler):
                     mid = int(body.get("id") or 0)
                 except (TypeError, ValueError):
                     mid = 0
-                emoji = (body.get("emoji") or "").strip()
-                if not mid or emoji not in CHAT_REACTS:
+                emoji = chat_react_canon(body.get("emoji") or body.get("e") or "")
+                if not mid or not emoji:
                     return self._json({"error": "bad react"}, 400)
                 uid = int(u["id"])
                 with _db_lock, db() as con:
@@ -6876,7 +7243,9 @@ class Handler(SimpleHTTPRequestHandler):
                     elif kind in CHAT_FILE_KINDS:
                         payload = _file_payload(con, u["id"], kind, raw)
                         if not payload:
-                            return self._json({"error": "bad file"}, 400)
+                            print(f"chat send rejected kind={kind} file={str(raw.get('file'))[:40]!r}", flush=True)
+                            return self._json({"error": "file expired, attach it again"}, 400)
+                        kind = payload.pop("_kind", kind) or kind
                     now = time.time()
                     cur = con.execute(
                         "INSERT INTO chat_msgs(lo,hi,sender_id,kind,body,payload,created,"

@@ -83,19 +83,64 @@ function PersonRow({ u, onClick, right, sub, active }: { u: PubUser; onClick: ()
 }
 
 /* ---------------- Chat ---------------- */
+// Server packs reactions as {e, n, mine}; older code/clients used {emoji, count}.
+function normReact(r: any): { emoji: string; n: number; mine: boolean } {
+  return { emoji: String(r?.e ?? r?.emoji ?? ''), n: Number(r?.n ?? r?.count ?? 1), mine: !!r?.mine };
+}
+
+const EXT_KIND: Record<string, string> = {
+  jpg: 'image', jpeg: 'image', png: 'image', webp: 'image', heic: 'image', heif: 'image', avif: 'image', gif: 'gif',
+  mov: 'video', mp4: 'video', m4v: 'video', '3gp': 'video', webm: 'video',
+  m4a: 'audio', aac: 'audio', caf: 'audio', mp3: 'audio', wav: 'audio', ogg: 'audio', flac: 'audio',
+};
+// iOS hands over "" or application/octet-stream for HEIC/MOV/M4A from Files: fall back to the extension.
+export function fileKind(f: { type: string; name?: string }): string {
+  const t = (f.type || '').toLowerCase();
+  if (/gif$/.test(t)) return 'gif';
+  if (t.startsWith('image/')) return 'image';
+  if (t.startsWith('video/')) return 'video';
+  if (t.startsWith('audio/')) return 'audio';
+  const ext = (f.name || '').split('.').pop()?.toLowerCase() || '';
+  return EXT_KIND[ext] || '';
+}
+
+// Re-encode big or HEIC photos to JPEG in the browser when it can decode them (Safari can);
+// otherwise upload as-is and the server converts.
+async function prepImage(f: File): Promise<Blob> {
+  const heic = /hei[cf]/i.test(f.type) || /\.hei[cf]$/i.test(f.name);
+  if (!heic && f.size < 3_000_000) return f;
+  try {
+    const bmp = await createImageBitmap(f, { imageOrientation: 'from-image' } as any);
+    const k = Math.min(1, 2560 / Math.max(bmp.width, bmp.height));
+    const c = document.createElement('canvas'); c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
+    c.getContext('2d')!.drawImage(bmp, 0, 0, c.width, c.height); bmp.close?.();
+    const out = await new Promise<Blob | null>((r) => c.toBlob(r, 'image/jpeg', 0.85));
+    return out && out.size > 1000 ? out : f;
+  } catch { return f; }
+}
+
 function useRecorder() {
   const [rec, setRec] = React.useState<{ kind: 'voice' | 'round'; started: number; stream: MediaStream } | null>(null);
   const mr = React.useRef<MediaRecorder | null>(null);
   const chunks = React.useRef<Blob[]>([]);
   const start = async (kind: 'voice' | 'round') => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia(kind === 'voice' ? { audio: { echoCancellation: true, noiseSuppression: true } } : { audio: true, video: { facingMode: 'user', width: { ideal: 480 }, height: { ideal: 480 } } });
-      const types = kind === 'voice' ? ['audio/webm;codecs=opus', 'audio/mp4', 'audio/webm'] : ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/mp4', 'video/webm'];
-      const mimeType = types.find((t) => (window as any).MediaRecorder?.isTypeSupported?.(t));
-      const r = new MediaRecorder(stream, { mimeType, audioBitsPerSecond: 64000, videoBitsPerSecond: kind === 'round' ? 1_200_000 : undefined });
+      if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') { toast.error('Запись не поддерживается в этом браузере'); return; }
+      // iOS: no exact sizes (OverconstrainedError on some models); square crop happens in CSS + on the server.
+      const stream = await navigator.mediaDevices.getUserMedia(kind === 'voice'
+        ? { audio: { echoCancellation: true, noiseSuppression: true } }
+        : { audio: { echoCancellation: true }, video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 640 }, frameRate: { ideal: 30, max: 30 } } });
+      // MP4 first: Safari/WebKit (every iOS browser) records H.264/AAC natively; WebM there is new and flaky.
+      const types = kind === 'voice'
+        ? ['audio/mp4;codecs=mp4a.40.2', 'audio/mp4', 'audio/webm;codecs=opus', 'audio/webm']
+        : ['video/mp4;codecs=avc1,mp4a.40.2', 'video/mp4;codecs=avc1', 'video/mp4', 'video/webm;codecs=vp8,opus', 'video/webm;codecs=vp9,opus', 'video/webm'];
+      const mimeType = types.find((t) => { try { return MediaRecorder.isTypeSupported(t); } catch { return false; } });
+      let r: MediaRecorder;
+      try { r = new MediaRecorder(stream, { ...(mimeType ? { mimeType } : {}), audioBitsPerSecond: 64000, ...(kind === 'round' ? { videoBitsPerSecond: 1_200_000 } : {}) }); }
+      catch { r = new MediaRecorder(stream); }
       chunks.current = [];
       r.ondataavailable = (e) => { if (e.data.size) chunks.current.push(e.data); };
-      r.start(250);
+      r.start(1000);
       mr.current = r;
       setRec({ kind, started: Date.now(), stream });
     } catch (e: any) { toast.error(e?.name === 'NotAllowedError' ? 'Нет доступа к микрофону/камере' : 'Не удалось начать запись'); }
@@ -108,7 +153,8 @@ function useRecorder() {
       const dur = (Date.now() - cur.started) / 1000;
       setRec(null); mr.current = null;
       if (!send || dur < 0.3) { res(null); return; }
-      res({ blob: new Blob(chunks.current, { type: r.mimeType || (cur.kind === 'voice' ? 'audio/webm' : 'video/webm') }), kind: cur.kind, dur });
+      const t = (r.mimeType || chunks.current[0]?.type || (cur.kind === 'voice' ? 'audio/mp4' : 'video/mp4')).split(';')[0];
+      res({ blob: new Blob(chunks.current, { type: t }), kind: cur.kind, dur });
     };
     try { r.stop(); } catch { res(null); }
   });
@@ -208,17 +254,22 @@ function Chat({ handle, meta, onRemoved }: { handle: string; meta?: PubUser; onR
     try {
       const up = await upload('/api/friends/chat/file', f, { 'X-Muse-Kind': kind, 'X-Muse-Duration': String(duration || 0) });
       toast.dismiss(id);
-      await send({ kind, payload: { file: up.file, url: up.url, duration: up.duration || duration, ctype: up.ctype } });
+      await send({ kind: up.kind || kind, payload: { file: up.file, url: up.url, duration: up.duration || duration, ctype: up.ctype } });
     } catch (e: any) { toast.error(e.message || 'Не загрузилось', { id }); }
   };
-  const pickFile = (f: File) => {
-    const kind = /gif$/i.test(f.type) ? 'gif' : f.type.startsWith('image/') ? 'image' : f.type.startsWith('video/') ? 'video' : f.type.startsWith('audio/') ? 'audio' : '';
+  const pickFile = async (f: File) => {
+    const kind = fileKind(f);
     if (!kind) { toast.error('Этот тип файла не поддерживается'); return; }
+    if (kind === 'image') { sendFile(await prepImage(f), 'image'); return; }
     if (kind === 'video' || kind === 'audio') {
-      const el = document.createElement(kind === 'video' ? 'video' : 'audio'); el.preload = 'metadata';
-      el.onloadedmetadata = () => { sendFile(f, kind, Math.round(el.duration || 0)); URL.revokeObjectURL(el.src); };
-      el.onerror = () => sendFile(f, kind, 0);
-      el.src = URL.createObjectURL(f);
+      // iOS often never fires loadedmetadata for .mov/HEVC: don't hang the upload on it.
+      const url = URL.createObjectURL(f); let done = false;
+      const go = (d: number) => { if (done) return; done = true; URL.revokeObjectURL(url); sendFile(f, kind, Math.round(d || 0)); };
+      const el = document.createElement(kind === 'video' ? 'video' : 'audio'); el.preload = 'metadata'; el.muted = true;
+      el.onloadedmetadata = () => go(isFinite(el.duration) ? el.duration : 0);
+      el.onerror = () => go(0);
+      setTimeout(() => go(0), 2500);
+      el.src = url;
     } else sendFile(f, kind);
   };
   const react = async (m: ChatMsg, emoji: string) => {
@@ -259,7 +310,7 @@ function Chat({ handle, meta, onRemoved }: { handle: string; meta?: PubUser; onR
         <button type="button" onClick={() => { setReply(null); setEditing(null); if (editing) setText(''); }} aria-label="Cancel" className="tap p-1"><X className="size-4" /></button></motion.div>}</AnimatePresence>
       {rec ? <RecordingBar rec={rec} onCancel={() => stop(false)} onSend={async () => { const r = await stop(true); if (r) sendFile(r.blob, r.kind, Math.round(r.dur)); }} />
         : <div className="flex items-end gap-2">
-          <input ref={fileRef} type="file" hidden accept="image/*,video/*,audio/*" onChange={(e) => { const f = e.target.files?.[0]; if (f) pickFile(f); e.target.value = ''; }} />
+          <input ref={fileRef} type="file" hidden accept="image/*,video/*,audio/*,.heic,.heif,.mov,.m4v,.mp4,.m4a,.aac,.caf,.mp3,.wav" onChange={(e) => { const f = e.target.files?.[0]; if (f) pickFile(f); e.target.value = ''; }} />
           <DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" aria-label="Attach"><Paperclip /></Button></DropdownMenuTrigger>
             <DropdownMenuContent side="top" align="start">
               <DropdownMenuItem onSelect={() => fileRef.current?.click()}><ImageIcon />Фото / видео / аудио</DropdownMenuItem>
@@ -290,7 +341,7 @@ function RecordingBar({ rec, onCancel, onSend }: { rec: { kind: string; started:
   const s = (now - rec.started) / 1000;
   React.useEffect(() => { if (rec.kind === 'round' && s >= 60) onSend(); }, [s >= 60]);
   return <div className="flex items-center gap-3">
-    {rec.kind === 'round' && <video ref={vid} muted playsInline className="size-28 rounded-full object-cover ring-2 ring-foreground -scale-x-100" />}
+    {rec.kind === 'round' && <video ref={vid} muted autoPlay playsInline {...{ 'webkit-playsinline': 'true' }} className="size-28 rounded-full object-cover ring-2 ring-foreground -scale-x-100" />}
     <span className="flex items-center gap-2 text-sm"><Circle className="size-3 animate-pulse fill-red-500 text-red-500" />{fmt(s)}</span>
     <span className="flex-1 text-xs text-muted-foreground">{rec.kind === 'round' ? 'Запись кружка (до 60с)' : 'Запись голосового'}</span>
     <Button variant="ghost" size="icon" onClick={onCancel} aria-label="Cancel"><Trash2 /></Button>
@@ -301,11 +352,24 @@ function RecordingBar({ rec, onCancel, onSend }: { rec: { kind: string; started:
 function MediaPlayerInline({ src, kind, dur }: { src: string; kind: 'voice' | 'audio' | 'round'; dur: number }) {
   const ref = React.useRef<HTMLMediaElement | null>(null);
   const [on, setOn] = React.useState(false); const [t, setT] = React.useState(0);
-  const toggle = () => { const el = ref.current; if (!el) return; if (el.paused) { document.querySelectorAll<HTMLMediaElement>('[data-chatmedia]').forEach((x) => x !== el && x.pause()); el.play().catch(() => {}); } else el.pause(); };
-  const common = { 'data-chatmedia': '', src, preload: 'metadata', onPlay: () => setOn(true), onPause: () => setOn(false), onEnded: () => { setOn(false); setT(0); }, onTimeUpdate: (e: any) => setT(e.currentTarget.currentTime) } as any;
+  const toggle = () => {
+    const el = ref.current; if (!el) return;
+    if (!el.paused) { el.pause(); return; }
+    document.querySelectorAll<HTMLMediaElement>('[data-chatmedia]').forEach((x) => x !== el && x.pause());
+    el.muted = false;
+    // Called synchronously inside the tap so iOS treats it as a user gesture.
+    const p = el.play();
+    p?.catch((e: any) => {
+      if (e?.name === 'NotAllowedError') { el.muted = true; el.play().catch(() => {}); toast('Звук выключен системой — нажмите ещё раз'); }
+      else if (el.error || e?.name === 'NotSupportedError') { el.load(); el.play().catch(() => toast.error('Не удалось воспроизвести')); }
+    });
+  };
+  // "#t=0.001" makes iOS Safari decode & paint the first frame instead of a black circle.
+  const vsrc = kind === 'round' && src && !src.includes('#') ? `${src}#t=0.001` : src;
+  const common = { 'data-chatmedia': '', src: vsrc, preload: 'metadata', onPlay: () => setOn(true), onPause: () => setOn(false), onEnded: () => { setOn(false); setT(0); }, onTimeUpdate: (e: any) => setT(e.currentTarget.currentTime) } as any;
   const total = dur || ref.current?.duration || 0;
   if (kind === 'round') return <button type="button" onClick={toggle} className="relative size-48 overflow-hidden rounded-full border">
-    <video ref={ref as any} {...common} playsInline muted={false} className="size-full object-cover" />
+    <video ref={ref as any} {...common} playsInline {...{ 'webkit-playsinline': 'true', 'x-webkit-airplay': 'deny' }} disablePictureInPicture disableRemotePlayback className="size-full object-cover" />
     <svg className="pointer-events-none absolute inset-0 -rotate-90" viewBox="0 0 100 100"><circle cx="50" cy="50" r="48" fill="none" stroke="currentColor" strokeOpacity=".9" strokeWidth="2" pathLength="1" strokeDasharray="1" strokeDashoffset={1 - (total ? t / total : 0)} /></svg>
     {!on && <span className="absolute inset-0 flex items-center justify-center bg-black/25"><Play className="size-8 fill-white text-white" /></span>}
     <span className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full bg-black/60 px-2 text-[10px] text-white">{fmt(on ? t : total)}</span>
@@ -331,7 +395,7 @@ function Message({ m, onReply, onEdit, onDelete, onReact }: { m: ChatMsg; onRepl
     className="flex w-64 items-center gap-3 rounded-xl border bg-card p-2 text-left text-card-foreground transition-colors hover:bg-accent">{p.cover ? <img src={p.cover} alt="" className="size-12 rounded-md object-cover" /> : <span className="flex size-12 items-center justify-center rounded-md bg-muted font-semibold">{(p.name || '#')[0]}</span>}<span className="min-w-0"><span className="block truncate text-sm font-medium">{p.name || 'Playlist'}</span><span className="block text-xs text-muted-foreground">@{p.handle} · {p.count || 0} tracks</span></span></button>;
   else if (m.kind === 'profile') body = <button type="button" onClick={() => nav({ view: 'user', handle: p.handle })} className="flex w-56 items-center gap-3 rounded-xl border bg-card p-2 text-left text-card-foreground hover:bg-accent"><Avatar user={p.hidden ? { handle: p.handle, hue: p.hue } : p} size={40} /><span className="min-w-0"><span className="block truncate text-sm font-medium">{p.hidden ? 'Профиль скрыт' : p.display || p.handle}</span><span className="block text-xs text-muted-foreground">@{p.handle}</span></span></button>;
   else if (m.kind === 'image' || m.kind === 'gif') body = <button type="button" onClick={() => open({ kind: 'media', type: 'image', src: fileSrc(p) })} className="overflow-hidden rounded-xl border"><img src={fileSrc(p)} alt="" className="max-h-72 max-w-64 object-cover" loading="lazy" /></button>;
-  else if (m.kind === 'video') body = <button type="button" onClick={() => open({ kind: 'media', type: 'video', src: fileSrc(p) })} className="relative overflow-hidden rounded-xl border"><video src={fileSrc(p)} muted playsInline preload="metadata" className="max-h-72 max-w-64" /><span className="absolute inset-0 flex items-center justify-center bg-black/25"><Play className="size-8 fill-white text-white" /></span></button>;
+  else if (m.kind === 'video') body = <button type="button" onClick={() => open({ kind: 'media', type: 'video', src: fileSrc(p) })} className="relative overflow-hidden rounded-xl border"><video src={`${fileSrc(p)}#t=0.001`} muted playsInline preload="metadata" className="max-h-72 max-w-64" /><span className="absolute inset-0 flex items-center justify-center bg-black/25"><Play className="size-8 fill-white text-white" /></span></button>;
   else if (m.kind === 'voice' || m.kind === 'audio') body = <div className={bubble}><MediaPlayerInline src={fileSrc(p)} kind={m.kind} dur={p.duration || 0} /></div>;
   else if (m.kind === 'round') body = <MediaPlayerInline src={fileSrc(p)} kind="round" dur={p.duration || 0} />;
   else body = <div className={cn(bubble, /^\p{Extended_Pictographic}{1,3}$/u.test(m.body.trim()) && 'bg-transparent text-4xl px-0')}>{m.body}</div>;
@@ -351,7 +415,7 @@ function Message({ m, onReply, onEdit, onDelete, onReact }: { m: ChatMsg; onRepl
           </DropdownMenuContent></DropdownMenu>
       </div>}
     </div>
-    {m.reacts?.length > 0 && <div className="flex flex-wrap gap-1">{m.reacts.map((r) => <button key={r.emoji} type="button" onClick={() => onReact(r.emoji)} className={cn('rounded-full border px-1.5 py-0.5 text-xs transition-transform active:scale-90', r.mine && 'border-foreground/50 bg-accent')}>{r.emoji} {(r.n ?? r.count ?? 1) > 1 ? r.n ?? r.count : ''}</button>)}</div>}
+    {m.reacts?.length > 0 && <div className="flex flex-wrap gap-1">{m.reacts.map(normReact).filter((r) => r.emoji).map((r) => <button key={r.emoji} type="button" onClick={() => onReact(r.emoji)} className={cn('rounded-full border px-1.5 py-0.5 text-xs transition-transform active:scale-90', r.mine && 'border-foreground/50 bg-accent')}>{r.emoji} {r.n > 1 ? r.n : ''}</button>)}</div>}
     <div className="flex items-center gap-1 px-1 text-[10px] text-muted-foreground">{m.edited && 'изменено · '}{timeOf(m.created)}{m.mine && !m.pending && (m.read ? <CheckCheck className="size-3" /> : <Check className="size-3" />)}</div>
   </>;
 }
