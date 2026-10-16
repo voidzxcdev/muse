@@ -37,9 +37,10 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-
 @keyframes shake{10%,90%{transform:translateX(-2px)}20%,80%{transform:translateX(5px)}30%,50%,70%{transform:translateX(-9px)}40%,60%{transform:translateX(9px)}}
 #skip{position:fixed;right:16px;bottom:calc(var(--sab) + 16px);z-index:6;height:44px;padding:0 18px;border-radius:22px;background:#ffffff14;color:#ffffffb0;font-size:14px;display:none}
 body.intro #skip{display:block}
-#cap{position:fixed;left:0;right:0;bottom:calc(var(--sab) + 90px);z-index:3;text-align:center;font-size:18px;color:#ffffffd0;opacity:0;transition:opacity .5s;pointer-events:none;padding:0 24px}
+#cap{position:fixed;left:0;right:0;top:calc(var(--sat) + 70px);z-index:3;text-align:center;font-size:18px;color:#ffffffd0;opacity:0;transition:opacity .5s;pointer-events:none;padding:0 24px}
 #cap.on{opacity:1}
 /* hud */
+#secret{position:absolute;right:14px;bottom:calc(var(--sab) + 14px);width:60px;height:60px;border-radius:30px;z-index:3}
 #hud{position:fixed;top:calc(var(--sat) + 10px);right:12px;z-index:7;display:none;gap:8px}
 body.open #hud{display:flex}
 .chip{height:44px;min-width:44px;padding:0 14px;border-radius:22px;background:#140a14b0;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border:1px solid #ffffff22;font-size:14px;color:#ffffffc0}
@@ -68,6 +69,29 @@ body.drawing #drawbar{display:flex}
 body.drawing main,body.drawing #hud{visibility:hidden}
 #drawtip{position:fixed;top:calc(var(--sat) + 24px);left:0;right:0;text-align:center;z-index:9;display:none;color:#ffffffb0;font-size:16px}
 body.drawing #drawtip{display:block}
+#dots{display:flex;gap:8px;justify-content:center;margin-top:14px;height:10px}
+#dots i{width:8px;height:8px;border-radius:4px;background:#ffffff26;transition:background .3s,transform .3s}
+#dots i.on{background:var(--pink);transform:scale(1.25);box-shadow:0 0 10px var(--pink)}
+.pulse{animation:pulse .45s cubic-bezier(.2,.9,.3,1.4)}@keyframes pulse{40%{transform:scale(1.12)}}
+#envWrap{position:fixed;inset:0;z-index:20;display:none;align-items:center;justify-content:center;background:#08040ccc;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+#envWrap.on{display:flex}
+.envelope{position:relative;width:min(300px,80vw);height:calc(min(300px,80vw)*.66);perspective:900px;animation:envIn .7s cubic-bezier(.2,.9,.3,1.2)}
+@keyframes envIn{from{transform:translateY(40px) scale(.8);opacity:0}}
+.e-back{position:absolute;inset:0;border-radius:10px;background:linear-gradient(160deg,#ff7aa8,#e63d78)}
+.e-letter{position:absolute;left:6%;right:6%;top:8%;height:86%;border-radius:8px;background:#fff6f9;box-shadow:0 4px 20px #0005;transition:transform 1s cubic-bezier(.2,.8,.2,1) .6s;display:flex;justify-content:center;padding-top:14px;color:#c2185b;font-weight:700;font-size:16px}
+.e-front{position:absolute;inset:0;border-radius:10px;background:linear-gradient(200deg,#ff8fb6,#ff4f8b);clip-path:polygon(0 0,50% 55%,100% 0,100% 100%,0 100%)}
+.e-flap{position:absolute;left:0;right:0;top:0;height:60%;background:linear-gradient(180deg,#ff9ec4,#ff5f95);clip-path:polygon(0 0,100% 0,50% 100%);transform-origin:top;transition:transform .7s cubic-bezier(.4,0,.2,1),z-index 0s .35s;z-index:3}
+.e-seal{position:absolute;left:50%;top:52%;width:40px;height:40px;margin:-20px 0 0 -20px;border-radius:20px;background:#b0124f;color:#ffd0e0;display:grid;place-items:center;font-size:18px;z-index:4;transition:opacity .3s,transform .3s;box-shadow:0 2px 8px #0006}
+.envelope.open .e-seal{opacity:0;transform:scale(1.6)}
+.envelope.open .e-flap{transform:rotateX(180deg);z-index:0}
+.envelope.open .e-letter{transform:translateY(-62%)}
+.lcard{position:absolute;left:18px;right:18px;top:calc(var(--sat) + 24px);bottom:calc(var(--sab) + 24px);max-width:460px;margin:0 auto;border-radius:24px;background:#fff6f9;color:#3a1426;padding:30px 24px 20px;display:flex;flex-direction:column;opacity:0;transform:translateY(60px) scale(.94);pointer-events:none;transition:opacity .7s,transform .8s cubic-bezier(.2,.8,.2,1);box-shadow:0 20px 60px #ff4f8b55}
+.lcard.on{opacity:1;transform:none;pointer-events:auto}
+.lbody{flex:1;overflow:auto;-webkit-overflow-scrolling:touch;font-size:18px;line-height:1.6;text-align:left;-webkit-user-select:text;user-select:text}
+.lbody p{margin-bottom:14px;opacity:0;transform:translateY(12px);transition:opacity .6s,transform .6s}
+.lcard.on .lbody p{opacity:1;transform:none}
+.lbody .sig{text-align:right;font-weight:700;color:#c2185b;font-size:20px}
+.lcard .btn{align-self:center;color:#c2185b;background:#ff4f8b18;margin-top:8px}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition-duration:.01ms!important}.t{filter:none;transform:none}}
 </style>
 </head>
@@ -86,12 +110,13 @@ body.drawing #drawtip{display:block}
 </div>
 <button id="skip" type="button">Пропустить</button>
 
-<div id="hud"><button class="chip" id="snd" type="button">♪ выкл</button><button class="chip" id="tilt" type="button">📱 Жидкость</button></div>
+
 
 <main>
   <section data-shape="hero" data-s="0.8">
+    <button id="secret" type="button" aria-label="Секрет"></button>
     <div class="t"><div class="k">16.10.2026 · 19:47</div><div class="big">Елиза</div>
-    <div class="small">Нажми на фигуру — она изменится<br>Веди пальцем — оставишь след<br>Удерживай — заряди сердце · Двумя пальцами — галактика</div></div>
+    <div class="small">Нажми на фигуру - она изменится<br>Веди пальцем - оставишь след<br>Удерживай - заряди сердце · Двумя пальцами - галактика</div></div>
   </section>
   <section data-shape="date" data-s="0.9"><div class="t"><div class="k">Дата</div><div class="big">16.10.2026</div><div class="txt">Обычный осенний день.<br>Пока не наступил вечер.</div></div></section>
   <section data-shape="t1947" data-s="0.9"><div class="t"><div class="k">Время</div><div class="big">19:47</div><div class="txt">Минута, когда я наконец<br>сказал тебе главное.</div></div></section>
@@ -99,12 +124,24 @@ body.drawing #drawtip{display:block}
   <section data-shape="infinity" data-s="0.9"><div class="t"><div class="k">С той минуты прошло</div>
     <div class="cnt"><div><b id="cd">0</b><span>дн</span></div><div><b id="ch">0</b><span>ч</span></div><div><b id="cm">0</b><span>мин</span></div><div><b id="cs">0</b><span>сек</span></div></div>
     <div class="txt">И это только начало.</div></div></section>
-  <section data-shape="ring" data-s="0.85"><div class="t"><div class="k">Твоя очередь</div><div class="txt">Нарисуй что-нибудь пальцем —<br>и посмотри, во что это превратится.</div><button class="btn solid" id="drawBtn" type="button">Рисовать ✍️</button></div></section>
-  <section data-shape="twoHearts" data-s="0.9"><div class="t"><div class="k">Фейерверк</div><div class="txt">Удерживай палец на экране,<br>пока сердце заряжается, — и отпусти.</div></div></section>
+  <section data-shape="ring" data-s="0.85"><div class="t"><div class="k">Твоя очередь</div><div class="txt">Нарисуй что-нибудь пальцем -<br>и посмотри, во что это превратится.</div><button class="btn solid" id="drawBtn" type="button">Рисовать ✍️</button></div></section>
+  <section data-shape="twoHearts" data-s="0.9"><div class="t"><div class="k">Фейерверк</div><div class="txt">Удерживай палец на экране,<br>пока сердце заряжается, - и отпусти.</div></div></section>
   <section data-shape="bigHeart" data-s="1.05" class="final"><div class="t"><h3>Елиза ❤️ Сёма</h3><div class="small">16.10.2026 · 19:47</div>
-    <div class="row"><button class="btn" id="replay" type="button">Сначала ↺</button><button class="btn solid" id="mkHeart" type="button">Сделать сердце ❤️</button></div></div></section>
+    <div class="row"><button class="btn" id="replay" type="button">Сначала ↺</button><button class="btn solid" id="openBtn" type="button">Открыть 💌</button></div><div id="dots" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div></div></section>
 </main>
 
+<!-- ================= LETTER (edit the text here) ================= -->
+<template id="letterText">
+<p>Елиза,</p>
+<p>16.10.2026, в 19:47, я наконец сказал тебе главное. С этой минуты у меня появилось самое важное время в календаре.</p>
+<p>Я собрал этот маленький мир из тысяч сердечек, потому что одними словами всё не передать. Каждое из них - для тебя.</p>
+<p>Мне так тепло от мысли, что теперь ты моя девушка. Спасибо, что ты есть.</p>
+<p>Я очень тебя люблю. И это только начало.</p>
+<p class="sig">Сёма</p>
+</template>
+<!-- ================= /LETTER ================= -->
+<div id="envWrap"><div class="envelope" id="env"><div class="e-back"></div><div class="e-letter"><div class="e-mini">Для Елизы ❤️</div></div><div class="e-front"></div><div class="e-flap"></div><div class="e-seal">❤</div></div>
+  <div class="lcard" id="lcard"><div class="lbody" id="lbody"></div><button class="btn" id="closeLetter" type="button">Закрыть</button></div></div>
 <div id="drawpad"></div>
 <div id="drawtip">Рисуй пальцем ✨</div>
 <div id="drawbar"><button class="btn" id="clearDraw" type="button">Ещё раз</button><button class="btn solid" id="doneDraw" type="button">Готово</button></div>
@@ -112,7 +149,7 @@ body.drawing #drawtip{display:block}
 <script>
 (()=>{
 'use strict';
-const RM=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const cap=document.getElementById('cap');const RM=matchMedia('(prefers-reduced-motion: reduce)').matches;
 const DPR=Math.min(devicePixelRatio||1,2);
 const $=s=>document.querySelector(s), body=document.body;
 const T0=Date.UTC(2026,9,16,17,47,0); // 16.10.2026 19:47 Berlin (UTC+2)
@@ -193,13 +230,7 @@ function spark(x,y,n,spd,col=[1,.45,.7],size=1){for(let k=0;k<n;k++){const i=spI
   sx[i]=x;sy[i]=y;svx[i]=Math.cos(a)*v;svy[i]=Math.sin(a)*v-spd*.2;sl[i]=1;ss[i]=(2+Math.random()*3)*size;sh[3*i]=col[0];sh[3*i+1]=col[1]*(.8+Math.random()*.4);sh[3*i+2]=col[2]}}
 function explode(x,y,power){for(let i=0;i<N;i++){const dx=px[i]-x,dy=py[i]-y,d=Math.hypot(dx,dy)+1,f=power*(.4+Math.random())*Math.min(1,180/d+.3);vx[i]+=dx/d*f;vy[i]+=dy/d*f}}
 
-/* ================= audio ================= */
-let actx=null,sound=false;const NOTES=[523.25,587.33,659.25,783.99,880,1046.5];
-function chime(f){if(!sound||!actx)return;const t=actx.currentTime,fr=f||NOTES[(Math.random()*NOTES.length)|0];
-  for(const [m,g] of [[1,.12],[2.01,.03]]){const o=actx.createOscillator(),v=actx.createGain();o.type='sine';o.frequency.value=fr*m;v.gain.setValueAtTime(0,t);v.gain.linearRampToValueAtTime(g,t+.01);v.gain.exponentialRampToValueAtTime(.0001,t+1.4);o.connect(v).connect(actx.destination);o.start(t);o.stop(t+1.5)}}
-$('#snd').addEventListener('click',()=>{sound=!sound;if(sound&&!actx){try{actx=new (window.AudioContext||window.webkitAudioContext)()}catch(_){sound=false}}
-  actx&&actx.resume&&actx.resume();$('#snd').classList.toggle('on',sound);$('#snd').textContent=sound?'♪ вкл':'♪ выкл';if(sound)chime(659.25)});
-
+function chime(){}
 /* ================= GL ================= */
 let prog,fadeProg,vbo,fbo,uRes,uHeart,uFade;
 if(gl){
@@ -292,7 +323,8 @@ function draw(n){
 
 /* ================= overlay (constellation, draw stroke, charge ring) ================= */
 const constSec=$('#constSec');
-let ovDirty=true;const CST=gen(22,i=>heartPts(i/22*TAU).map(z=>z/34));
+let ovDirty=true;const SEC=[];for(let i=0;i<34;i++){const[a,b]=heartPts(i/34*TAU);SEC.push(a*.62+(Math.random()-.5)*1.2,b*.62+(Math.random()-.5)*1.2);if(i%3===0)SEC.push(a*.3,b*.3)}
+const CST=gen(22,i=>heartPts(i/22*TAU).map(z=>z/34));
 function drawOverlay(t){
   ox.setTransform(1,0,0,1,0,0);ox.globalAlpha=1;ox.shadowBlur=0;if(ovDirty){ox.globalCompositeOperation='copy';ox.fillStyle='rgba(0,0,0,0)';ox.fillRect(0,0,ov.width,ov.height);ox.globalCompositeOperation='source-over';ox.clearRect(0,0,ov.width,ov.height);ovDirty=false}ox.setTransform(DPR,0,0,DPR,0,0);
   if(mode==='main'&&!drawing&&activeSec===3){const r=constSec.getBoundingClientRect();
@@ -305,6 +337,9 @@ function drawOverlay(t){
     }}
   if(drawing&&drawPts.length>1){ovDirty=true;ox.lineWidth=4;ox.lineCap=ox.lineJoin='round';ox.strokeStyle='rgba(255,170,210,.8)';ox.shadowColor='#ff4f8b';ox.shadowBlur=14;ox.beginPath();
     for(let i=0;i<drawPts.length;i++){const p=drawPts[i];p.b?ox.moveTo(p.x,p.y):ox.lineTo(p.x,p.y)}ox.stroke();ox.shadowBlur=0}
+  if(mode==='main'&&!drawing&&activeSec===0){const r=secretB.getBoundingClientRect();if(r.bottom>0&&r.top<H){ovDirty=true;const cx=r.left+r.width/2,cy=r.top+r.height/2,pu=1+.14*Math.pow(Math.max(0,Math.sin(t*2.4)),6);
+    const g=ox.createRadialGradient(cx,cy,0,cx,cy,28*pu);g.addColorStop(0,`rgba(255,110,170,${.2+.12*Math.sin(t*2.4)})`);g.addColorStop(1,'rgba(255,110,170,0)');ox.fillStyle=g;ox.beginPath();ox.arc(cx,cy,28*pu,0,TAU);ox.fill();
+    for(let i=0;i<SEC.length;i+=2){const x=cx+SEC[i]*pu,y=cy+SEC[i+1]*pu,b=(liquid?.95:.6)+.3*Math.sin(t*4+i);ox.fillStyle=`rgba(255,${150+((i*13)%80)},${190+((i*7)%50)},${b})`;ox.beginPath();ox.arc(x,y,1.6,0,TAU);ox.fill()}}}
   if(charging){ovDirty=true;ox.strokeStyle='rgba(255,120,170,.9)';ox.lineWidth=4;ox.beginPath();ox.arc(chargeX,chargeY,46,-Math.PI/2,-Math.PI/2+charge*TAU);ox.stroke()}
 }
 
@@ -336,7 +371,7 @@ form.addEventListener('submit',e=>{e.preventDefault();
   for(let i=0;i<N;i++){vx[i]+=(Math.random()-.5)*14;vy[i]+=(Math.random()-.5)*6}});
 
 /* ================= intro chain ================= */
-const cap=$('#cap');let chainTimer=null,chainIdx=0;
+let chainTimer=null,chainIdx=0;
 const CHAIN=[['t1947',1700,''],['heart',1700,''],['eliza',2100,''],['twoHearts',1300,''],['heart',900,''],['infinity',1500,''],['star',1300,''],['rose',1500,'']];
 function runChain(){
   clearTimeout(chainTimer);chainIdx=0;mode='intro';body.classList.add('intro');kBase=.05;
@@ -355,7 +390,7 @@ function unlock(){
 }
 
 /* ================= interaction ================= */
-const isUI=el=>el&&el.closest&&el.closest('button,input,label,.chip,#drawpad,#drawbar');
+const isUI=el=>el&&el.closest&&el.closest('button,input,label,.chip,#drawpad,#drawbar,#envWrap');
 function tapAt(x,y){
   if(mode!=='main')return;
   const r=secs[0].getBoundingClientRect();
@@ -372,7 +407,6 @@ function endPress(x,y){clearTimeout(pressT);
 function fireworks(x,y,p){
   explode(x,y,10+p*22);buzz([40,30,80]);
   const cols=[[1,.4,.7],[1,.85,.5],[.75,.6,1],[1,.6,.8]];for(let k=0;k<6;k++){const a=Math.random()*TAU,d=40+Math.random()*120;spark(x+Math.cos(a)*d,y+Math.sin(a)*d,60,9+p*8,cols[k%4],1.2)}
-  if(sound)[0,120,260].forEach((dl,i)=>setTimeout(()=>chime(NOTES[i*2]),dl));
   if(p>.35)setTimeout(()=>{override={s:SH.eliza,x:W/2,y:H*.4,S:Math.min(W,H)*.98,until:performance.now()+3200,k:.035}},350);
 }
 function moveTrail(x,y){if(trail){trail.vx=x-trail.x;trail.vy=y-trail.y;trail.x=x;trail.y=y}else trail={x,y,vx:0,vy:0};
@@ -402,16 +436,19 @@ addEventListener('mouseleave',()=>{trail=null});
 addEventListener('contextmenu',e=>{if(mode==='main')e.preventDefault()});
 
 /* tilt / liquid / shake */
-const tiltB=$('#tilt');let oriOn=false;
+let oriOn=false;
 function onOri(e){if(e.gamma==null)return;gX=Math.max(-1,Math.min(1,e.gamma/35));gY=Math.max(-1,Math.min(1,(e.beta-35)/35))}
 function onMot(e){const a=e.accelerationIncludingGravity||e.acceleration;if(!a)return;const m=Math.hypot(a.x||0,a.y||0,a.z||0);
   if(m>26&&mode==='main'){explode(W/2,H/2,8);spark(W/2,H/2,40,10);buzz(20)}}
-tiltB.addEventListener('click',async()=>{
+const secretB=$('#secret');
+secretB.addEventListener('click',async()=>{
   if(!oriOn){try{if(typeof DeviceOrientationEvent!=='undefined'&&DeviceOrientationEvent.requestPermission){const r=await DeviceOrientationEvent.requestPermission();if(r!=='granted')throw 0}
     if(typeof DeviceMotionEvent!=='undefined'&&DeviceMotionEvent.requestPermission){try{await DeviceMotionEvent.requestPermission()}catch(_){}}
-    addEventListener('deviceorientation',onOri);addEventListener('devicemotion',onMot);oriOn=true}catch(_){/* still allow liquid with gravity down */}}
-  liquid=!liquid;tiltB.classList.toggle('on',liquid);tiltB.textContent=liquid?'📱 Жидкость ✓':'📱 Жидкость';buzz(12);chime();
+    addEventListener('deviceorientation',onOri);addEventListener('devicemotion',onMot);oriOn=true}catch(_){}}
+  liquid=!liquid;const r=secretB.getBoundingClientRect();spark(r.left+r.width/2,r.top+r.height/2,50,9,[1,.6,.85]);buzz([10,30,10]);
+  toast(liquid?'Секрет найден ✨ Наклони телефон':'Сердечки снова на месте ❤️');
   if(liquid)explode(W/2,H/2,3)});
+let toastT=null;function toast(t){cap.textContent=t;cap.classList.add('on');clearTimeout(toastT);toastT=setTimeout(()=>cap.classList.remove('on'),2600)}
 
 /* ================= draw mode ================= */
 const pad=$('#drawpad');let drawStroke=false,drawTimer=null;
@@ -437,8 +474,24 @@ tick();setInterval(tick,1000);
 
 /* ================= final buttons ================= */
 $('#replay').addEventListener('click',()=>{scrollTo(0,0);body.classList.remove('open');heroIdx=0;override=null;runChain()});
-$('#mkHeart').addEventListener('click',()=>{explode(W/2,H*.36,24);for(let k=0;k<4;k++)spark(W/2+(Math.random()-.5)*200,H*.36+(Math.random()-.5)*200,50,11);buzz([20,30,20,30,60]);
-  if(sound)[0,150,300,450].forEach((dl,i)=>setTimeout(()=>chime(NOTES[i+1]),dl))});
+let opens=0;const dots=[...document.querySelectorAll('#dots i')],openB=$('#openBtn'),envWrap=$('#envWrap'),env=$('#env'),lcard=$('#lcard'),lbody=$('#lbody');
+const OPEN_MSG=['❤️','ещё…','ещё чуть-чуть','почти!'];
+openB.addEventListener('click',()=>{
+  if(opens>=5)return showLetter();
+  opens++;dots.forEach((d,i)=>d.classList.toggle('on',i<opens));
+  const r=openB.getBoundingClientRect();spark(r.left+r.width/2,r.top,18+opens*10,6+opens*1.5);explode(W/2,H*.36,3+opens*2.5);buzz(10+opens*8);
+  openB.classList.remove('pulse');void openB.offsetWidth;openB.classList.add('pulse');
+  if(opens<5){openB.textContent='Открыть 💌 '+OPEN_MSG[opens-1];return}
+  openB.textContent='Открыть 💌';showLetter();
+});
+function showLetter(){
+  lbody.innerHTML=$('#letterText').innerHTML;[...lbody.children].forEach((p,i)=>p.style.transitionDelay=(.25+i*.35)+'s');
+  envWrap.classList.add('on');env.classList.remove('open');lcard.classList.remove('on');buzz([20,40,20,40,80]);
+  for(let k=0;k<6;k++)setTimeout(()=>spark(W/2+(Math.random()-.5)*240,H/2+(Math.random()-.5)*160,40,10,[1,.5+Math.random()*.3,.75]),k*140);
+  setTimeout(()=>{env.classList.add('open');buzz(15)},RM?50:700);
+  setTimeout(()=>{lcard.classList.add('on');explode(W/2,H/2,8)},RM?100:2300);
+}
+$('#closeLetter').addEventListener('click',()=>{envWrap.classList.remove('on');env.classList.remove('open');lcard.classList.remove('on')});
 
 window.__dbg={go:n=>{override={s:SH[n],x:W/2,y:H*.4,S:Math.min(W,H)*.9,until:performance.now()+4000}},fire:(x,y)=>fireworks(x,y,1)};
 requestAnimationFrame(frame);

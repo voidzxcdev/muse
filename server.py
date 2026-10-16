@@ -67,6 +67,7 @@ HOST = os.environ.get("HOST") or "0.0.0.0"
 ON_RENDER = bool(os.environ.get("RENDER"))
 PUBLIC_URL = (os.environ.get("PUBLIC_URL") or os.environ.get("RENDER_EXTERNAL_URL") or "").rstrip("/")
 DATABASE_URL = os.environ.get("DATABASE_URL") or ""  # set → Postgres (Supabase); unset → local SQLite
+ELISA_HOSTS = ("elisa.style", "www.elisa.style")
 BUILD = 318  # bump every release — the UI polls this and prompts reload
 # Never list or play these. Official audio of the same song stays.
 _HIDDEN_IDS = frozenset({
@@ -6057,9 +6058,26 @@ class Handler(SimpleHTTPRequestHandler):
             except Exception:
                 pass
 
+    def _elisa(self, host, path):
+        # elisa.style: standalone page for Eliza; www -> apex; nothing else of Muse is exposed.
+        if host != "elisa.style":
+            self.send_response(301)
+            self.send_header("Location", "https://elisa.style" + (self.path or "/"))
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        if path in ("/", "/index.html"):
+            self.directory = STATIC
+            self.path = "/eliza.html"
+            return super().do_GET()
+        self.send_error(404)
+
     def do_GET(self):
         parsed = urllib.parse.urlparse(self.path)
         path, qs = parsed.path, urllib.parse.parse_qs(parsed.query)
+        host = (self.headers.get("Host") or "").split(":")[0].strip().lower()
+        if host in ELISA_HOSTS:
+            return self._elisa(host, path)
         try:
             if path == "/api/health":
                 return self._json({"ok": True, "build": BUILD})
@@ -6696,6 +6714,8 @@ class Handler(SimpleHTTPRequestHandler):
         self.do_GET()
 
     def do_POST(self):
+        if (self.headers.get("Host") or "").split(":")[0].strip().lower() in ELISA_HOSTS:
+            return self.send_error(404)
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path
         try:
