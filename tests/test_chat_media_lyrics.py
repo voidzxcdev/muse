@@ -1,5 +1,5 @@
 """Quick offline checks: chat upload MIME sniffing (iPhone formats) and lyrics matching.
-Run: python tests/test_chat_media_lyrics.py"""
+Run: python -m unittest tests.test_chat_media_lyrics   (from the repo root)"""
 import os
 import sys
 import unittest
@@ -68,15 +68,45 @@ class Lyrics(unittest.TestCase):
                 "syncedLyrics": "[00:01.00] la" if synced else "", "plainLyrics": "la"}
 
     def test_score_accepts_exact(self):
-        self.assertIsNotNone(s.ly_score(self.row("Daft Punk", "Get Lucky", 248), "Daft Punk", "Get Lucky", 249, False))
+        self.assertIsNotNone(s.ly_score(self.row("Daft Punk", "Get Lucky", 248), "Daft Punk", "Get Lucky", 249))
         self.assertIsNotNone(s.ly_score(self.row("Daft Punk feat. Pharrell", "Get Lucky (Radio Edit)", 248),
                                         "Daft Punk", "Get Lucky", 248, False))
 
     def test_score_rejects_mismatch(self):
-        self.assertIsNone(s.ly_score(self.row("Some Cover Band", "Get Lucky", 248), "Daft Punk", "Get Lucky", 248, False))
-        self.assertIsNone(s.ly_score(self.row("Daft Punk", "Lose Yourself to Dance", 248), "Daft Punk", "Get Lucky", 248, False))
-        self.assertIsNone(s.ly_score(self.row("Daft Punk", "Get Lucky", 369), "Daft Punk", "Get Lucky", 248, False))
-        self.assertIsNone(s.ly_score(self.row("Random", "Hello", 180), "", "Hello", 200, False))
+        self.assertIsNone(s.ly_score(self.row("Some Cover Band", "Get Lucky", 248), "Daft Punk", "Get Lucky", 248))
+        self.assertIsNone(s.ly_score(self.row("Daft Punk", "Lose Yourself to Dance", 248), "Daft Punk", "Get Lucky", 248))
+        self.assertIsNone(s.ly_score(self.row("Post Malone", "Better Now", 231), "Post Malone", "Circles", 213))
+        self.assertIsNone(s.ly_score(self.row("Linkin Park", "Numbers", 188), "Linkin Park", "Numb", 188))
+
+    def test_duration_ranks_not_rejects(self):
+        exact = s.ly_judge(self.row("Daft Punk", "Get Lucky", 248), "Daft Punk", "Get Lucky", 249)
+        near = s.ly_judge(self.row("Daft Punk", "Get Lucky", 255), "Daft Punk", "Get Lucky", 249)
+        mv = s.ly_judge(self.row("Ed Sheeran", "Shape of You", 234), "Ed Sheeran", "Shape of You", 264, True)
+        self.assertTrue(exact[1] and near[1])
+        self.assertGreater(exact[0], near[0])
+        self.assertEqual(mv[1], False)            # MV intro: plain text, no wrong timestamps
+        nodur = s.ly_judge(self.row("Daft Punk", "Get Lucky", 248), "Daft Punk", "Get Lucky", 0)
+        self.assertIsNotNone(nodur)
+
+    def test_fuzzy_names(self):
+        ok = lambda ra, rt, a, t, d=200: s.ly_score(self.row(ra, rt, d), a, t, d)
+        self.assertIsNotNone(ok("Скриптонит", "Положение", "Skryptonite", "Положение"))     # translit
+        self.assertIsNotNone(ok("ROSALÍA", "DESPECHÁ", "Rosalia", "Despecha"))                # accents
+        self.assertIsNotNone(ok("Travis Scott", "Travis Scott - SICKO MODE (Audio)", "Travis Scott", "Sicko Mode"))
+        self.assertIsNotNone(ok("Lady Gaga & Bruno Mars", "Die With A Smile", "Bruno Mars", "Die With A Smile"))
+        self.assertIsNotNone(ok("Miyagi, Andy Panda", "Kosandra", "Miyagi & Andy Panda", "Kosandra"))
+
+    def test_title_only_needs_exact_and_duration(self):
+        r = self.row("Adele", "Hello", 180)
+        self.assertIsNone(s.ly_judge(r, "", "Hello", 180))                      # one generic word
+        r = self.row("kizaru", "Money long", 135)
+        self.assertIsNotNone(s.ly_judge(r, "", "Money long", 135, strict_title=True))
+        self.assertIsNone(s.ly_judge(r, "", "Money long", 160, strict_title=True))
+
+    def test_identify_channel_flag(self):
+        self.assertEqual(s.ly_identify_ex("Money long", "HAUNTED FAMILY")[3], True)
+        self.assertEqual(s.ly_identify_ex("Blinding Lights", "The Weeknd - Topic")[3], False)
+        self.assertEqual(s.ly_identify("BTS: Dynamite | The Tonight Show", "Tonight Show")[:2], ("BTS", "Dynamite"))
 
 
 if __name__ == "__main__":

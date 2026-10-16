@@ -67,7 +67,7 @@ HOST = os.environ.get("HOST") or "0.0.0.0"
 ON_RENDER = bool(os.environ.get("RENDER"))
 PUBLIC_URL = (os.environ.get("PUBLIC_URL") or os.environ.get("RENDER_EXTERNAL_URL") or "").rstrip("/")
 DATABASE_URL = os.environ.get("DATABASE_URL") or ""  # set → Postgres (Supabase); unset → local SQLite
-BUILD = 314  # bump every release — the UI polls this and prompts reload
+BUILD = 315  # bump every release — the UI polls this and prompts reload
 # Never list or play these. Official audio of the same song stays.
 _HIDDEN_IDS = frozenset({
     "4NRXx6U8ABQ",  # The Weeknd - Blinding Lights (Official Video)
@@ -673,7 +673,7 @@ def _from_ovh(candidates):
 # from the title first, fall back to the channel only when it looks like an
 # artist, and reject any provider row whose artist/title/duration don't agree.
 # Wrong lyrics are worse than "no lyrics".
-LYRICS_CACHE_VER = "v9"
+LYRICS_CACHE_VER = "v10"
 _LY_BRACKET_NOISE = re.compile(
     r"\s*[\(\[【［][^)\]】］]*(official|lyric|audio|video|visuali[sz]er|\bmv\b|\bm/v\b|\bhd\b|\bhq\b|\b4k\b|"
     r"remaster|clip|клип|премьера|premiere|explicit|clean|color\s*coded|prod\.?|"
@@ -738,16 +738,16 @@ def _ly_strip_parens(s):
     return re.sub(r"\s*[\(\[][^)\]]*[\)\]]", "", s or "").strip(" -|:")
 
 
-def ly_identify(raw_title, channel):
-    """→ (artist, title, is_video). Artist may be '' when unknown."""
+def ly_identify_ex(raw_title, channel):
+    """→ (artist, title, is_video, artist_from_channel). Artist may be '' when unknown."""
     raw_title = raw_title or ""
-    is_video = bool(re.search(r"(?i)\b(official\s+(music\s+)?video|music\s+video|\bmv\b|clip|клип)\b", raw_title))
+    is_video = bool(re.search(r"(?i)\b(official\s+(music\s+)?video|music\s+video|\bmv\b|m/v|clip|клип)\b", raw_title))
     t = ly_clean_title(raw_title)
     ch_raw = (channel or "").strip()
     topic = bool(re.search(r"(?i)-\s*topic\s*$", ch_raw))
     ch = ly_clean_channel(ch_raw)
-    artist, title = "", t
-    m = re.match(r"^(.+?)\s+-\s+(.+)$", t)
+    artist, title, from_ch = "", t, False
+    m = re.match(r"^(.+?)\s+[-–—]\s+(.+)$", t) or re.match(r"^([^:]{2,30}):\s+(.+)$", t)
     if m:
         left, right = m.group(1).strip(), m.group(2).strip()
         ch_tokens, left_tokens, right_tokens = set(_ly_norm(ch)), set(_ly_norm(left)), set(_ly_norm(right))
@@ -757,113 +757,262 @@ def ly_identify(raw_title, channel):
         else:
             artist, title = left, right
     elif ch and (topic or not _LY_CHANNEL_JUNK.search(ch)):
-        artist = ch
+        artist, from_ch = ch, not topic
     if artist and title.lower().startswith(artist.lower() + " "):
         title = title[len(artist):].strip(" -:")
-    return _ly_strip_feat(artist).strip(), _ly_strip_feat(title).strip(), is_video
+    title = re.sub(r"\s*[\(\[][^)\]]*\b(?:prod|премьера|слив|teaser|тизер)\b[^)\]]*[\)\]]", "", title, flags=re.I)
+    return _ly_strip_feat(artist).strip(), _ly_strip_feat(title).strip(" -|:,"), is_video, from_ch
 
 
-def _ly_title_match(got, want):
-    g, w = _ly_norm(_ly_strip_feat(got)), _ly_norm(_ly_strip_feat(want))
-    if not g or not w:
+def ly_identify(raw_title, channel):
+    """→ (artist, title, is_video)."""
+    return ly_identify_ex(raw_title, channel)[:3]
+
+
+_CYR = dict(zip("абвгдеёжзийклмнопрстуфхцчшщъыьэюя",
+                ["a", "b", "v", "g", "d", "e", "e", "zh", "z", "i", "y", "k", "l", "m", "n", "o", "p", "r",
+                 "s", "t", "u", "f", "h", "ts", "ch", "sh", "sch", "", "y", "", "e", "yu", "ya"]))
+
+
+def _ly_translit(s):
+    return "".join(_CYR.get(c, c) for c in (s or "").lower())
+
+
+def _ly_key(s):
+    """Comparable tokens: accents off, Cyrillic→Latin, &/and/x/feat noise dropped."""
+    toks = _ly_norm(_ly_translit(unicodedata_normalize(s or "")))
+    toks = [t.replace("y", "i").replace("j", "i") for t in toks]   # skryptonite ~ skriptonit
+    return [t for t in toks if t not in {"feat", "ft", "featuring", "with", "vs"}]
+
+
+def _ly_ratio(a, b):
+    import difflib
+    return difflib.SequenceMatcher(None, a, b).ratio()
+
+
+def ly_token_set_ratio(a, b):
+    """fuzzywuzzy-style token-set ratio on normalised tokens, 0..1."""
+    ta, tb = set(_ly_key(a)), set(_ly_key(b))
+    if not ta or not tb:
         return 0.0
-    if g == w:
+    if ta == tb:
         return 1.0
-    g2, w2 = _ly_norm(_ly_strip_parens(_ly_strip_feat(got))), _ly_norm(_ly_strip_parens(_ly_strip_feat(want)))
-    if g2 and g2 == w2:
-        return 0.95
-    sg, sw = set(g2 or g), set(w2 or w)
-    jac = len(sg & sw) / max(len(sg | sw), 1)
-    return jac if len(sw) > 1 else (1.0 if sg == sw else 0.0)
-
-
-def _ly_artist_match(got, want):
-    if not want:
-        return 0.5  # unknown artist: neutral, caller demands more elsewhere
-    g, w = set(_ly_norm(got)), set(_ly_norm(want))
-    if not g or not w:
-        return 0.0
-    if g == w:
-        return 1.0
-    # primary artist of a collab: "Daft Punk" vs "Daft Punk, Pharrell Williams"
-    if w <= g or g <= w:
-        return 0.9
-    parts = [set(_ly_norm(p)) for p in re.split(r"\s*(?:,|&|/|\bx\b|\bfeat\.?|\bft\.?|\band\b|\bи\b)\s*", got or "", flags=re.I) if p.strip()]
-    if any(p and (p <= w or w <= p) for p in parts):
-        return 0.85
-    return len(g & w) / max(len(g | w), 1)
-
-
-def ly_score(row, artist, title, dur, is_video=False):
-    """None = reject. Higher = better. Pure function (tested)."""
-    if not isinstance(row, dict) or row.get("instrumental"):
-        return None
-    ts = _ly_title_match(row.get("trackName") or row.get("name") or "", title)
-    as_ = _ly_artist_match(row.get("artistName") or "", artist)
-    if ts < 0.8:
-        return None
-    if artist and as_ < 0.85:
-        return None
-    exact = ts >= 0.95 and (as_ >= 0.9 if artist else False)
-    delta = None
-    try:
-        rd = float(row.get("duration") or 0)
-        if rd > 0 and dur:
-            delta = abs(rd - float(dur))
-    except (TypeError, ValueError):
-        delta = None
-    if delta is None:
-        if not exact:
-            return None
-        delta_pen = 12
-    else:
-        limit = 3 if not exact else (45 if is_video else 10)
-        if not artist:
-            limit = 3
-        if delta > limit:
-            return None
-        delta_pen = delta * (3 if delta <= 3 else 1.5)
-    synced = bool(row.get("syncedLyrics") or row.get("lrc"))
-    return round(100 * ts + 60 * as_ - delta_pen + (20 if synced else 0), 2)
-
-
-def _ly_pick(rows, artist, title, dur, is_video):
-    best = None
-    for row in rows or []:
-        sc = ly_score(row, artist, title, dur, is_video)
-        if sc is None:
-            continue
-        lines, synced, _ = _pack_lyrics(row, dur)
-        if not lines or not _lyrics_quality_ok(lines, synced):
-            continue
-        if best is None or sc > best[0]:
-            best = (sc, lines, synced)
+    inter = " ".join(sorted(ta & tb))
+    ra, rb = " ".join(sorted(ta - tb)), " ".join(sorted(tb - ta))
+    s1, s2 = (inter + " " + ra).strip(), (inter + " " + rb).strip()
+    best = _ly_ratio(s1, s2)
+    if inter:
+        # subset match ("Feel Good Inc" vs "Feel Good Inc Remastered") only counts when
+        # the shared part is most of the longer side
+        cover = len(inter) / max(len(s1), len(s2))
+        if cover >= 0.6:
+            best = max(best, 0.55 + 0.45 * cover)
     return best
 
 
-def _ly_lrclib(artist, title, dur, is_video):
-    rows = []
-    if artist:
-        params = {"track_name": title, "artist_name": artist}
-        if dur:
-            params["duration"] = int(round(dur))
-        got = _lrclib_get("/get?" + urllib.parse.urlencode(params))
-        if isinstance(got, dict):
-            rows.append(got)
-        q = {"track_name": title, "artist_name": artist}
+def _ly_artist_parts(s):
+    return [p.strip() for p in re.split(
+        r"\s*(?:,|&|/|;|\+|\bx\b|\bvs\.?|\bfeat\.?|\bft\.?|\bfeaturing\b|\bwith\b|\band\b|\bи\b)\s*",
+        s or "", flags=re.I) if p and p.strip()]
+
+
+def _ly_row_title(row, artist):
+    """LRCLIB rows are often 'Artist - Title (Audio)': drop the artist prefix and noise."""
+    t = ly_clean_title(row.get("trackName") or row.get("name") or "")
+    ra = row.get("artistName") or ""
+    m = re.match(r"^(.+?)\s+[-–—]\s+(.+)$", t)
+    if m and any(_ly_artist_match(m.group(1), x) >= 0.85 for x in filter(None, [ra, artist])):
+        t = m.group(2)
+    return t
+
+
+def _ly_title_match(got, want):
+    g, w = _ly_strip_feat(got), _ly_strip_feat(want)
+    kg, kw = _ly_key(g), _ly_key(w)
+    if not kg or not kw:
+        return 0.0
+    if kg == kw:
+        return 1.0
+    g2, w2 = _ly_strip_parens(g), _ly_strip_parens(w)
+    if _ly_key(g2) and _ly_key(g2) == _ly_key(w2):
+        return 0.95
+    r = max(ly_token_set_ratio(g, w), ly_token_set_ratio(g2 or g, w2 or w))
+    if min(len(_ly_key(g2 or g)), len(_ly_key(w2 or w))) <= 1 and r < 0.9:
+        return 0.0                                  # "Numb" ≠ "Numbers"
+    return r
+
+
+def _ly_artist_match(got, want):
+    """Any credited artist on either side matching counts."""
+    if not want:
+        return 0.5
+    if not got:
+        return 0.0
+    best = 0.0
+    for g in _ly_artist_parts(got) or [got]:
+        for w in _ly_artist_parts(want) or [want]:
+            kg, kw = " ".join(_ly_key(g)), " ".join(_ly_key(w))
+            if not kg or not kw:
+                continue
+            if kg == kw:
+                return 1.0
+            best = max(best, _ly_ratio(kg, kw), _ly_ratio(kg.replace(" ", ""), kw.replace(" ", "")))
+    return best
+
+
+LY_TITLE_MIN = 0.75
+LY_ARTIST_MIN = 0.8
+
+
+def ly_judge(row, artist, title, dur, is_video=False, strict_title=False):
+    """→ (score, use_synced) or None to reject. Duration ranks rather than gates,
+    except for title-only searches where it's the only identity signal left."""
+    if not isinstance(row, dict) or row.get("instrumental"):
+        return None
+    has_synced = bool(row.get("syncedLyrics") or row.get("lrc"))
+    if not (has_synced or row.get("plainLyrics") or row.get("lyrics")):
+        return None
+    ts = _ly_title_match(_ly_row_title(row, artist), title)
+    as_ = _ly_artist_match(row.get("artistName") or "", artist)
+    if ts < (0.9 if strict_title or not artist else LY_TITLE_MIN):
+        return None
+    if artist and as_ < LY_ARTIST_MIN:
+        return None
+    try:
+        rd = float(row.get("duration") or 0)
+    except (TypeError, ValueError):
+        rd = 0
+    delta = abs(rd - float(dur)) if rd > 0 and dur else None
+    strong = ts >= 0.9 and bool(artist) and as_ >= 0.9
+    if strict_title or not artist:
+        # Title-only identity: exact multi-word title + duration within 10s, or nothing
+        # ("Hello"/"Love" by an unknown uploader would match a random famous song).
+        if delta is None or delta > 10 or ts < 0.95 or len(_ly_key(_ly_strip_parens(title) or title)) < 2:
+            return None
+    use_synced = has_synced
+    score = 100 * ts + 60 * (as_ if artist else 0.6)
+    if delta is None:
+        score -= 15
+        use_synced = has_synced and strong
+    elif delta <= 3:
+        score += 30
+    elif delta <= max(15.0, 0.2 * float(dur)) and ts >= 0.85:
+        score += 15 - min(delta, 30) / 2
+        if delta > 8:
+            use_synced = False                       # same song, other edit: timestamps would drift
     else:
-        q = {"track_name": title}
-    found = _lrclib_get("/search?" + urllib.parse.urlencode(q))
-    if isinstance(found, list):
-        rows.extend(found[:20])
-    if not rows and artist:
-        found = _lrclib_get("/search?" + urllib.parse.urlencode({"q": f"{artist} {title}"}))
-        if isinstance(found, list):
-            rows.extend(found[:20])
-    return _ly_pick(rows, artist, title, dur, is_video)
+        # Different edit (MV intro, live, extended): words fine, timestamps not.
+        if not strong:
+            return None
+        score -= 20 + min(delta, 120) / 6
+        use_synced = False
+    if use_synced:
+        score += 20
+    return round(score, 2), use_synced
 
 
-def _ly_netease(artist, title, dur, is_video):
+def ly_score(row, artist, title, dur, is_video=False):
+    """Score or None (rejected)."""
+    j = ly_judge(row, artist, title, dur, is_video)
+    return j[0] if j else None
+
+
+def _ly_lines(row, use_synced, dur):
+    if use_synced:
+        lines, synced, _ = _pack_lyrics(row, dur)
+        if lines and synced and _lyrics_quality_ok(lines, True):
+            return lines, True
+    plain = row.get("plainLyrics") or row.get("lyrics") or ""
+    if not plain and (row.get("syncedLyrics") or row.get("lrc")):
+        plain = "\n".join(l.get("text", "") for l in _parse_lrc(row.get("syncedLyrics") or row.get("lrc")))
+    lines = _plain_lines(plain)
+    if lines and _lyrics_quality_ok(lines, False):
+        return lines, False
+    return None, False
+
+
+def _ly_pick(rows, artist, title, dur, is_video, strict_title=False):
+    best, seen = None, set()
+    for row in rows or []:
+        if not isinstance(row, dict):
+            continue
+        rid = row.get("id") or id(row)
+        if rid in seen:
+            continue
+        seen.add(rid)
+        j = ly_judge(row, artist, title, dur, is_video, strict_title)
+        if not j or (best is not None and j[0] <= best[0]):
+            continue
+        lines, synced = _ly_lines(row, j[1], dur)
+        if lines:
+            best = (j[0], lines, synced)
+    return best
+
+
+def _lrclib_q(params):
+    """LRCLIB with one retry: transient failures used to get cached as 'no lyrics'."""
+    path = ("/get?" if "duration" in params else "/search?") + urllib.parse.urlencode(params)
+    for attempt in range(2):
+        got = _lrclib_get(path)
+        if isinstance(got, list):
+            return got[:25]
+        if isinstance(got, dict) and (got.get("trackName") or got.get("id")):
+            return [got]
+        if path.startswith("/get"):
+            return []                                # 404 = not found, don't retry
+        time.sleep(0.5 * (attempt + 1))
+    return []
+
+
+def _ly_good(best):
+    return best is not None and best[2] and best[0] >= 185
+
+
+def _ly_lrclib(artist, title, dur, is_video, channel_artist=False):
+    """Passes: exact /get → track+artist search → q search → title-only (artist fuzzy-checked)."""
+    best = None
+
+    def take(rows, strict=False, a=None):
+        nonlocal best
+        got = _ly_pick(rows, artist if a is None else a, title, dur, is_video, strict)
+        if got and (best is None or got[0] > best[0]):
+            best = got
+
+    if artist and dur:
+        take(_lrclib_q({"track_name": title, "artist_name": artist, "duration": int(round(dur))}))
+        if _ly_good(best):
+            return best
+    if artist:
+        take(_lrclib_q({"track_name": title, "artist_name": artist}))
+        if _ly_good(best):
+            return best
+        take(_lrclib_q({"q": f"{artist} {title}"}))
+        if _ly_good(best):
+            return best
+    rows = _lrclib_q({"track_name": title})
+    take(rows)
+    if best is None and artist and channel_artist:
+        take(rows, strict=True, a="")               # the "artist" was only the uploader
+    return best
+
+
+def _ly_ovh(artist, title):
+    """lyrics.ovh (GET api.lyrics.ovh/v1/{artist}/{title}): plain text, exact names only."""
+    if not artist or not title:
+        return None
+    data = _http_json("https://api.lyrics.ovh/v1/" + urllib.parse.quote(artist, safe="") + "/" +
+                      urllib.parse.quote(title, safe=""), timeout=6)
+    text = (data or {}).get("lyrics") if isinstance(data, dict) else None
+    if not text or len(text) < 80:
+        return None
+    text = re.sub(r"^Paroles de la chanson .*?\r?\n", "", text)
+    lines = _plain_lines(text)
+    if lines and _lyrics_quality_ok(lines, False):
+        return (100.0, lines, False)
+    return None
+
+
+def _ly_netease(artist, title, dur, is_video, channel_artist=False):
     if not artist:
         return None
     headers = {"Referer": "https://music.163.com/", "User-Agent": _lyric_ua()}
@@ -879,22 +1028,22 @@ def _ly_netease(artist, title, dur, is_video):
         an = ", ".join((x.get("name") or "") for x in (song.get("artists") or []) if isinstance(x, dict))
         fake = {"trackName": song.get("name") or "", "artistName": an,
                 "duration": (song.get("duration") or 0) / 1000.0, "syncedLyrics": "x"}
-        sc = ly_score(fake, artist, title, dur, is_video)
-        if sc is not None and (best is None or sc > best[0]):
-            best = (sc, song)
+        j = ly_judge(fake, artist, title, dur, is_video)
+        if j and j[1] and (best is None or j[0] > best[0]):
+            best = (j[0], song)
     if not best or not best[1].get("id"):
         return None
     lyr = _http_json("https://music.163.com/api/song/lyric?" + urllib.parse.urlencode(
         {"id": str(best[1]["id"]), "lv": -1, "kv": -1, "tv": -1}), timeout=6, headers=headers)
     lines = _parse_lrc(((lyr or {}).get("lrc") or {}).get("lyric") or "") if isinstance(lyr, dict) else []
     if lines and _lyrics_quality_ok(lines, True):
-        return (best[0], lines, True)
+        return (best[0] - 5, lines, True)
     return None
 
 
 def lyrics_lookup(title, artist, duration):
     """title = raw YouTube title (or a clean song name), artist = channel / artist."""
-    a, t, is_video = ly_identify(title, artist)
+    a, t, is_video, from_channel = ly_identify_ex(title, artist)
     if not t:
         return {"lines": [], "synced": False}
     try:
@@ -905,27 +1054,39 @@ def lyrics_lookup(title, artist, duration):
     now = time.time()
     with _lyrics_lock:
         hit = _lyrics_cache.get(key)
-        if hit and now - hit[0] < (6 * 3600 if hit[1].get("lines") else 600):
+        if hit and now - hit[0] < (6 * 3600 if hit[1].get("lines") else 300):
             return hit[1]
-    attempts = [(a, t)]
     bare = _ly_strip_parens(t)
+    attempts = [(a, t)]
     if bare and bare != t:
         attempts.append((a, bare))
-    if a:
-        primary = re.split(r"\s*(?:,|&|/|\bx\b|\band\b|\bи\b)\s*", a, maxsplit=1, flags=re.I)[0].strip()
-        if primary and primary.lower() != a.lower():
-            attempts.append((primary, t))
+    primary = _ly_artist_parts(a)[:1] if a else []
+    if primary and primary[0].lower() != a.lower():
+        attempts.append((primary[0], bare or t))
     best = None
     for aa, tt in attempts:
         for backend in (_ly_lrclib, _ly_netease):
             try:
-                got = backend(aa, tt, dur, is_video)
+                got = backend(aa, tt, dur, is_video, from_channel)
             except Exception:
                 got = None
             if got and (best is None or got[0] > best[0]):
                 best = got
-        if best and best[2]:
+            if _ly_good(best):
+                break                                # LRCLIB verified: don't let NetEase override
+        if _ly_good(best):
             break
+    if best is None and a and not from_channel:
+        for aa in dict.fromkeys([a] + primary):
+            for tt in dict.fromkeys([t, bare or t]):
+                try:
+                    best = _ly_ovh(aa, tt)
+                except Exception:
+                    best = None
+                if best:
+                    break
+            if best:
+                break
     out = {"lines": best[1], "synced": bool(best[2]), "artist": a, "title": t} if best else \
         {"lines": [], "synced": False, "artist": a, "title": t}
     with _lyrics_lock:
