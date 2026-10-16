@@ -141,7 +141,7 @@ export function PlayerBar() {
   const artist = cur ? String(cur.uploader || '').replace(/\s*-\s*Topic$/i, '').replace(/VEVO$/i, '').trim() : '';
   return (
     <footer id="player" hidden={!cur} data-id={cur?.id || ''} data-artist={artist} data-duration={duration ? String(duration) : ''}
-      className="kb-hide fixed inset-x-0 bottom-[calc(64px+env(safe-area-inset-bottom))] z-40 border-t pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] bg-background/85 backdrop-blur-xl md:bottom-0">
+      className="kb-hide fixed inset-x-0 bottom-[calc(var(--tab-h)+var(--sab))] z-40 border-t pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] bg-background/85 backdrop-blur-xl md:bottom-0">
       {cur && <motion.div initial={reduce ? false : { y: 24, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ type: 'spring', stiffness: 380, damping: 34 }}
         className="grid h-[76px] grid-cols-[1fr_auto] items-center gap-2 px-3 md:h-20 md:gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_minmax(0,1fr)] md:px-5">
         <div className="flex min-w-0 items-center gap-3">

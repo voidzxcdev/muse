@@ -7,7 +7,10 @@
 
 /* Vercel theme (21st.dev @serafimcloud/themes/vercel = tweakcn "vercel") */
 :root {
-  --tab-h: 64px;
+  --tab-h: 72px;
+  /* iOS home-indicator inset, capped: Safari 26 can report the bottom toolbar area here too,
+     which floated the tab bar ~90px above the screen edge. */
+  --sab: min(env(safe-area-inset-bottom, 0px), 34px);
   --background: oklch(0.99 0 0);
   --foreground: oklch(0 0 0);
   --card: oklch(1 0 0);
@@ -230,7 +233,7 @@ html { touch-action: manipulation; -webkit-tap-highlight-color: transparent; -we
 html.kb-open .kb-hide { display: none !important; }
 /* Bottom padding for scroll content: tab bar (56) + safe area + mini player */
 @media (max-width: 767px) {
-  .nav-pad { padding-bottom: calc(var(--tab-h) + env(safe-area-inset-bottom) + var(--player-h, 0px)); }
+  .nav-pad { padding-bottom: calc(var(--tab-h) + var(--sab) + var(--player-h, 0px)); }
   html.kb-open .nav-pad { padding-bottom: 0; }
 }
 @media (min-width: 768px) { .nav-pad { padding-bottom: var(--player-h-md, 0px); } }

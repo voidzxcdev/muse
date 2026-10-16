@@ -210,10 +210,10 @@ export function TabBar() {
   const unseen = useSession((s) => s.unseen);
   const sheet = lib || meOpen;
   const item = (key: string, active: boolean, icon: React.ReactNode, label: string, onClick: () => void, extra?: React.ReactNode, id?: string) => (
-    <button key={key} id={id} type="button" onClick={onClick} aria-label={label} aria-current={active ? 'page' : undefined}
-      className={cn('relative flex min-h-16 flex-1 flex-col items-center justify-center gap-1 text-xs transition-[color,transform] active:scale-95',
+    <button key={key} id={id} type="button" onPointerDown={(e) => { if (e.pointerType !== 'mouse') { e.preventDefault(); onClick(); } }} onClick={(e) => { if (e.detail === 0 || (e.nativeEvent as any).pointerType === 'mouse') onClick(); }} aria-label={label} aria-current={active ? 'page' : undefined}
+      className={cn('relative flex h-full min-w-0 flex-1 basis-0 flex-col items-center justify-center gap-1.5 text-[13px] leading-none transition-[color,background-color] duration-75 active:bg-accent/60',
         active ? 'font-semibold text-foreground' : 'font-medium text-muted-foreground')}>
-      <span className="relative flex h-8 w-14 items-center justify-center">
+      <span className="relative flex h-9 w-16 items-center justify-center">
         {active && <motion.span layoutId="tab-ind" className="absolute inset-0 rounded-full bg-accent" transition={{ type: 'spring', stiffness: 500, damping: 38 }} />}
         <span className="relative">{icon}</span>{extra}
       </span>
@@ -225,14 +225,14 @@ export function TabBar() {
     setTimeout(() => { const q = document.getElementById('q') as HTMLInputElement | null; q?.focus(); q?.select(); }, 60);
   };
   return (
-    <nav id="tabbar" aria-label="Primary" className="kb-hide fixed inset-x-0 bottom-0 z-40 flex h-[calc(64px+env(safe-area-inset-bottom))] border-t bg-background/90 pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] backdrop-blur-xl md:hidden">
-      {item('home', !sheet && route.view === 'home', <Home className="size-6" />, 'Главная', () => nav({ view: 'home' }), null, 'tabHome')}
-      {item('search', !sheet && route.view === 'search', <Search className="size-6" />, 'Поиск', focusSearch, null, 'tabSearch')}
-      {item('lib', lib || (!sheet && (route.view === 'liked' || route.view === 'ownpl')), <Library className="size-6" />, 'Медиатека', () => setLib(true), null, 'tabLib')}
-      {item('friends', !sheet && route.view === 'friends', <Users className="size-6" />, 'Друзья', () => nav({ view: 'friends', handle: '' }),
+    <nav id="tabbar" aria-label="Primary" className="kb-hide fixed inset-x-0 bottom-0 z-40 flex h-[calc(var(--tab-h)+var(--sab))] touch-manipulation select-none border-t bg-background/95 pb-[var(--sab)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] backdrop-blur-xl md:hidden">
+      {item('home', !sheet && route.view === 'home', <Home className="size-7" />, 'Главная', () => nav({ view: 'home' }), null, 'tabHome')}
+      {item('search', !sheet && route.view === 'search', <Search className="size-7" />, 'Поиск', focusSearch, null, 'tabSearch')}
+      {item('lib', lib || (!sheet && (route.view === 'liked' || route.view === 'ownpl')), <Library className="size-7" />, 'Медиатека', () => setLib(true), null, 'tabLib')}
+      {item('friends', !sheet && route.view === 'friends', <Users className="size-7" />, 'Друзья', () => nav({ view: 'friends', handle: '' }),
         unseen ? <span className="absolute right-2 top-0 min-w-4 rounded-full bg-foreground px-1 text-[10px] font-semibold leading-4 text-background">{unseen > 9 ? '9+' : unseen}</span> : null, 'tabFriends')}
       {item('me', meOpen || (!sheet && route.view === 'user' && !!me && (route as any).handle === me.handle),
-        me ? <Avatar user={me} size={26} /> : <User className="size-6" />, me ? 'Я' : 'Войти', () => setMe(true), null, 'tabMe')}
+        me ? <Avatar user={me} size={28} /> : <User className="size-7" />, me ? 'Я' : 'Войти', () => setMe(true), null, 'tabMe')}
     </nav>
   );
 }

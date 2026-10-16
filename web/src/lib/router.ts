@@ -44,7 +44,9 @@ interface RouterState { route: Route; navigate: (r: Route, opts?: { replace?: bo
 function withTransition(fn: () => void) {
   const d = document as any;
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  if (!d.startViewTransition || reduce) { fn(); return; }
+  // View Transitions block until the old frame is snapshotted — on iOS that made every tap feel ~0.3s late.
+  const touch = matchMedia('(pointer: coarse)').matches;
+  if (!d.startViewTransition || reduce || touch) { fn(); return; }
   d.startViewTransition(() => flushSync(fn));
 }
 
