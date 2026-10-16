@@ -6215,6 +6215,10 @@ class Handler(SimpleHTTPRequestHandler):
                     "error": "gone",
                     "message": "Muse does not export catalog media as files.",
                 }, 410)
+            if path in ("/19:47", "/1947", "/19%3A47", "/19%3a47", "/19:47/", "/1947/"):
+                self.directory = STATIC
+                self.path = "/eliza.html"
+                return super().do_GET()
             if path in ("/legal", "/legal.html", "/privacy", "/gdpr", "/terms", "/dpa",
                         "/subprocessors", "/sla", "/cookies", "/credits", "/dmca"):
                 self.directory = STATIC
@@ -7710,6 +7714,7 @@ class Handler(SimpleHTTPRequestHandler):
                       "/market", "/friends", "/legal", "/legal.html",
                       "/privacy", "/gdpr", "/terms", "/dpa", "/subprocessors",
                       "/sla", "/cookies", "/credits", "/dmca")
+                    or p in ("/19:47", "/1947", "/19%3A47", "/19%3a47", "/eliza.html")
                     or p.startswith("/app.") or p.startswith("/style.")
                     or p.startswith("/@")):
                 self.send_header("Cache-Control", "no-store")
