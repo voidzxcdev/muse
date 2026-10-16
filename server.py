@@ -67,7 +67,7 @@ HOST = os.environ.get("HOST") or "0.0.0.0"
 ON_RENDER = bool(os.environ.get("RENDER"))
 PUBLIC_URL = (os.environ.get("PUBLIC_URL") or os.environ.get("RENDER_EXTERNAL_URL") or "").rstrip("/")
 DATABASE_URL = os.environ.get("DATABASE_URL") or ""  # set → Postgres (Supabase); unset → local SQLite
-BUILD = 317  # bump every release — the UI polls this and prompts reload
+BUILD = 318  # bump every release — the UI polls this and prompts reload
 # Never list or play these. Official audio of the same song stays.
 _HIDDEN_IDS = frozenset({
     "4NRXx6U8ABQ",  # The Weeknd - Blinding Lights (Official Video)
@@ -3938,8 +3938,8 @@ BASE_YDL = {
     "noplaylist": True,
     # WARP + YouTube bot checks routinely need >10s; short timeouts abort the
     # one client combo (ios+android) that still succeeds.
-    "socket_timeout": 25,
-    "retries": 3,
+    "socket_timeout": 12,
+    "retries": 1,
     # Audio comes from direct https formats; the HLS/DASH manifests are extra
     # round-trips to googlevideo that sometimes hang for the full timeout.
     "extractor_args": {"youtube": {"skip": ["hls", "dash"]},
@@ -4181,9 +4181,23 @@ def _pick_player_audio(data, vid):
     }
 
 
+_it_good = {"label": None}   # last client that returned audio; tried first next time
+
+
+def innertube_order(players, good_label):
+    """Last-good client first, rest in declared order (pure, tested)."""
+    if not good_label:
+        return list(players)
+    lab = lambda sp: (YTM_CLIENT if sp.get("ytm") else sp["client"]).get("clientName")
+    first = [sp for sp in players if lab(sp) == good_label]
+    return first + [sp for sp in players if lab(sp) != good_label]
+
+
 def _innertube_audio(vid):
-    """Resolve a stream URL with no cookies and no yt-dlp watch page."""
-    for spec in _INNERTUBE_PLAYERS:
+    """Resolve a stream URL with no cookies and no yt-dlp watch page.
+    ANDROID_VR was always tried first and always answered "sign in" on WARP,
+    costing a full proxied round trip (up to 10s) on every cold play."""
+    for spec in innertube_order(_INNERTUBE_PLAYERS, _it_good["label"]):
         client = dict(YTM_CLIENT) if spec.get("ytm") else dict(spec["client"])
         label = client.get("clientName") or "?"
         try:
@@ -4206,10 +4220,11 @@ def _innertube_audio(vid):
                 },
                 method="POST",
             )
-            with _yt_open(req, timeout=10) as resp:
+            with _yt_open(req, timeout=6) as resp:
                 data = json.loads(resp.read().decode("utf-8", "replace"))
             picked = _pick_player_audio(data, vid)
             if picked and picked.get("audio_url"):
+                _it_good["label"] = label
                 print(f"innertube {vid} {label}: ok", flush=True)
                 return picked
             st = (data.get("playabilityStatus") or {}).get("reason") or (
@@ -5032,19 +5047,48 @@ def _piped_audio(video_id):
 
 
 def _resolve_audio(video_id):
+    # Innertube is one small HTTPS call: run it without the global gate, which
+    # used to queue every user's cold play behind one slow yt-dlp extraction.
+    hit = _cached_audio(video_id)
+    if hit:
+        return hit
+    fast = _resolve_innertube(video_id)
+    if fast:
+        return fast
     with _full_gate:
         hit = _cached_audio(video_id)
-        return hit or _resolve_audio_locked(video_id)
+        return hit or _resolve_audio_locked(video_id, skip_innertube=True)
 
 
-def _resolve_audio_locked(video_id):
+def _resolve_innertube(video_id):
+    now = time.time()
+    picked = _innertube_audio(video_id)
+    if not (picked and picked.get("audio_url")):
+        return None
+    payload = {
+        "id": video_id,
+        "title": picked.get("title") or video_id,
+        "uploader": picked.get("uploader") or "",
+        "duration": picked.get("duration"),
+        "categories": [],
+        "thumbnail": picked.get("thumbnail") or _yt_thumb(video_id),
+        "audio_url": picked["audio_url"],
+        "ext": picked.get("ext") or "",
+        "abr": picked.get("abr"),
+    }
+    _cache_put(_url_cache, video_id, (now, payload))
+    print(f"resolve {video_id}: innertube {time.time() - now:.1f}s", flush=True)
+    return payload
+
+
+def _resolve_audio_locked(video_id, skip_innertube=False):
     now = time.time()
     url = f"https://www.youtube.com/watch?v={video_id}"
     last_err = None
 
     # Innertube first: yt-dlp ios/android currently only expose progressive
     # format 18 (muxed video). Serving that as audio makes play() never start.
-    picked = _innertube_audio(video_id)
+    picked = None if skip_innertube else _innertube_audio(video_id)
     if picked and picked.get("audio_url"):
         payload = {
             "id": video_id,
@@ -5261,6 +5305,29 @@ def _download_audio(video_id):
                 os.remove(flat)
         with _audio_jobs_lock:
             _audio_jobs.discard(video_id)
+
+
+_prefetching = set()
+_prefetch_lock = threading.Lock()
+
+
+def _prefetch_one(v):
+    try:
+        best_audio_url(v)
+    except Exception:
+        pass
+    finally:
+        with _prefetch_lock:
+            _prefetching.discard(v)
+
+
+def _warm_audio_later(video_id, delay):
+    if delay <= 0:
+        return _warm_audio(video_id, force=True)
+    t = threading.Timer(delay, _warm_audio, args=(video_id,), kwargs={"force": True})
+    t.daemon = True
+    t.start()
+    return True
 
 
 def _warm_audio(video_id, force=False):
@@ -5903,7 +5970,9 @@ class Handler(SimpleHTTPRequestHandler):
         cached = _audio_file(video_id, aac_only=ios)
         if cached:
             return self._serve_audio_file(cached)
-        _warm_audio(video_id, force=True)
+        # The cache download used to start immediately and fight the live stream
+        # for the same WARP tunnel (first bytes took 5-12s). Start it a bit later.
+        _warm_audio_later(video_id, 6 if not ios else 0)
         if ios:
             # Safari cannot play a YouTube iframe with the screen locked, and
             # it cannot play a live Opus/WebM proxy either. Remuxed AAC is
@@ -6086,6 +6155,21 @@ class Handler(SimpleHTTPRequestHandler):
                             "SELECT 1 FROM likes WHERE user_id=? AND video_id=?",
                             (u["id"], v)).fetchone())
                 return self._json({**data, "liked": liked})
+            if path == "/api/prefetch":
+                # Resolve stream URLs for upcoming tracks (next in queue, top results)
+                # into the URL cache without blocking the caller.
+                ids = [x for x in (qs.get("v") or [""])[0].split(",") if re.fullmatch(r"[\w-]{11}", x)][:3]
+                started = 0
+                for v in ids:
+                    if hidden_track(v) or _cached_audio(v):
+                        continue
+                    with _prefetch_lock:
+                        if len(_prefetching) >= 4 or v in _prefetching:
+                            continue
+                        _prefetching.add(v)
+                    threading.Thread(target=_prefetch_one, args=(v,), daemon=True).start()
+                    started += 1
+                return self._json({"ok": True, "started": started}, 202)
             if path == "/api/enrich":
                 raw = (qs.get("ids") or [""])[0]
                 cards, drop = enrich_ids(raw.split(","))

@@ -6,6 +6,7 @@ import { useSession } from '@/lib/session';
 import { useRouter } from '@/lib/router';
 import type { PubUser, Track } from '@/lib/types';
 import { hiddenTrack } from '@/lib/utils';
+import { prefetchStreams } from '@/player/store';
 import { Empty, GridSkeleton, TrackGrid } from '@/components/tracks';
 import { Avatar } from '@/components/ui/misc';
 import { Page, SectionTitle } from './common';
@@ -27,6 +28,9 @@ export function SearchView({ q, mode }: { q: string; mode: 'songs' | 'people' })
           const tracks = (j.results || []).filter((r: Track) => !hiddenTrack(r));
           setRes({ tracks });
           useSession.getState().markLiked(tracks.map((t: Track) => t.id));
+          // Warm the stream URL of the top 2 results once the user stops typing.
+          const pf = setTimeout(() => { if (!ctl.signal.aborted) prefetchStreams(tracks.slice(0, 2).map((t: Track) => t.id)); }, 900);
+          ctl.signal.addEventListener('abort', () => clearTimeout(pf));
           // Phase 2 (legacy parity): background enrich patches durations/uploader
           if (tracks.length) fetchJSON(`/api/enrich?ids=${tracks.map((t: Track) => t.id).join(',')}`, { signal: ctl.signal }, 20000).then((e) => {
             const map = new Map<string, any>((e.cards || []).map((x: any) => [x.id, x]));

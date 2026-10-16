@@ -126,6 +126,34 @@ function finalizePrev(completed: boolean) {
 }
 
 let playToken = 0;
+/* Stall watchdog: no silent hangs. 7s without 'playing' → reload the stream once;
+   another 7s → clear error and stop the spinner (or skip in a queue). */
+let watchdog: ReturnType<typeof setTimeout> | null = null;
+export const STALL_MS = 7000;
+function clearWatchdog() { if (watchdog) { clearTimeout(watchdog); watchdog = null; } }
+function armWatchdog(token: number, id: string, attempt = 0) {
+  clearWatchdog();
+  watchdog = setTimeout(() => {
+    if (token !== playToken || userPaused || usePlayer.getState().current?.id !== id) return;
+    if (audio.currentTime > 0.2 && !audio.paused) return;
+    if (attempt === 0) {
+      try { audio.src = streamUrl(id) + `&r=${Date.now()}`; audio.play().catch(() => {}); } catch {}
+      armWatchdog(token, id, 1);
+      return;
+    }
+    toast.error('Трек не запускается — YouTube не отвечает. Попробуйте ещё раз или другой трек.');
+    usePlayer.setState({ playing: false, loading: false });
+    try { audio.pause(); } catch {}
+  }, STALL_MS);
+}
+const prefetched = new Set<string>();
+export function prefetchStreams(ids: (string | undefined)[]) {
+  const want = ids.filter((x): x is string => !!x && /^[\w-]{11}$/.test(x) && !prefetched.has(x)).slice(0, 3);
+  if (!want.length) return;
+  want.forEach((x) => prefetched.add(x));
+  if (prefetched.size > 200) prefetched.clear();
+  fetch(`/api/prefetch?v=${want.join(',')}`, { credentials: 'same-origin' }).catch(() => {});
+}
 let errTries = 0;
 let extending: Promise<boolean> | null = null;
 let sleepTimer: ReturnType<typeof setTimeout> | null = null;
@@ -220,6 +248,7 @@ export const usePlayer = create<PlayerState>((set, get) => ({
       if (token !== playToken) return;
       if (e?.name === 'NotAllowedError') set({ playing: false });
     });
+    armWatchdog(token, t.id);
     applyFx(get().fx);
     mediaSession(cur, 'playing');
     useSession.getState().markLiked([t.id]);
@@ -241,8 +270,8 @@ export const usePlayer = create<PlayerState>((set, get) => ({
 
   toggle: () => {
     if (!get().current) return;
-    if (audio.paused) { userPaused = false; audio.play().catch(() => {}); }
-    else { userPaused = true; audio.pause(); }
+    if (audio.paused) { userPaused = false; audio.play().catch(() => {}); if (audio.currentTime < 0.2) armWatchdog(playToken, get().current!.id, 1); }
+    else { userPaused = true; clearWatchdog(); audio.pause(); }
   },
 
   next: async () => {
@@ -299,7 +328,12 @@ export const usePlayer = create<PlayerState>((set, get) => ({
 
 /* ---------- element events → store ---------- */
 let lastTick = 0;
-audio.addEventListener('playing', () => { usePlayer.setState({ playing: true, loading: false }); tick(true); });
+audio.addEventListener('playing', () => {
+  clearWatchdog();
+  usePlayer.setState({ playing: true, loading: false }); tick(true);
+  const { queue, qi, shuffle } = usePlayer.getState();
+  if (!shuffle) prefetchStreams([queue[qi + 1]?.id]);
+});
 audio.addEventListener('play', () => usePlayer.setState({ playing: true }));
 audio.addEventListener('pause', () => { usePlayer.setState({ playing: false }); mediaSession(usePlayer.getState().current, 'paused'); tick(true); });
 audio.addEventListener('waiting', () => usePlayer.setState({ loading: true }));
