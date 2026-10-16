@@ -6,7 +6,7 @@ import { usePlayer } from '@/player/store';
 import { useUI } from '@/lib/ui-store';
 import { useTheme } from '@/hooks/theme';
 import { registerSW, startNotifPoll, stopNotifPoll, checkUpdate, ensurePush } from '@/lib/services';
-import { LibrarySheet, Sidebar, TabBar, TopBar } from '@/components/layout';
+import { LibrarySheet, MeSheet, Sidebar, TabBar, TopBar } from '@/components/layout';
 import { NowPlaying, PlayerBar } from '@/components/player';
 import { AppPrompt, CookieBar, ModalHost, Onboarding } from '@/components/dialogs';
 import { TooltipProvider } from '@/components/ui/misc';
@@ -42,7 +42,7 @@ export default function App() {
   const hasPlayer = usePlayer((s) => !!s.current);
   const route = useRouter((s) => s.route);
   useKeyboardInset();
-  React.useEffect(() => { const r = document.documentElement.style; r.setProperty('--player-h', hasPlayer ? '68px' : '0px'); r.setProperty('--player-h-md', hasPlayer ? '80px' : '0px'); }, [hasPlayer]);
+  React.useEffect(() => { const r = document.documentElement.style; r.setProperty('--player-h', hasPlayer ? '76px' : '0px'); r.setProperty('--player-h-md', hasPlayer ? '80px' : '0px'); }, [hasPlayer]);
 
   React.useEffect(() => {
     useSession.getState().refreshMe();
@@ -94,6 +94,7 @@ export default function App() {
     <TabBar />
     <NowPlaying />
     <LibrarySheet />
+    <MeSheet />
     <ModalHost />
     <Onboarding />
     <CookieBar />

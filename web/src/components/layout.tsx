@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { Bell, Heart, Home, LayoutGrid, Library, LogIn, LogOut, MoreHorizontal, Plus, Scale, Search, Settings, Shuffle, User, Users, X, Moon, Sun, Monitor, Music2 } from 'lucide-react';
+import { Bell, ChevronRight, Heart, Home, LayoutGrid, Library, LogIn, LogOut, MoreHorizontal, Plus, Search, Settings, Shuffle, User, Users, X, Moon, Sun, Monitor, Music2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useRouter } from '@/lib/router';
 import { useSession } from '@/lib/session';
@@ -8,7 +8,7 @@ import { useUI } from '@/lib/ui-store';
 import { usePlayer } from '@/player/store';
 import { mixAll } from '@/lib/actions';
 import { Avatar, Kbd, Tip } from './ui/misc';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from './ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from './ui/dropdown-menu';
 import { Dialog } from './ui/dialog';
 import { useTheme } from '@/hooks/theme';
 
@@ -75,14 +75,6 @@ export function MoreMenu({ children, side = 'right', align = 'start' }: { childr
       <DropdownMenuContent side={side} align={align} className="w-64">
         <DropdownMenuItem onSelect={() => nav({ view: 'market' })}><LayoutGrid /><div><div>Маркетплейс</div><div className="text-xs text-muted-foreground">Плейлистов</div></div></DropdownMenuItem>
         <DropdownMenuItem onSelect={() => nav({ view: 'friends', handle: '' })}><Users /><span className="flex-1">Друзья</span>{unseen > 0 && <span className="rounded-full bg-foreground px-1.5 text-[10px] font-semibold text-background">{unseen}</span>}</DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuSub>
-          <DropdownMenuSubTrigger><Scale /><div><div>Legal</div><div className="text-xs text-muted-foreground">Privacy, GDPR, terms</div></div></DropdownMenuSubTrigger>
-          <DropdownMenuSubContent className="w-60">
-            <DropdownMenuLabel>Legal</DropdownMenuLabel>
-            {LEGAL.map(([href, b, i]) => <DropdownMenuItem key={href} onSelect={() => window.open(href, '_blank', 'noopener')}><div><div>{b}</div><div className="text-xs text-muted-foreground">{i}</div></div></DropdownMenuItem>)}
-          </DropdownMenuSubContent>
-        </DropdownMenuSub>
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -179,57 +171,116 @@ export function TopBar() {
   };
   return (
     <header id="topbar" className="sticky top-0 z-30 shrink-0 border-b pt-[env(safe-area-inset-top)] bg-background/75 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60">
-      <div className="flex h-14 items-center gap-3 pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] md:px-8">
+      <div className="flex h-16 md:h-14 items-center gap-3 pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] md:px-8">
         <button type="button" onClick={() => nav({ view: 'home' })} aria-label="Home" className="tap shrink-0 md:hidden"><img src="/muselogo.png?v=172" alt="Muse" className="size-7 max-w-none rounded-md" /></button>
         <form id="searchForm" role="search" className="relative flex min-w-0 max-w-xl flex-1 items-center" onSubmit={(e) => { e.preventDefault(); clearTimeout(timer.current); if (q.trim().length >= 1) nav({ view: 'search', q: q.trim(), mode }); }}>
-          <div className="relative flex h-9 pointer-coarse:h-11 w-full items-center rounded-lg border bg-muted/40 transition-[border-color,box-shadow] focus-within:border-ring/60 focus-within:ring-[3px] focus-within:ring-ring/20">
-            <div id="qSwitch" role="tablist" aria-label="Search type" className="relative ml-1 flex h-7 items-center gap-0.5 rounded-md p-0.5 pointer-coarse:gap-2">
+          <div className="relative flex h-12 md:h-9 w-full items-center rounded-xl md:rounded-lg border bg-muted/40 transition-[border-color,box-shadow] focus-within:border-ring/60 focus-within:ring-[3px] focus-within:ring-ring/20">
+            <div id="qSwitch" role="tablist" aria-label="Search type" className="relative ml-1 flex h-10 md:h-7 items-center gap-0.5 rounded-lg md:rounded-md p-0.5">
               {(['songs', 'people'] as const).map((m) => (
-                <button key={m} type="button" role="tab" aria-selected={mode === m} title={m === 'songs' ? 'Search songs' : 'Search people'}
+                <button key={m} type="button" role="tab" aria-selected={mode === m} title={m === 'songs' ? 'Search songs' : 'Search people'} aria-label={m === 'songs' ? 'Search songs' : 'Search people'}
                   onClick={() => { setMode(m); if (q.trim().length >= 2) nav({ view: 'search', q: q.trim(), mode: m }); inp.current?.focus(); }}
-                  className={cn('tap relative flex h-6 w-7 items-center justify-center rounded transition-colors', mode === m ? 'text-foreground' : 'text-muted-foreground hover:text-foreground')}>
+                  className={cn('tap relative flex h-9 w-10 md:h-6 md:w-7 items-center justify-center rounded-md md:rounded transition-colors', mode === m ? 'text-foreground' : 'text-muted-foreground hover:text-foreground')}>
                   {mode === m && <motion.span layoutId="qpill" className="absolute inset-0 rounded bg-background shadow-sm dark:bg-accent" transition={{ type: 'spring', stiffness: 520, damping: 36 }} />}
-                  {m === 'songs' ? <Search className="relative size-3.5" /> : <Users className="relative size-3.5" />}
+                  {m === 'songs' ? <Search className="relative size-5 md:size-3.5" /> : <Users className="relative size-5 md:size-3.5" />}
                 </button>
               ))}
             </div>
             <input ref={inp} id="q" value={q} autoComplete="off" spellCheck={false}
               placeholder={mode === 'people' ? 'Search people…' : 'Search a song…'}
               onChange={(e) => { setQ(e.target.value); run(e.target.value); }}
-              className="h-full min-w-0 flex-1 bg-transparent px-2 text-sm outline-none placeholder:text-muted-foreground" />
-            {q ? <button id="qClear" type="button" aria-label="Clear search" onClick={() => { setQ(''); nav({ view: 'home' }); inp.current?.focus(); }} className="tap mr-2 rounded p-0.5 text-muted-foreground hover:text-foreground"><X className="size-3.5" /></button>
+              enterKeyHint="search" className="h-full min-w-0 flex-1 bg-transparent px-2 text-base md:text-sm outline-none placeholder:text-muted-foreground" />
+            {q ? <button id="qClear" type="button" aria-label="Clear search" onClick={() => { setQ(''); nav({ view: 'home' }); inp.current?.focus(); }} className="tap mr-1 flex size-10 items-center justify-center rounded-md text-muted-foreground hover:text-foreground md:mr-2 md:size-auto md:p-0.5"><X className="size-5 md:size-3.5" /></button>
               : <Kbd className="mr-2 hidden sm:inline-flex">/</Kbd>}
           </div>
         </form>
-        <div className="ml-auto flex shrink-0 items-center gap-2 md:hidden">
-          <AccountMenu side="bottom" align="end">
-            <button type="button" aria-label="Account" className="tap">{me ? <Avatar user={me} size={30} /> : <span className="flex size-[30px] items-center justify-center rounded-full border"><User className="size-4" /></span>}</button>
-          </AccountMenu>
-        </div>
       </div>
     </header>
   );
 }
 
+/* Mobile: one-handed bottom bar — 64px + safe area, 24px icons, always-visible labels. */
 export function TabBar() {
   const route = useRouter((s) => s.route);
   const nav = useRouter((s) => s.navigate);
   const setLib = useUI((s) => s.setLibrarySheet);
+  const lib = useUI((s) => s.librarySheet);
+  const meOpen = useUI((s) => s.meSheet);
+  const setMe = useUI((s) => s.setMeSheet);
+  const me = useSession((s) => s.me);
   const unseen = useSession((s) => s.unseen);
-  const item = (key: string, active: boolean, Icon: any, label: string, onClick: () => void, extra?: React.ReactNode, id?: string) => (
-    <button key={key} id={id} type="button" onClick={onClick} className={cn('relative flex min-h-11 flex-1 flex-col items-center justify-center gap-1 text-[11px] font-medium transition-[color,transform] active:scale-95', active ? 'text-foreground' : 'text-muted-foreground')}>
-      {active && <motion.span layoutId="tab-ind" className="absolute top-0 h-0.5 w-8 rounded-full bg-foreground" transition={{ type: 'spring', stiffness: 500, damping: 38 }} />}
-      <Icon className="size-5" />{label}{extra}
+  const sheet = lib || meOpen;
+  const item = (key: string, active: boolean, icon: React.ReactNode, label: string, onClick: () => void, extra?: React.ReactNode, id?: string) => (
+    <button key={key} id={id} type="button" onClick={onClick} aria-label={label} aria-current={active ? 'page' : undefined}
+      className={cn('relative flex min-h-16 flex-1 flex-col items-center justify-center gap-1 text-xs transition-[color,transform] active:scale-95',
+        active ? 'font-semibold text-foreground' : 'font-medium text-muted-foreground')}>
+      <span className="relative flex h-8 w-14 items-center justify-center">
+        {active && <motion.span layoutId="tab-ind" className="absolute inset-0 rounded-full bg-accent" transition={{ type: 'spring', stiffness: 500, damping: 38 }} />}
+        <span className="relative">{icon}</span>{extra}
+      </span>
+      <span className="relative leading-none">{label}</span>
     </button>
   );
+  const focusSearch = () => {
+    if (route.view !== 'home' && route.view !== 'search') nav({ view: 'home' });
+    setTimeout(() => { const q = document.getElementById('q') as HTMLInputElement | null; q?.focus(); q?.select(); }, 60);
+  };
   return (
-    <nav id="tabbar" aria-label="Primary" className="kb-hide fixed inset-x-0 bottom-0 z-40 flex h-[calc(56px+env(safe-area-inset-bottom))] border-t bg-background/85 pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] backdrop-blur-xl md:hidden">
-      {item('home', route.view === 'home' || route.view === 'search', Home, 'Home', () => nav({ view: 'home' }))}
-      {item('liked', route.view === 'liked', Heart, 'Liked', () => nav({ view: 'liked' }))}
-      {item('friends', route.view === 'friends', Users, 'Friends', () => nav({ view: 'friends', handle: '' }), unseen ? <span className="absolute right-[30%] top-1.5 size-2 rounded-full bg-foreground" /> : null)}
-      <MoreMenu side="top" align="center"><button id="tabMore" type="button" className="flex min-h-11 flex-1 flex-col items-center justify-center gap-1 text-[11px] font-medium text-muted-foreground transition-transform active:scale-95"><MoreHorizontal className="size-5" />More</button></MoreMenu>
-      {item('lib', false, Library, 'Library', () => setLib(true), null, 'tabLib')}
+    <nav id="tabbar" aria-label="Primary" className="kb-hide fixed inset-x-0 bottom-0 z-40 flex h-[calc(64px+env(safe-area-inset-bottom))] border-t bg-background/90 pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] backdrop-blur-xl md:hidden">
+      {item('home', !sheet && route.view === 'home', <Home className="size-6" />, 'Главная', () => nav({ view: 'home' }), null, 'tabHome')}
+      {item('search', !sheet && route.view === 'search', <Search className="size-6" />, 'Поиск', focusSearch, null, 'tabSearch')}
+      {item('lib', lib || (!sheet && (route.view === 'liked' || route.view === 'ownpl')), <Library className="size-6" />, 'Медиатека', () => setLib(true), null, 'tabLib')}
+      {item('friends', !sheet && route.view === 'friends', <Users className="size-6" />, 'Друзья', () => nav({ view: 'friends', handle: '' }),
+        unseen ? <span className="absolute right-2 top-0 min-w-4 rounded-full bg-foreground px-1 text-[10px] font-semibold leading-4 text-background">{unseen > 9 ? '9+' : unseen}</span> : null, 'tabFriends')}
+      {item('me', meOpen || (!sheet && route.view === 'user' && !!me && (route as any).handle === me.handle),
+        me ? <Avatar user={me} size={26} /> : <User className="size-6" />, me ? 'Я' : 'Войти', () => setMe(true), null, 'tabMe')}
     </nav>
+  );
+}
+
+function SheetRow({ icon: Icon, label, hint, onClick, badge, danger, id }: { icon: any; label: string; hint?: string; onClick: () => void; badge?: React.ReactNode; danger?: boolean; id?: string }) {
+  return <button id={id} type="button" onClick={onClick}
+    className={cn('flex min-h-14 w-full items-center gap-4 rounded-xl px-3 text-left transition-colors active:scale-[.99] active:bg-accent', danger ? 'text-destructive' : 'text-foreground')}>
+    <span className={cn('flex size-10 shrink-0 items-center justify-center rounded-lg', danger ? 'bg-destructive/10' : 'bg-muted')}><Icon className="size-5" /></span>
+    <span className="min-w-0 flex-1"><span className="block text-base font-medium">{label}</span>{hint && <span className="block truncate text-xs text-muted-foreground">{hint}</span>}</span>
+    {badge}
+    {!danger && <ChevronRight className="size-5 text-muted-foreground" />}
+  </button>;
+}
+
+/* Mobile account + more: big labelled rows in a bottom sheet (replaces the top-right avatar menu and "More"). */
+export function MeSheet() {
+  const on = useUI((s) => s.meSheet);
+  const set = useUI((s) => s.setMeSheet);
+  const open = useUI((s) => s.open);
+  const me = useSession((s) => s.me);
+  const logout = useSession((s) => s.logout);
+  const unseen = useSession((s) => s.unseen);
+  const likeCount = useSession((s) => s.likeCount);
+  const nav = useRouter((s) => s.navigate);
+  const { theme, setTheme } = useTheme();
+  const go = (f: () => void) => { set(false); f(); };
+  return (
+    <Dialog open={on} onOpenChange={set} side="bottom" title={me ? me.display : 'Muse'}>
+      {me ? <div className="mt-1 flex items-center gap-3 px-1 pb-3 text-sm text-muted-foreground"><Avatar user={me} size={40} /><span>@{me.handle}</span></div>
+        : <button type="button" onClick={() => go(() => open({ kind: 'auth', tab: 'signin' }))} className="mt-2 flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-foreground text-base font-semibold text-background active:scale-[.99]"><LogIn className="size-5" />Войти или создать аккаунт</button>}
+      <div className="mt-2 flex flex-col gap-1">
+        {me && <SheetRow id="meProfile" icon={User} label="Профиль" hint="Ваша страница и статистика" onClick={() => go(() => nav({ view: 'user', handle: me.handle }))} />}
+        <SheetRow icon={Heart} label="Любимые треки" hint={likeCount ? `${likeCount} треков` : 'Лайкните трек, он появится здесь'} onClick={() => go(() => nav({ view: 'liked' }))} />
+        <SheetRow icon={LayoutGrid} label="Маркетплейс" hint="Плейлисты сообщества" onClick={() => go(() => nav({ view: 'market' }))} />
+        <SheetRow icon={Users} label="Друзья" hint="Чаты и активность" onClick={() => go(() => nav({ view: 'friends', handle: '' }))}
+          badge={unseen > 0 ? <span className="rounded-full bg-foreground px-2 text-xs font-semibold leading-5 text-background">{unseen}</span> : null} />
+        {me && <SheetRow icon={Bell} label="Уведомления" onClick={() => go(() => open({ kind: 'notifs' }))} />}
+        <SheetRow id="meSettings" icon={Settings} label="Параметры" hint="Аккаунт, звук, приватность и правовая информация" onClick={() => go(() => open({ kind: 'settings' }))} />
+      </div>
+      <p className="mb-2 mt-4 px-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">Тема</p>
+      <div role="radiogroup" aria-label="Тема" className="grid grid-cols-3 gap-2">
+        {([['dark', Moon, 'Тёмная'], ['light', Sun, 'Светлая'], ['system', Monitor, 'Авто']] as const).map(([k, I, l]) =>
+          <button key={k} type="button" role="radio" aria-checked={theme === k} onClick={() => setTheme(k)}
+            className={cn('flex min-h-12 items-center justify-center gap-2 rounded-xl border text-sm font-medium transition-colors active:scale-[.98]', theme === k ? 'border-foreground bg-accent text-foreground' : 'text-muted-foreground')}>
+            <I className="size-5" />{l}</button>)}
+      </div>
+      {me && <div className="mt-3 border-t pt-2"><SheetRow icon={LogOut} label="Выйти" danger onClick={() => go(() => { logout(); nav({ view: 'home' }); })} /></div>}
+    </Dialog>
   );
 }
 
@@ -238,17 +289,17 @@ export function LibrarySheet() {
   const set = useUI((s) => s.setLibrarySheet);
   const me = useSession((s) => s.me);
   const open = useUI((s) => s.open);
+  const nav = useRouter((s) => s.navigate);
+  const likeCount = useSession((s) => s.likeCount);
   return (
-    <Dialog open={on} onOpenChange={set} side="bottom" title="Library">
-      <div className="mt-3 flex items-center justify-between">
-        {me ? <div className="flex items-center gap-2"><Avatar user={me} size={28} /><span className="text-sm font-medium">{me.display}</span></div>
-          : <button type="button" className="text-sm underline" onClick={() => { set(false); open({ kind: 'auth', tab: 'signin' }); }}>Sign in</button>}
-        <div className="flex gap-2">
-          <button type="button" onClick={() => { set(false); mixAll(usePlayer.getState().play); }} className="min-h-11 rounded-md border px-4 text-sm active:scale-95">Mix all</button>
-          <button id="sheetNew" type="button" onClick={() => { set(false); me ? open({ kind: 'newPlaylist' }) : open({ kind: 'auth', tab: 'signin' }); }} className="min-h-11 rounded-md border px-4 text-sm active:scale-95">+ New</button>
-        </div>
+    <Dialog open={on} onOpenChange={set} side="bottom" title="Медиатека">
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <button type="button" onClick={() => { set(false); mixAll(usePlayer.getState().play); }} className="flex min-h-12 items-center justify-center gap-2 whitespace-nowrap rounded-xl border text-[15px] font-medium active:scale-[.98]"><Shuffle className="size-5" />Перемешать</button>
+        <button id="sheetNew" type="button" onClick={() => { set(false); me ? open({ kind: 'newPlaylist' }) : open({ kind: 'auth', tab: 'signin' }); }} className="flex min-h-12 items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-foreground text-[15px] font-semibold text-background active:scale-[.98]"><Plus className="size-5" />Плейлист</button>
       </div>
-      <div className="mt-4">{me ? <PlaylistLinks onPick={() => set(false)} /> : null}</div>
+      <div className="mt-3"><SheetRow icon={Heart} label="Любимые треки" hint={likeCount ? `${likeCount} треков` : undefined} onClick={() => { set(false); nav({ view: 'liked' }); }} /></div>
+      {!me && <button type="button" className="mt-3 min-h-12 w-full rounded-xl border text-base font-medium" onClick={() => { set(false); open({ kind: 'auth', tab: 'signin' }); }}>Войти, чтобы сохранять плейлисты</button>}
+      <div className="mt-3 [&_button]:min-h-14 [&_button]:text-base">{me ? <PlaylistLinks onPick={() => set(false)} /> : null}</div>
     </Dialog>
   );
 }

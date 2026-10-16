@@ -1,11 +1,11 @@
 import * as React from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { ChevronDown, Heart, ListMusic, ListPlus, Loader2, Moon, Pause, Play, Repeat, Repeat1, Shuffle, SkipBack, SkipForward, SlidersHorizontal, Volume1, Volume2, VolumeX, Mic2 } from 'lucide-react';
+import { ChevronDown, Heart, ListMusic, ListPlus, Loader2, Moon, Pause, Play, Repeat, Repeat1, Share2, Shuffle, SkipBack, SkipForward, SlidersHorizontal, Volume1, Volume2, VolumeX, Mic2, Disc3 } from 'lucide-react';
 import { cn, fmt, prettyTitle, splitArtist, ytThumb } from '@/lib/utils';
 import { FX_MODES, getAudio, usePlayer } from '@/player/store';
 import { useSession } from '@/lib/session';
 import { useUI } from '@/lib/ui-store';
-import { needAuth, toggleLike } from '@/lib/actions';
+import { needAuth, shareTrack, toggleLike } from '@/lib/actions';
 import { api } from '@/lib/api';
 import type { LyricLine, Track } from '@/lib/types';
 import { Popover, PopoverContent, PopoverTrigger, Tip } from './ui/misc';
@@ -18,7 +18,7 @@ function useProgress() {
 }
 
 /* Seek line: id="pline" + pointerdown contract kept for the Linux MPRIS bridge. */
-function SeekBar({ big }: { big?: boolean }) {
+function SeekBar({ big, touch }: { big?: boolean; touch?: boolean }) {
   const { ratio, time, duration } = useProgress();
   const ref = React.useRef<HTMLDivElement>(null);
   const [drag, setDrag] = React.useState<number | null>(null);
@@ -31,6 +31,18 @@ function SeekBar({ big }: { big?: boolean }) {
     window.addEventListener('pointermove', move); window.addEventListener('pointerup', up);
   };
   const shown = drag ?? ratio;
+  if (touch) return (
+    <div className="w-full">
+      <div ref={ref} onPointerDown={down} role="slider" aria-label="Перемотка" aria-valuemin={0} aria-valuemax={Math.round(duration)} aria-valuenow={Math.round(time)} tabIndex={0}
+        className="relative flex h-11 w-full cursor-pointer touch-none items-center outline-none">
+        <div className={cn('relative w-full overflow-hidden rounded-full bg-input transition-[height]', drag != null ? 'h-2.5' : 'h-2')}>
+          <div className="absolute inset-y-0 left-0 w-full origin-left rounded-full bg-foreground will-change-transform" style={{ transform: `scaleX(${shown})` }} />
+        </div>
+        <div className={cn('absolute -translate-x-1/2 rounded-full bg-foreground shadow-md ring-4 ring-background/60 transition-[width,height]', drag != null ? 'size-6' : 'size-5')} style={{ left: `${shown * 100}%` }} />
+      </div>
+      <div className="flex justify-between font-mono text-xs tabular-nums text-muted-foreground"><span>{fmt(drag != null ? drag * duration : time)}</span><span>{fmt(duration)}</span></div>
+    </div>
+  );
   return (
     <div className={cn('flex w-full items-center gap-2', big && 'gap-3')}>
       <span id={big ? undefined : 'pos'} className="w-10 text-right font-mono text-[11px] tabular-nums text-muted-foreground">{fmt(drag != null ? drag * duration : time)}</span>
@@ -84,16 +96,16 @@ export function FxPopover({ children }: { children: React.ReactNode }) {
     </PopoverContent></Popover>;
 }
 
-function PlayButton({ big }: { big?: boolean }) {
+function PlayButton({ big, size }: { big?: boolean; size?: 'mini' | 'hero' }) {
   const playing = usePlayer((s) => s.playing);
   const loading = usePlayer((s) => s.loading);
   const reduce = useReducedMotion();
-  return <button id={big ? undefined : 'bPlay'} type="button" title="Play / Pause (space)" aria-label={playing ? 'Pause' : 'Play'}
+  return <button id={big || size ? undefined : 'bPlay'} type="button" title="Play / Pause (space)" aria-label={playing ? 'Pause' : 'Play'}
     onClick={() => usePlayer.getState().toggle()}
-    className={cn('relative flex items-center justify-center rounded-full bg-foreground text-background shadow-sm transition-transform duration-150 hover:scale-105 active:scale-95', big ? 'size-16' : 'size-9', playing && 'playing')}>
+    className={cn('relative flex items-center justify-center rounded-full bg-foreground text-background shadow-sm transition-transform duration-150 hover:scale-105 active:scale-95', size === 'hero' ? 'size-[72px]' : size === 'mini' ? 'size-12' : big ? 'size-16' : 'size-9', playing && 'playing')}>
     <AnimatePresence initial={false} mode="popLayout">
       <motion.span key={playing ? 'pa' : 'pl'} initial={reduce ? false : { scale: 0.6, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.6, opacity: 0 }} transition={{ duration: 0.15 }}>
-        {playing ? <Pause className={cn('fill-current', big ? 'size-6' : 'size-4')} /> : <Play className={cn('fill-current translate-x-[1px]', big ? 'size-6' : 'size-4')} />}
+        {playing ? <Pause className={cn('fill-current', size === 'hero' ? 'size-8' : size === 'mini' ? 'size-5' : big ? 'size-6' : 'size-4')} /> : <Play className={cn('fill-current translate-x-[1px]', size === 'hero' ? 'size-8' : size === 'mini' ? 'size-5' : big ? 'size-6' : 'size-4')} />}
       </motion.span>
     </AnimatePresence>
     {loading && playing && <Loader2 className={cn('absolute animate-spin text-background/40', big ? 'size-[4.5rem]' : 'size-10')} strokeWidth={1} />}
@@ -129,20 +141,20 @@ export function PlayerBar() {
   const artist = cur ? String(cur.uploader || '').replace(/\s*-\s*Topic$/i, '').replace(/VEVO$/i, '').trim() : '';
   return (
     <footer id="player" hidden={!cur} data-id={cur?.id || ''} data-artist={artist} data-duration={duration ? String(duration) : ''}
-      className="kb-hide fixed inset-x-0 bottom-[calc(56px+env(safe-area-inset-bottom))] z-40 border-t pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] bg-background/85 backdrop-blur-xl md:bottom-0">
+      className="kb-hide fixed inset-x-0 bottom-[calc(64px+env(safe-area-inset-bottom))] z-40 border-t pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] bg-background/85 backdrop-blur-xl md:bottom-0">
       {cur && <motion.div initial={reduce ? false : { y: 24, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ type: 'spring', stiffness: 380, damping: 34 }}
-        className="grid h-[68px] grid-cols-[1fr_auto] items-center gap-3 px-3 md:h-20 md:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_minmax(0,1fr)] md:px-5">
+        className="grid h-[76px] grid-cols-[1fr_auto] items-center gap-2 px-3 md:h-20 md:gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_minmax(0,1fr)] md:px-5">
         <div className="flex min-w-0 items-center gap-3">
-          <button type="button" onClick={() => expand(true)} className="group relative size-11 shrink-0 overflow-hidden rounded-md bg-muted md:size-12" aria-label="Open now playing">
+          <button type="button" onClick={() => expand(true)} className="group relative size-14 shrink-0 overflow-hidden rounded-lg bg-muted md:size-12 md:rounded-md" aria-label="Open now playing">
             <AnimatePresence mode="popLayout" initial={false}>
               <motion.img id="art" key={cur.id} src={ytThumb(cur.id, cur.thumbnail)} alt="" className="absolute inset-0 size-full object-cover"
                 initial={reduce ? false : { opacity: 0, scale: 1.08 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.3 }} />
             </AnimatePresence>
             <span className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100"><ChevronDown className="size-4 rotate-180 text-white" /></span>
           </button>
-          <button type="button" onClick={() => expand(true)} className="min-w-0 text-left">
-            <div id="ptitle" className="truncate text-sm font-medium">{prettyTitle(cur.title) || 'Loading…'}</div>
-            <div className="truncate text-xs text-muted-foreground">{artist}</div>
+          <button type="button" onClick={() => expand(true)} aria-label="Открыть плеер" className="flex min-h-14 min-w-0 flex-1 flex-col justify-center text-left md:min-h-0 md:flex-none">
+            <div id="ptitle" className="truncate text-[15px] font-medium md:text-sm">{prettyTitle(cur.title) || 'Loading…'}</div>
+            <div className="truncate text-[13px] text-muted-foreground md:text-xs">{artist}</div>
           </button>
           <button id="bLike" type="button" aria-label="Like" onClick={() => toggleLike(cur)} className={cn('hidden size-8 shrink-0 items-center justify-center rounded-md transition-transform active:scale-90 md:flex', liked ? 'text-foreground loved' : 'text-muted-foreground hover:text-foreground')}>
             <motion.span key={String(liked)} initial={reduce || !liked ? false : { scale: 0.5 }} animate={{ scale: 1 }} transition={{ type: 'spring', stiffness: 600, damping: 15 }}><Heart className={cn('size-4', liked && 'fill-current')} /></motion.span>
@@ -150,9 +162,10 @@ export function PlayerBar() {
         </div>
         <div className="hidden flex-col items-center gap-1 md:flex"><Transport /><SeekBar /></div>
         <div className="flex items-center justify-end gap-1">
-          <div className="flex items-center gap-2 md:hidden">
-            <button type="button" aria-label="Like" onClick={() => toggleLike(cur)} className={cn('flex size-11 items-center justify-center transition-transform active:scale-90', liked ? 'text-foreground' : 'text-muted-foreground')}><Heart className={cn('size-5', liked && 'fill-current')} /></button>
-            <PlayButton />
+          <div className="flex items-center gap-1 md:hidden">
+            <button type="button" aria-label={liked ? 'Убрать из любимых' : 'В любимые'} onClick={() => toggleLike(cur)} className={cn('flex size-12 items-center justify-center rounded-full transition-transform active:scale-90', liked ? 'text-foreground' : 'text-muted-foreground')}><Heart className={cn('size-6', liked && 'fill-current')} /></button>
+            <PlayButton size="mini" />
+            <button type="button" aria-label="Следующий трек" onClick={() => usePlayer.getState().next()} className="flex size-12 items-center justify-center rounded-full text-foreground active:scale-90"><SkipForward className="size-6 fill-current" /></button>
           </div>
           <div className="hidden items-center gap-1 md:flex">
             <IconBtn label="Lyrics & queue" onClick={() => expand(true)}><Mic2 className="size-4" /></IconBtn>
@@ -163,7 +176,7 @@ export function PlayerBar() {
           </div>
         </div>
       </motion.div>}
-      {cur && <div className="absolute inset-x-0 top-0 h-px md:hidden"><MiniProgress /></div>}
+      {cur && <div className="absolute inset-x-0 top-0 h-0.5 bg-input md:hidden"><MiniProgress /></div>}
     </footer>
   );
 }
@@ -243,6 +256,7 @@ export function NowPlaying() {
   const liked = useSession((s) => !!cur && s.likedIds.has(cur.id));
   const [tab, setTab] = React.useState<'lyrics' | 'queue'>('lyrics');
   const reduce = useReducedMotion();
+  const mobile = useIsMobile();
   React.useEffect(() => {
     if (!open) return;
     const k = (e: KeyboardEvent) => { if (e.key === 'Escape') set(false); };
@@ -259,6 +273,7 @@ export function NowPlaying() {
         <img src={ytThumb(cur.id, cur.thumbnail)} alt="" className="size-full scale-125 object-cover blur-3xl saturate-150" />
         <div className="absolute inset-0 bg-gradient-to-b from-background/40 via-background/80 to-background" />
       </div>
+      {mobile ? <MobileNowPlaying cur={cur} liked={liked} onClose={() => set(false)} /> : <>
       <div className="relative flex items-center justify-between px-4 pt-[max(1rem,env(safe-area-inset-top))] md:px-8">
         <button id="bpClose" type="button" aria-label="Close" onClick={() => set(false)} className="flex size-9 pointer-coarse:size-11 items-center justify-center rounded-full border bg-background/40 backdrop-blur hover:bg-accent"><ChevronDown className="size-5" /></button>
         <div className="flex rounded-lg border bg-background/40 p-0.5 backdrop-blur md:hidden">
@@ -296,8 +311,77 @@ export function NowPlaying() {
         <div className={cn('min-h-0 flex-1 overflow-y-auto md:hidden', tab === 'queue' ? 'block' : 'hidden')}><Queue /></div>
       </div>
       <div className="relative mx-auto hidden w-full max-w-6xl px-10 pb-6 md:block"><details className="group"><summary className="flex cursor-pointer list-none items-center gap-2 text-xs font-medium uppercase tracking-wider text-muted-foreground"><ListMusic className="size-3.5" />Queue</summary><div className="mt-3 h-48"><Queue /></div></details></div>
+      </>}
     </motion.div>}
   </AnimatePresence>;
 }
 function SleepChip() { const m = usePlayer((s) => s.sleepMins); return <button type="button" onClick={() => usePlayer.getState().cycleSleep()} className={cn('flex items-center gap-1.5 rounded-md px-2 py-1 text-xs hover:bg-accent hover:text-foreground', m && 'text-foreground')}><Moon className="size-3.5" /><span data-sleep>{m ? `${m}m` : 'Off'}</span></button>; }
 function VolumeLite() { const v = usePlayer((s) => s.volume); return <input type="range" min={0} max={100} value={Math.round(v * 100)} className="range w-28" style={{ ['--val' as any]: `${Math.round(v * 100)}%` }} onChange={(e) => usePlayer.getState().setVolume(Number(e.target.value) / 100)} aria-label="Volume" />; }
+
+function useIsMobile() {
+  const q = '(max-width: 767px)';
+  const [m, setM] = React.useState(() => typeof window !== 'undefined' && window.matchMedia(q).matches);
+  React.useEffect(() => { const mq = window.matchMedia(q); const f = () => setM(mq.matches); mq.addEventListener('change', f); return () => mq.removeEventListener('change', f); }, []);
+  return m;
+}
+
+function ActionBtn({ icon: Icon, label, onClick, active, id }: { icon: any; label: string; onClick?: () => void; active?: boolean; id?: string }) {
+  return <button id={id} type="button" onClick={onClick} aria-pressed={active}
+    className={cn('flex min-h-16 min-w-0 flex-1 flex-col items-center justify-center gap-1.5 whitespace-nowrap rounded-2xl text-[11px] font-medium transition-[background-color,transform] active:scale-95 min-[375px]:text-xs',
+      active ? 'bg-accent text-foreground' : 'text-muted-foreground')}>
+    <Icon className={cn('size-6', active && Icon === Heart && 'fill-current')} />{label}
+  </button>;
+}
+
+/* Mobile Now Playing: art/lyrics/queue up top, every control in the bottom (thumb) half. */
+function MobileNowPlaying({ cur, liked, onClose }: { cur: Track; liked: boolean; onClose: () => void }) {
+  const [pane, setPane] = React.useState<'art' | 'lyrics' | 'queue'>('art');
+  const shuffle = usePlayer((s) => s.shuffle);
+  const repeat = usePlayer((s) => s.repeat);
+  const fx = usePlayer((s) => s.fx);
+  const sleep = usePlayer((s) => s.sleepMins);
+  const reduce = useReducedMotion();
+  const toggle = (p: 'lyrics' | 'queue') => setPane((x) => (x === p ? 'art' : p));
+  const artist = String(cur.uploader || '').replace(/\s*-\s*Topic$/i, '');
+  return <div className="relative flex min-h-0 flex-1 flex-col pb-[max(0.75rem,env(safe-area-inset-bottom))] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
+    <div className="flex items-center gap-2 px-3 pt-[max(0.5rem,env(safe-area-inset-top))]">
+      <button id="bpClose" type="button" aria-label="Свернуть плеер" onClick={onClose} className="flex size-12 items-center justify-center rounded-full active:bg-accent"><ChevronDown className="size-7" /></button>
+      <span className="flex-1 text-center text-xs font-medium uppercase tracking-wider text-muted-foreground">{pane === 'lyrics' ? 'Текст' : pane === 'queue' ? 'Далее' : 'Сейчас играет'}</span>
+      <span className="size-12" />
+    </div>
+    <div className="relative min-h-0 flex-1 px-5">
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.div key={pane} className="absolute inset-0 px-5" initial={reduce ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.18 }}>
+          {pane === 'art' ? <div className="flex h-full items-center justify-center py-2">
+            <motion.div layoutId={reduce ? undefined : 'np-art'} className="relative aspect-square h-full max-h-[360px] max-w-full overflow-hidden rounded-2xl border shadow-2xl">
+              <img id="bpCover" src={ytThumb(cur.id, cur.thumbnail).replace('mqdefault', 'hqdefault')} alt="" className="absolute inset-0 size-full object-cover" />
+            </motion.div>
+          </div> : pane === 'lyrics' ? <div id="bpLyrics" className="h-full"><Lyrics cur={cur} /></div> : <div className="h-full py-2"><Queue /></div>}
+        </motion.div>
+      </AnimatePresence>
+    </div>
+    <div id="bpNow" className="flex shrink-0 flex-col gap-2 px-5 pt-3">
+      <div className="min-w-0"><h2 id="bpNowTitle" className="truncate text-xl font-semibold tracking-tight">{prettyTitle(cur.title)}</h2>
+        <p id="bpNowArtist" className="truncate text-base text-muted-foreground">{artist}</p></div>
+      <SeekBar touch />
+      <div className="flex items-center justify-between">
+        <button type="button" aria-label="Перемешивание" aria-pressed={shuffle} onClick={() => usePlayer.getState().toggleShuffle()} className={cn('relative flex size-12 items-center justify-center rounded-full active:scale-90', shuffle ? 'text-foreground' : 'text-muted-foreground')}><Shuffle className="size-6" />{shuffle && <span className="absolute bottom-1 size-1 rounded-full bg-foreground" />}</button>
+        <button type="button" aria-label="Предыдущий трек" onClick={() => usePlayer.getState().prev()} className="flex size-14 items-center justify-center rounded-full active:scale-90 active:bg-accent"><SkipBack className="size-8 fill-current" /></button>
+        <PlayButton size="hero" />
+        <button type="button" aria-label="Следующий трек" onClick={() => usePlayer.getState().next()} className="flex size-14 items-center justify-center rounded-full active:scale-90 active:bg-accent"><SkipForward className="size-8 fill-current" /></button>
+        <button type="button" aria-label={`Повтор: ${repeat}`} aria-pressed={repeat !== 'off'} onClick={() => usePlayer.getState().cycleRepeat()} className={cn('relative flex size-12 items-center justify-center rounded-full active:scale-90', repeat !== 'off' ? 'text-foreground' : 'text-muted-foreground')}>{repeat === 'one' ? <Repeat1 className="size-6" /> : <Repeat className="size-6" />}{repeat !== 'off' && <span className="absolute bottom-1 size-1 rounded-full bg-foreground" />}</button>
+      </div>
+      <div className="mt-1 flex gap-1">
+        <ActionBtn icon={Heart} label={liked ? 'В любимых' : 'Нравится'} active={liked} onClick={() => toggleLike(cur)} />
+        <TrackMenu t={cur} align="end"><button type="button" aria-label="Добавить в плейлист" className="flex min-h-16 min-w-0 flex-1 flex-col items-center justify-center gap-1.5 whitespace-nowrap rounded-2xl text-[11px] font-medium text-muted-foreground active:scale-95 min-[375px]:text-xs"><ListPlus className="size-6" />Плейлист</button></TrackMenu>
+        <ActionBtn icon={pane === 'lyrics' ? Disc3 : Mic2} label="Текст" active={pane === 'lyrics'} onClick={() => toggle('lyrics')} />
+        <ActionBtn icon={ListMusic} label="Очередь" active={pane === 'queue'} onClick={() => toggle('queue')} />
+        <ActionBtn icon={Share2} label="Отправить" onClick={() => shareTrack(cur)} />
+      </div>
+      <div className="flex gap-2">
+        <FxPopover><button type="button" className={cn('flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl border text-sm', fx !== 'normal' ? 'border-foreground/40 text-foreground' : 'text-muted-foreground')}><SlidersHorizontal className="size-4" />Эффекты{fx !== 'normal' ? ' · вкл' : ''}</button></FxPopover>
+        <button type="button" onClick={() => usePlayer.getState().cycleSleep()} className={cn('flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl border text-sm', sleep ? 'border-foreground/40 text-foreground' : 'text-muted-foreground')}><Moon className="size-4" /><span data-sleep>{sleep ? `Сон через ${sleep} мин` : 'Таймер сна'}</span></button>
+      </div>
+    </div>
+  </div>;
+}

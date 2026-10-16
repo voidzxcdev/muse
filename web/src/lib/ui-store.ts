@@ -15,6 +15,8 @@ interface UIState {
   open: (m: Modal) => void;
   close: () => void;
   librarySheet: boolean;
+  meSheet: boolean;
+  setMeSheet: (on: boolean) => void;
   setLibrarySheet: (on: boolean) => void;
   pendingTake: { handle: string; slug: string } | null;
   setPendingTake: (p: { handle: string; slug: string } | null) => void;
@@ -24,6 +26,8 @@ export const useUI = create<UIState>((set) => ({
   open: (m) => set({ modal: m }),
   close: () => set({ modal: null }),
   librarySheet: false,
+  meSheet: false,
+  setMeSheet: (on) => set({ meSheet: on }),
   setLibrarySheet: (on) => set({ librarySheet: on }),
   pendingTake: null,
   setPendingTake: (p) => set({ pendingTake: p }),

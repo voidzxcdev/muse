@@ -7,6 +7,7 @@
 
 /* Vercel theme (21st.dev @serafimcloud/themes/vercel = tweakcn "vercel") */
 :root {
+  --tab-h: 64px;
   --background: oklch(0.99 0 0);
   --foreground: oklch(0 0 0);
   --card: oklch(1 0 0);
@@ -229,7 +230,7 @@ html { touch-action: manipulation; -webkit-tap-highlight-color: transparent; -we
 html.kb-open .kb-hide { display: none !important; }
 /* Bottom padding for scroll content: tab bar (56) + safe area + mini player */
 @media (max-width: 767px) {
-  .nav-pad { padding-bottom: calc(56px + env(safe-area-inset-bottom) + var(--player-h, 0px)); }
+  .nav-pad { padding-bottom: calc(var(--tab-h) + env(safe-area-inset-bottom) + var(--player-h, 0px)); }
   html.kb-open .nav-pad { padding-bottom: 0; }
 }
 @media (min-width: 768px) { .nav-pad { padding-bottom: var(--player-h-md, 0px); } }

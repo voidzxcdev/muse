@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const BASE = process.argv[2] || 'http://127.0.0.1:8090';
-const OUT = path.resolve('screens', 'v3');
+const OUT = path.resolve(process.env.OUT || path.join('screens', 'v3'));
 fs.mkdirSync(OUT, { recursive: true });
 const user = `uitest_${Date.now().toString(36).slice(-5)}`;
 const pass = 'uitest-pass-1';
@@ -69,13 +69,22 @@ async function full(viewport, tag) {
     await page.waitForTimeout(1800); await shot(page, tag, n);
   }
   await page.locator('#tabLib').tap().catch(() => {}); await page.waitForTimeout(700); await shot(page, tag, '10-library-sheet');
+  await page.keyboard.press('Escape'); await page.waitForTimeout(400);
+  // account / more menu: new "Me" tab, or the old top-right avatar + "More" tab
+  const me = page.locator('#tabMe');
+  if (await me.count()) { await me.tap(); await page.waitForTimeout(700); await shot(page, tag, '11-menu'); await page.keyboard.press('Escape'); }
+  else {
+    await page.locator('header button[aria-label="Account"]').tap().catch(() => {}); await page.waitForTimeout(700); await shot(page, tag, '11-menu'); await page.keyboard.press('Escape'); await page.waitForTimeout(300);
+    await page.locator('#tabMore').tap().catch(() => {}); await page.waitForTimeout(700); await shot(page, tag, '12-more'); await page.keyboard.press('Escape');
+  }
+  await page.waitForTimeout(400);
   await ctx.close();
 }
 await full({ width: 375, height: 812 }, 'm375');
 await full({ width: 320, height: 640 }, 'm320');
-await full({ width: 844, height: 390 }, 'land844');
+if (!process.env.QUICK) await full({ width: 844, height: 390 }, 'land844');
 // overflow sweep at other widths
-try { for (const vp of [{ width: 390, height: 844 }, { width: 414, height: 896 }, { width: 768, height: 1024 }, { width: 667, height: 375 }, { width: 1024, height: 768 }]) {
+if (!process.env.QUICK) try { for (const vp of [{ width: 390, height: 844 }, { width: 414, height: 896 }, { width: 768, height: 1024 }, { width: 667, height: 375 }, { width: 1024, height: 768 }]) {
   const ctx = await ctxFor(vp); const page = await ctx.newPage(); await page.goto(BASE + '/mobile/android', { waitUntil: 'networkidle' }); await signIn(page);
   for (const u of ['/home', '/liked', '/market', '/friends', `/@${user}`]) { await page.goto(BASE + u, { waitUntil: 'networkidle' }); await page.waitForTimeout(1200); await checks(page, `w${vp.width}x${vp.height}`, u); }
   await ctx.close();
