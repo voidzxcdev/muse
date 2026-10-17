@@ -1,0 +1,68 @@
+
+  <!-- Muse: account / chat dialogs (Riff's modal-backdrop + dialog-card) -->
+  <div class="modal-backdrop hidden" id="muse-auth-modal">
+    <div class="dialog-card muse-auth-card">
+      <h3 id="muse-auth-title">Sign in to Muse</h3>
+      <div class="sp-modes" id="muse-auth-modes">
+        <button type="button" class="active" data-mode="signin">Sign in</button>
+        <button type="button" data-mode="signup">Create account</button>
+      </div>
+      <form id="muse-auth-form" autocomplete="on">
+        <input type="text" id="muse-auth-user" class="pill-text-input" placeholder="Username" maxlength="24" autocomplete="username" autocapitalize="off" spellcheck="false" required>
+        <input type="password" id="muse-auth-pass" class="pill-text-input" placeholder="Password" autocomplete="current-password" required>
+        <label class="muse-check hidden" id="muse-auth-tos-row"><input type="checkbox" id="muse-auth-tos" class="m3-checkbox"> <span>I accept the <a href="/terms" target="_blank" rel="noopener">terms</a> and <a href="/privacy" target="_blank" rel="noopener">privacy policy</a></span></label>
+        <div class="import-error-block hidden" id="muse-auth-error"></div>
+        <div class="dialog-actions">
+          <button type="button" class="btn-outline-pill" id="btn-muse-auth-cancel">Cancel</button>
+          <button type="submit" class="btn-pill-primary" id="btn-muse-auth-submit">Sign in</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="modal-backdrop hidden" id="muse-profile-modal">
+    <div class="dialog-card">
+      <h3>Edit profile</h3>
+      <div class="muse-profile-edit-avatar">
+        <span class="muse-avatar-slot" id="muse-edit-avatar"></span>
+        <button type="button" class="btn-outline-pill" id="btn-muse-avatar">Change photo</button>
+        <input type="file" id="muse-avatar-file" hidden accept="image/*">
+      </div>
+      <input type="text" id="muse-edit-display" class="pill-text-input" placeholder="Display name" maxlength="24">
+      <input type="text" id="muse-edit-handle" class="pill-text-input" placeholder="@handle" maxlength="24" autocapitalize="off" spellcheck="false">
+      <div class="import-error-block hidden" id="muse-profile-error"></div>
+      <div class="dialog-actions">
+        <button type="button" class="btn-outline-pill" id="btn-muse-profile-cancel">Cancel</button>
+        <button type="button" class="btn-pill-primary" id="btn-muse-profile-save">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop hidden" id="muse-pick-modal">
+    <div class="dialog-card muse-pick-card">
+      <h3 id="muse-pick-title">Send a track</h3>
+      <input type="text" id="muse-pick-input" class="pill-text-input" placeholder="Search..." autocomplete="off">
+      <div class="tracks-list muse-pick-list" id="muse-pick-list"></div>
+      <div class="dialog-actions">
+        <button type="button" class="btn-outline-pill" id="btn-muse-pick-cancel">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop hidden" id="muse-confirm-modal">
+    <div class="dialog-card">
+      <h3 id="muse-confirm-title">Are you sure?</h3>
+      <p class="muse-dialog-text" id="muse-confirm-text"></p>
+      <div class="dialog-actions">
+        <button type="button" class="btn-outline-pill" id="btn-muse-confirm-cancel">Cancel</button>
+        <button type="button" class="btn-pill-primary" id="btn-muse-confirm-ok">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop hidden muse-media-modal" id="muse-media-modal">
+    <button class="btn-icon-pill muse-media-close" id="btn-muse-media-close" title="Close" aria-label="Close">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+    </button>
+    <div class="muse-media-stage" id="muse-media-stage"></div>
+  </div>

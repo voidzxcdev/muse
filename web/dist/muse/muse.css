@@ -1,0 +1,215 @@
+/* Muse on top of Riff's stylesheet (Riff by rootless, MIT; see /riff/LICENSE).
+   Only three kinds of rules live here:
+   1. hiding Riff features Muse's web build can't offer (Electron-only, file export, translation);
+   2. Сёма's phone rules applied to Riff's own <=600px layout (labeled tab bar flush to the bottom,
+      44px+ targets, safe-area, dvh, thin scrollbars);
+   3. Muse's social screens (accounts, friends, chats), built from Riff's tokens and components. */
+
+/* ---------- 1. features Muse doesn't ship on the web ---------- */
+.titlebar-controls,
+.platform-switch-container,
+#nav-local, #view-local,
+.btn-row-more, #btn-playbar-more, #btn-download-playlist,
+#btn-translate-lyrics, #setting-tr-lang-row, #setting-tr-auto-row,
+.settings-nav-btn[data-cat="integrations"], .settings-section[data-cat="integrations"],
+.settings-nav-btn[data-cat="custom-themes"], .settings-section[data-cat="custom-themes"],
+#setting-engine-api-row, .setting-item:has(#btn-compact-engine-btns),
+.settings-nav-btn[data-cat="storage"], .settings-section[data-cat="storage"],
+#tools-row, #offline-storage-item, #music-folder-item, #download-folder-item,
+.setting-item:has(#btn-tray-on-close), .setting-item:has(#btn-win-media-keys),
+.setting-item:has(#btn-multi-instance), .setting-item:has(#btn-open-css-editor),
+.setting-item:has(#btn-open-clear-cache),
+#btn-check-updates, #btn-mini-player { display: none !important; }
+
+body { overflow: clip; } /* hidden + programmatic scroll on focus shifted the whole app sideways */
+/* Riff's (hidden here) translate button covers the Line toggle in the empty panel; keep it covered */
+.right-panel.lyrics-empty #btn-lyrics-mode { visibility: hidden; }
+.muse-zero { display: none !important; }
+.nav-label { display: none; }
+.muse-logo-mark { width: 18px; height: 18px; border-radius: 5px; display: block; object-fit: cover; }
+.muse-about-logo { width: 64px; height: 64px; border-radius: 16px; }
+.muse-rail-avatar { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; }
+.muse-rail-avatar .muse-avatar { --s: 28px; }
+
+/* thin scrollbars everywhere (Сёма) */
+* { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--md-sys-color-on-surface) 22%, transparent) transparent; }
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--md-sys-color-on-surface) 22%, transparent); border-radius: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
+
+/* ---------- 2. phones: Riff's own <=600px layout, Сёма's rules ---------- */
+@media (max-width: 600px) {
+  html, body { height: 100dvh; overscroll-behavior: none; }
+  body { -webkit-tap-highlight-color: transparent; }
+  .titlebar { padding-top: env(safe-area-inset-top); height: calc(40px + env(safe-area-inset-top)); }
+  .toast-container { top: calc(48px + env(safe-area-inset-top)); }
+
+  /* labeled tab bar, flush to the bottom edge, safe-area inside it */
+  .sidebar {
+    height: calc(64px + env(safe-area-inset-bottom) + var(--android-nav, 0px)) !important;
+    padding: 0 4px calc(env(safe-area-inset-bottom) + var(--android-nav, 0px)) !important;
+    bottom: 0 !important;
+    border-radius: 0 !important;
+  }
+  .sidebar-nav { gap: 0; }
+  .sidebar .nav-item {
+    flex-direction: column; justify-content: center; align-items: center; gap: 3px;
+    min-height: 44px; min-width: 44px; padding: 6px 0 4px !important;
+    touch-action: manipulation;
+  }
+  .sidebar .nav-item .nav-indicator { width: 52px; height: 30px; }
+  .sidebar .nav-label {
+    display: block; font-size: 11px; line-height: 13px; font-weight: 600; letter-spacing: 0.1px;
+    max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    color: var(--md-sys-color-on-surface-variant);
+  }
+  .sidebar .nav-item.active .nav-label { color: var(--md-sys-color-on-surface); }
+  .sidebar .nav-item .nav-badge { top: -2px; right: 6px; }
+
+  /* the big player controls sit low, right above the tabs */
+  .playbar { bottom: calc(72px + env(safe-area-inset-bottom) + var(--android-nav, 0px)) !important; }
+  .playbar .btn-icon-pill, .playbar button { min-width: 44px; min-height: 44px; }
+  .playbar .btn-play-pause { width: 48px; height: 48px; }
+  .app-layout { margin-bottom: calc(164px + env(safe-area-inset-bottom) + var(--android-nav, 0px)) !important; }
+  /* Riff's <=600px rule leaves a 260px side strip over the list; on a phone it is a full-width sheet
+     above the player, opened with Riff's own lyrics button and closed with its X */
+  .right-panel {
+    left: 8px !important; right: 8px !important; width: auto !important; min-width: 0 !important; max-width: none !important;
+    top: calc(112px + env(safe-area-inset-top)) !important;
+    bottom: calc(164px + env(safe-area-inset-bottom) + var(--android-nav, 0px)) !important;
+    padding: 16px !important; z-index: 140;
+  }
+  .right-panel.hidden { width: auto !important; transform: translateY(24px); }
+
+  /* touch: 44px targets, nothing that only exists on hover */
+  .btn-icon-pill, .btn-pill-primary, .btn-outline-pill, .m3-dropdown-option, .m3-dropdown-trigger,
+  .settings-nav-btn, .lyrics-action-btn, .sp-modes button { min-height: 44px; }
+  .btn-icon-pill { min-width: 44px; }
+  .track-row { min-height: 56px; }
+  /* Riff's row actions only appear on hover; on touch the favorite and add buttons stay visible,
+     and the row number and cover-art button give their space back to the title */
+  .track-row { gap: 10px; padding-left: 8px; padding-right: 4px; }
+  .track-row .track-row-index, .track-row .btn-row-art { display: none !important; }
+  .track-row .track-row-actions { opacity: 1 !important; gap: 0; }
+  .track-row .track-row-actions .btn-icon-pill { width: 44px; height: 44px; background: transparent; }
+  input, textarea, select { font-size: 16px !important; } /* no iOS zoom-on-focus */
+  .modal-backdrop .dialog-card, .modal-backdrop .settings-card { max-height: calc(100dvh - 32px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); overflow-y: auto; }
+
+}
+@media (hover: none) {
+  .track-row .track-row-actions { opacity: 1 !important; }
+}
+
+/* ---------- 3. Muse social screens in Riff's language ---------- */
+.muse-avatar { --s: 40px; position: relative; display: inline-flex; flex: 0 0 auto; width: var(--s); height: var(--s); border-radius: 50%; }
+.muse-avatar img, .muse-avatar-letter { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: flex; align-items: center; justify-content: center; }
+.muse-avatar-letter { color: #fff; font-weight: 700; font-size: calc(var(--s) * 0.42); user-select: none; }
+.muse-online { position: absolute; right: 0; bottom: 0; width: 28%; height: 28%; min-width: 9px; min-height: 9px; border-radius: 50%; background: #3ddc84; box-shadow: 0 0 0 2px var(--md-sys-color-surface-container); }
+.muse-avatar-slot { display: inline-flex; }
+.muse-online-text { color: var(--md-sys-color-primary) !important; }
+
+.muse-hero .muse-hero-avatar { overflow: visible; }
+.muse-hero .muse-hero-avatar .muse-avatar { --s: 104px; }
+.muse-hero .muse-hero-avatar .muse-avatar img, .muse-hero .muse-hero-avatar .muse-avatar-letter { border-radius: 32px; }
+.muse-hero .muse-hero-avatar .muse-online { right: -2px; bottom: -2px; width: 22px; height: 22px; }
+.muse-hero-logo { width: 104px; height: 104px; border-radius: 32px; object-fit: cover; }
+.muse-bio { white-space: normal; }
+.muse-setting-top { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.muse-setting-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.muse-setting-desc { opacity: 0.72; font-size: calc(12.5px * var(--font-scale, 1)); overflow-wrap: anywhere; }
+.muse-section { margin-top: 20px; }
+.muse-loader { display: flex; justify-content: center; padding: 32px 0; }
+.muse-empty { display: flex; flex-direction: column; align-items: center; gap: 16px; text-align: center; }
+.muse-person-row { cursor: pointer; }
+.muse-person-row .muse-avatar { margin-right: 12px; }
+.muse-row-actions { display: flex; gap: 6px; align-items: center; margin-left: auto; }
+.muse-profile-edit-avatar { display: flex; align-items: center; gap: 16px; margin: 4px 0 12px; }
+.muse-profile-edit-avatar .muse-avatar { --s: 72px; }
+#muse-profile-modal .pill-text-input, #muse-auth-modal .pill-text-input { width: 100%; margin-bottom: 10px; }
+#muse-auth-modes { margin: 4px 0 14px; }
+.muse-check { display: flex; gap: 10px; align-items: center; margin: 4px 0 10px; font-size: calc(13px * var(--font-scale, 1)); }
+.muse-check a { color: var(--md-sys-color-primary); }
+.muse-dialog-text { opacity: 0.8; margin: 0 0 16px; }
+
+/* chat */
+/* the chat fills Riff's content card; only the message log scrolls */
+.main-content:has(#view-chat.active) { overflow: hidden; padding-bottom: 16px; display: flex; flex-direction: column; }
+#view-chat.active { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+.muse-chat { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; gap: 8px; }
+.muse-chat-head { display: flex; align-items: center; gap: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--md-sys-color-outline-variant); }
+.muse-chat-peer { display: flex; align-items: center; gap: 12px; flex: 1 1 auto; min-width: 0; background: none; border: 0; color: inherit; text-align: left; padding: 4px 8px; border-radius: var(--md-shape-corner-m); cursor: pointer; }
+.muse-chat-peer-meta { display: flex; flex-direction: column; min-width: 0; }
+.muse-chat-log { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; padding: 8px 2px; overscroll-behavior: contain; }
+.muse-day { text-align: center; margin: 10px 0 6px; }
+.muse-day span { font-size: calc(12px * var(--font-scale, 1)); padding: 4px 12px; border-radius: 999px; background: var(--md-sys-color-surface-container-high); color: var(--md-sys-color-on-surface-variant); }
+.muse-msg { display: flex; flex-direction: column; align-items: flex-start; max-width: min(78%, 520px); animation: museMsgIn 220ms cubic-bezier(0.2, 0, 0, 1); }
+.muse-msg.mine { align-self: flex-end; align-items: flex-end; }
+@keyframes museMsgIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.muse-bubble { position: relative; padding: 8px 12px 6px; border-radius: 20px 20px 20px 6px; background: var(--md-sys-color-surface-container-high); color: var(--md-sys-color-on-surface); user-select: text; -webkit-user-select: text; -webkit-touch-callout: none; max-width: 100%; }
+.muse-msg.mine .muse-bubble { border-radius: 20px 20px 6px 20px; background: var(--md-sys-color-primary-container); color: var(--md-sys-color-on-primary-container); }
+.muse-msg.media .muse-bubble { padding: 4px; }
+.muse-msg.round .muse-bubble { background: none; padding: 0; }
+.muse-msg-text { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.4; }
+.muse-msg-text a { color: inherit; text-decoration: underline; }
+.muse-msg-deleted { font-style: italic; opacity: 0.65; }
+.muse-msg-meta { display: flex; justify-content: flex-end; align-items: center; gap: 3px; font-size: 11px; opacity: 0.66; margin-top: 2px; }
+.muse-msg.media .muse-msg-meta, .muse-msg.round .muse-msg-meta { padding: 0 6px 2px; }
+.muse-tick { display: inline-flex; }
+.muse-tick.read { color: var(--md-sys-color-primary); opacity: 1; }
+.muse-msg-reply { font-size: 12.5px; padding: 4px 8px; margin-bottom: 4px; border-left: 3px solid var(--md-sys-color-primary); border-radius: 6px; background: color-mix(in srgb, var(--md-sys-color-on-surface) 6%, transparent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 320px; cursor: pointer; }
+.muse-msg.muse-flash .muse-bubble { box-shadow: 0 0 0 2px var(--md-sys-color-primary); }
+.muse-msg-media { display: block; max-width: min(320px, 64vw); max-height: 360px; border-radius: 16px; cursor: zoom-in; background: var(--md-sys-color-surface-container-highest); }
+.muse-msg-song { min-width: 240px; background: color-mix(in srgb, var(--md-sys-color-on-surface) 5%, transparent); border-radius: 14px; cursor: pointer; padding-right: 8px; }
+.muse-msg-song .muse-avatar { margin: 0 12px 0 4px; }
+.muse-msg-play { display: inline-flex; width: 36px; height: 36px; border-radius: 50%; align-items: center; justify-content: center; background: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary); flex: 0 0 auto; }
+.muse-reacts { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
+.muse-react { min-height: 28px; padding: 0 8px; border-radius: 999px; border: 1px solid var(--md-sys-color-outline-variant); background: var(--md-sys-color-surface-container); color: inherit; font-size: 13px; cursor: pointer; }
+.muse-react.mine { background: var(--md-sys-color-secondary-container); border-color: transparent; }
+
+.muse-voice { display: flex; align-items: center; gap: 10px; min-width: 220px; }
+.muse-voice-btn { width: 40px !important; height: 40px !important; min-width: 40px; flex: 0 0 auto; }
+.muse-voice-bars { flex: 1 1 auto; display: flex; align-items: center; gap: 2px; height: 30px; }
+.muse-voice-bars i { flex: 1 1 0; border-radius: 2px; background: currentColor; opacity: 0.35; min-height: 3px; transition: opacity 120ms; }
+.muse-voice-bars i.on { opacity: 1; }
+.muse-voice-time { font-size: 12px; opacity: 0.75; font-variant-numeric: tabular-nums; }
+.muse-round { position: relative; width: 220px; height: 220px; border-radius: 50%; overflow: hidden; cursor: pointer; background: #000; }
+.muse-round video { width: 100%; height: 100%; object-fit: cover; }
+.muse-round-play { position: absolute; inset: 0; margin: auto; width: 52px; height: 52px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.45); color: #fff; }
+.muse-round.playing .muse-round-play { display: none; }
+.muse-round.playing { box-shadow: 0 0 0 3px var(--md-sys-color-primary); }
+.muse-round-time { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); padding: 2px 8px; border-radius: 999px; background: rgba(0, 0, 0, 0.5); color: #fff; font-size: 12px; }
+
+.muse-chat-reply, .muse-chat-rec, .muse-chat-compose { display: flex; align-items: center; gap: 8px; }
+.muse-chat-reply.hidden, .muse-chat-rec.hidden, .muse-chat-compose.hidden { display: none; }
+.muse-chat-reply { padding: 6px 6px 6px 14px; border-radius: var(--md-shape-corner-m); background: var(--md-sys-color-surface-container-high); border-left: 3px solid var(--md-sys-color-primary); }
+.muse-chat-reply span { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13px; }
+.muse-chat-rec { padding: 6px 6px 6px 14px; border-radius: 999px; background: var(--md-sys-color-surface-container-high); }
+.muse-chat-rec-label { flex: 1 1 auto; opacity: 0.75; }
+.muse-rec-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--md-sys-color-error); animation: museRec 1s ease-in-out infinite alternate; }
+@keyframes museRec { to { opacity: 0.25; } }
+.muse-round-preview { width: 64px; height: 64px; border-radius: 50%; object-fit: cover; transform: scaleX(-1); }
+.muse-round-preview.hidden { display: none; }
+.muse-chat-input { flex: 1 1 auto; min-width: 0; resize: none; min-height: 44px; max-height: 140px; padding: 11px 18px; line-height: 22px; border-radius: 22px; overflow-y: auto; }
+.muse-send { width: 44px !important; height: 44px !important; flex: 0 0 auto; }
+.muse-send.hidden, #btn-chat-mic.hidden { display: none !important; }
+.muse-attach { position: relative; width: auto; flex: 0 0 auto; }
+.muse-attach .m3-dropdown-menu { top: auto; bottom: calc(100% + 6px); left: 0; right: auto; min-width: 220px; transform-origin: bottom left; border-radius: var(--md-shape-corner-m); }
+
+.muse-msg-menu { position: fixed; z-index: 10000; min-width: 210px; max-width: calc(100vw - 16px); padding: 6px 0; border-radius: var(--md-shape-corner-m); background: var(--md-sys-color-surface-container-high); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35); animation: museMenuIn 160ms cubic-bezier(0.2, 0, 0, 1); }
+@keyframes museMenuIn { from { opacity: 0; transform: scale(0.94); } to { opacity: 1; transform: none; } }
+.muse-msg-menu .m3-dropdown-option { width: 100%; background: none; border: 0; color: inherit; text-align: left; }
+.muse-msg-menu .muse-danger { color: var(--md-sys-color-error); }
+.muse-react-row { display: flex; justify-content: space-between; gap: 0; padding: 2px 8px 6px; border-bottom: 1px solid var(--md-sys-color-outline-variant); margin-bottom: 4px; }
+.muse-react-pick { width: 34px; height: 44px; padding: 0; border: 0; background: none; font-size: 20px; border-radius: 10px; cursor: pointer; }
+
+.muse-pick-card { width: min(520px, calc(100vw - 32px)); }
+.muse-pick-list, .muse-gif-grid { max-height: min(56vh, 460px); overflow-y: auto; margin: 10px 0; }
+.muse-gif-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 6px; }
+.muse-gif { padding: 0; border: 0; border-radius: 12px; overflow: hidden; background: var(--md-sys-color-surface-container-highest); cursor: pointer; aspect-ratio: 4 / 3; }
+.muse-gif img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.muse-gif-grid .empty-hint { grid-column: 1 / -1; }
+
+.muse-media-modal { align-items: center; justify-content: center; }
+.muse-media-stage { max-width: 94vw; max-height: 88vh; display: flex; }
+.muse-media-stage img, .muse-media-stage video { max-width: 94vw; max-height: 88vh; border-radius: 16px; object-fit: contain; }
+.muse-media-close { position: fixed; top: calc(16px + env(safe-area-inset-top)); right: 16px; z-index: 2; }
