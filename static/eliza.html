@@ -10,9 +10,10 @@
 :root{--sat:env(safe-area-inset-top,0px);--sab:env(safe-area-inset-bottom,0px);--pink:#ff4f8b;--rose:#ff9ec4;--bg:#08040c}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;margin:0;padding:0}
 html,body{background:var(--bg);color:#fff;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",Roboto,system-ui,sans-serif;overscroll-behavior:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
-html,body{position:fixed;inset:0;width:100%;height:100%;overflow:hidden;touch-action:none;-webkit-text-size-adjust:100%}
+html,body{touch-action:pan-y;-webkit-text-size-adjust:100%}
+html{scroll-snap-type:y proximity}
 *{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
-body{background:radial-gradient(120% 60% at 50% 0%,#24081c 0%,var(--bg) 65%) fixed}
+body{min-height:100dvh;overflow-x:hidden;background:radial-gradient(120% 60% at 50% 0%,#24081c 0%,var(--bg) 65%) fixed}
 body.locked,body.intro{overflow:hidden;height:100dvh}
 button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-action:manipulation}
 #gl,#ov{position:fixed;inset:0;width:100%;height:100%;pointer-events:none}
@@ -47,17 +48,9 @@ body.intro #skip{display:block}
 body.open #hud{display:flex}
 .chip{height:44px;min-width:44px;padding:0 14px;border-radius:22px;background:#140a14b0;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border:1px solid #ffffff22;font-size:14px;color:#ffffffc0}
 .chip.on{border-color:var(--pink);color:var(--rose)}
-main{position:fixed;left:0;right:0;top:0;z-index:2;display:none;touch-action:none;will-change:transform;transition:transform .75s cubic-bezier(.65,0,.25,1)}
-#nav{position:fixed;left:50%;bottom:calc(var(--sab) + 12px);transform:translateX(-50%);z-index:7;display:none;align-items:center;gap:4px;padding:4px;border-radius:30px;background:#140a14a0;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border:1px solid #ffffff1a}
-body.open #nav{display:flex}body.drawing #nav{display:none}
-#nav .nb{width:48px;height:48px;border-radius:24px;font-size:20px;color:#ffffffd0;display:grid;place-items:center}
-#nav .nb:active{background:#ff4f8b33}#nav .nb:disabled{opacity:.25}
-#nav .nb.hint{animation:bob 1.6s ease-in-out infinite}@keyframes bob{50%{transform:translateY(4px)}}
-#nav .dots{display:flex;gap:2px}#nav .dot{width:16px;height:44px;display:grid;place-items:center}
-#nav .dot::after{content:'';width:7px;height:7px;border-radius:4px;background:#ffffff40;transition:background .3s,transform .3s}
-#nav .dot.on::after{background:var(--pink);transform:scale(1.3);box-shadow:0 0 8px var(--pink)}
+main{position:relative;z-index:2;display:none;touch-action:pan-y}
 body.open main{display:block}
-section{position:relative;height:100dvh;overflow:hidden;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;text-align:center;padding:calc(var(--sat) + 40px) 24px calc(var(--sab) + 84px)}
+section{position:relative;min-height:100dvh;scroll-snap-align:start;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;text-align:center;padding:calc(var(--sat) + 40px) 24px calc(var(--sab) + 64px)}
 .t{max-width:420px;opacity:0;transform:translateY(30px);filter:blur(6px);transition:opacity .9s,transform .9s cubic-bezier(.2,.8,.2,1),filter .9s}
 section.in .t{opacity:1;transform:none;filter:none}
 .k{font-size:12px;letter-spacing:.26em;text-transform:uppercase;color:var(--rose)}
@@ -149,7 +142,6 @@ body.drawing #drawtip{display:block}
 <!-- ================= /LETTER ================= -->
 <div id="envWrap"><div class="envelope" id="env"><div class="e-back"></div><div class="e-letter"><div class="e-mini">Для Елизы ❤️</div></div><div class="e-front"></div><div class="e-flap"></div><div class="e-seal">❤</div></div>
   <div class="lcard" id="lcard"><div class="lbody" id="lbody"></div><button class="btn" id="closeLetter" type="button">Закрыть</button></div></div>
-<nav id="nav" aria-label="Навигация"><button class="nb" id="navUp" type="button" aria-label="Вверх">↑</button><div class="dots" id="navDots"></div><button class="nb hint" id="navDown" type="button" aria-label="Вниз">↓</button></nav>
 <div id="drawpad"></div>
 <div id="drawtip">Рисуй пальцем ✨</div>
 <div id="drawbar"><button class="btn" id="clearDraw" type="button">Ещё раз</button><button class="btn solid" id="doneDraw" type="button">Готово</button></div>
@@ -362,16 +354,6 @@ function resolveMain(){
   mainCx=W/2;mainCy=H*.36+r.top*.55;
   if(best!==activeSec){activeSec=best;activeSince=performance.now();chime();buzz(8)}
 }
-let page=0;const mainEl=document.querySelector('main'),navDots=$('#navDots'),navUp=$('#navUp'),navDown=$('#navDown');
-secs.forEach((_,i)=>{const d=document.createElement('button');d.type='button';d.className='dot';d.setAttribute('aria-label',String(i+1));d.addEventListener('click',()=>goPage(i));navDots.appendChild(d)});
-function goPage(i,instant){page=Math.max(0,Math.min(secs.length-1,i));if(instant){mainEl.style.transition='none';requestAnimationFrame(()=>requestAnimationFrame(()=>mainEl.style.transition=''))}
-  mainEl.style.transform=`translateY(${-page*100}dvh)`;if(!CSS.supports('height','1dvh'))mainEl.style.transform=`translateY(${-page*innerHeight}px)`;
-  [...navDots.children].forEach((d,k)=>d.classList.toggle('on',k===page));navUp.disabled=page===0;navDown.disabled=page===secs.length-1;secs[page].classList.add('in');if(!instant)buzz(8)}
-window.goPage=goPage;
-navUp.addEventListener('click',()=>goPage(page-1));navDown.addEventListener('click',()=>{navDown.classList.remove('hint');goPage(page+1)});
-let wheelT=0;addEventListener('wheel',e=>{if(mode!=='main'||drawing)return;e.preventDefault();const n=performance.now();if(n-wheelT<800||Math.abs(e.deltaY)<20)return;wheelT=n;goPage(page+(e.deltaY>0?1:-1))},{passive:false});
-addEventListener('keydown',e=>{if(mode!=='main'||drawing)return;if(['ArrowDown','PageDown',' '].includes(e.key)){e.preventDefault();goPage(page+1)}else if(['ArrowUp','PageUp'].includes(e.key)){e.preventDefault();goPage(page-1)}});
-addEventListener('resize',()=>{if(mode==='main')goPage(page,true)});
 const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('in')}),{threshold:.3});secs.forEach(s=>io.observe(s));
 
 /* ================= lock ================= */
@@ -397,7 +379,7 @@ function runChain(){
     sS=Math.min(W,H)*(n==='eliza'||n==='t1947'?.95:.8);setShape(n);buzz(10);if(n==='heart'){spark(scx,scy,60,10)}chainTimer=setTimeout(step,ms)};
   step();
 }
-function endIntro(){clearTimeout(chainTimer);body.classList.remove('intro','locked');body.classList.add('open');mode='main';goPage(0,true);spark(W/2,H*.35,80,12)}
+function endIntro(){clearTimeout(chainTimer);body.classList.remove('intro','locked');body.classList.add('open');mode='main';scrollTo(0,0);spark(W/2,H*.35,80,12)}
 $('#skip').addEventListener('click',endIntro);
 function unlock(){
   buzz([15,30,60]);$('#lock').classList.add('gone');chime(783.99);
@@ -415,8 +397,9 @@ function tapAt(x,y){
   if(activeSec===0&&Math.hypot(x-mainCx,y-mainCy)<mainS*.55){heroIdx=(heroIdx+1)%HERO.length;explode(x,y,6);spark(x,y,30,8);buzz(12);chime();return}
   spark(x,y,RM?6:24,7);buzz(6);chime();
 }
-function startPress(x,y){pressStart={x,y,t:performance.now()};clearTimeout(pressT);
-  pressT=setTimeout(()=>{if(!pressStart||mode!=='main')return;charging=true;charge=0;chargeX=x;chargeY=y;buzz(15);chargeBuzz()},380)}
+let scrolledSincePress=false;addEventListener('scroll',()=>{scrolledSincePress=true;if(pressStart&&!charging)clearTimeout(pressT)},{passive:true});
+function startPress(x,y){scrolledSincePress=false;pressStart={x,y,t:performance.now()};clearTimeout(pressT);
+  pressT=setTimeout(()=>{if(!pressStart||mode!=='main'||scrolledSincePress)return;charging=true;charge=0;chargeX=x;chargeY=y;buzz(15);chargeBuzz()},250)}
 function chargeBuzz(){if(!charging)return;buzz(6+charge*20|0);setTimeout(chargeBuzz,260-charge*160)}
 function endPress(x,y){clearTimeout(pressT);
   if(charging){charging=false;const p=charge;fireworks(chargeX,chargeY,p);charge=0}
@@ -432,11 +415,11 @@ function moveTrail(x,y){if(trail){trail.vx=x-trail.x;trail.vy=y-trail.y;trail.x=
   if(pressStart&&Math.hypot(x-pressStart.x,y-pressStart.y)>12)clearTimeout(pressT);
   if(charging){chargeX=x;chargeY=y}}
 
-addEventListener('touchstart',e=>{lastTouch=performance.now();if(isUI(e.target)||drawing)return;if(e.cancelable)e.preventDefault();const ts=e.touches;
+addEventListener('touchstart',e=>{lastTouch=performance.now();if(isUI(e.target)||drawing)return;const ts=e.touches;
   if(ts.length===2&&mode==='main'){clearTimeout(pressT);charging=false;pressStart=null;const a=ts[0],b=ts[1];
     galaxy={x:(a.clientX+b.clientX)/2,y:(a.clientY+b.clientY)/2,d0:Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY),ang:Math.atan2(b.clientY-a.clientY,b.clientX-a.clientX),rot:0,spin:0,S:Math.min(W,H)*.8};buzz(10);chime(440);return}
-  if(ts.length===1){const t=ts[0];trail={x:t.clientX,y:t.clientY,vx:0,vy:0};startPress(t.clientX,t.clientY)}},{passive:false});
-addEventListener('touchmove',e=>{if(drawing)return;if(e.cancelable&&!(e.target.closest&&e.target.closest('.lbody')))e.preventDefault();const ts=e.touches;
+  if(ts.length===1){const t=ts[0];trail={x:t.clientX,y:t.clientY,vx:0,vy:0};startPress(t.clientX,t.clientY)}},{passive:true});
+addEventListener('touchmove',e=>{if(drawing)return;const ts=e.touches;
   if(galaxy&&ts.length>=2){e.preventDefault();const a=ts[0],b=ts[1],ang=Math.atan2(b.clientY-a.clientY,b.clientX-a.clientX);let da=ang-galaxy.ang;if(da>Math.PI)da-=TAU;if(da<-Math.PI)da+=TAU;
     galaxy.spin+=da*.6;galaxy.ang=ang;galaxy.x=(a.clientX+b.clientX)/2;galaxy.y=(a.clientY+b.clientY)/2;galaxy.S=Math.max(120,Math.min(W*1.4,Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY)*1.6));return}
   if(charging)e.preventDefault();
@@ -446,8 +429,8 @@ addEventListener('touchend',e=>{lastTouch=performance.now();if(drawing)return;if
 addEventListener('touchcancel',()=>{trail=null;galaxy=null;clearTimeout(pressT);if(charging){charging=false;fireworks(chargeX,chargeY,charge)}pressStart=null});
 for(const g of ['gesturestart','gesturechange','gestureend'])document.addEventListener(g,e=>e.preventDefault(),{passive:false});
 addEventListener('dblclick',e=>e.preventDefault(),{passive:false});
-let lastTE=0;addEventListener('touchend',e=>{const n=performance.now();if(n-lastTE<300&&e.cancelable&&!isUI(e.target))e.preventDefault();lastTE=n},{passive:false});
 addEventListener('selectstart',e=>{if(!(e.target.closest&&e.target.closest('input')))e.preventDefault()});
+addEventListener('touchmove',e=>{if(e.touches.length>1&&e.cancelable)e.preventDefault()},{passive:false});
 // mouse (desktop / tests)
 let mdown=false;
 addEventListener('mousedown',e=>{if(performance.now()-lastTouch<1000||isUI(e.target)||drawing||e.sourceCapabilities&&e.sourceCapabilities.firesTouchEvents)return;mdown=true;startPress(e.clientX,e.clientY)});
@@ -494,7 +477,7 @@ function tick(){let s=Math.max(0,Math.floor((Date.now()-T0)/1000));$('#cd').text
 tick();setInterval(tick,1000);
 
 /* ================= final buttons ================= */
-$('#replay').addEventListener('click',()=>{goPage(0,true);body.classList.remove('open');heroIdx=0;override=null;runChain()});
+$('#replay').addEventListener('click',()=>{scrollTo(0,0);body.classList.remove('open');heroIdx=0;override=null;runChain()});
 let opens=0;const dots=[...document.querySelectorAll('#dots i')],openB=$('#openBtn'),envWrap=$('#envWrap'),env=$('#env'),lcard=$('#lcard'),lbody=$('#lbody');
 const OPEN_MSG=['❤️','ещё…','ещё чуть-чуть','почти!'];
 openB.addEventListener('click',()=>{
