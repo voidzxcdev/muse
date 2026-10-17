@@ -6078,6 +6078,8 @@ class Handler(SimpleHTTPRequestHandler):
         host = (self.headers.get("Host") or "").split(":")[0].strip().lower()
         if host in ELISA_HOSTS:
             return self._elisa(host, path)
+        if path == "/eliza.html":
+            return self.send_error(404)  # only served on elisa.style
         try:
             if path == "/api/health":
                 return self._json({"ok": True, "build": BUILD})
