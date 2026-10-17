@@ -42,7 +42,7 @@ export function UserView({ handle }: { handle: string }) {
   };
   return <Page className="max-w-5xl">
     <motion.section initial={reduce ? false : { opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-      className="relative overflow-hidden rounded-2xl border bg-card px-6 pb-8 pt-10 text-center">
+      className="relative overflow-hidden rounded-2xl  bg-card px-6 pb-8 pt-10 text-center">
       <div className="bg-grid pointer-events-none absolute inset-0" />
       <div className="relative flex flex-col items-center">
         {locked ? <span className="flex size-28 items-center justify-center rounded-full bg-muted"><Lock className="size-8 text-muted-foreground" /></span> : <Avatar user={u} size={112} online={!u.mine && u.online} className="ring-4 ring-background" />}
@@ -62,16 +62,16 @@ export function UserView({ handle }: { handle: string }) {
         </div>
         {badges.length > 0 && <div className="mt-6 flex flex-wrap justify-center gap-2">
           {badges.map((b: any) => { const id = String(b.id || '').replace(/[^a-z0-9]/g, ''); if (!id) return null; return <Tip key={id} label={<span><b>{b.name || id}</b>{b.desc ? <span className="block opacity-70">{b.desc}</span> : null}{b.tier === 'legendary' ? <span className="block">секретный</span> : null}</span>}>
-            <span tabIndex={0} className={cn('flex size-11 items-center justify-center rounded-xl border bg-background transition-transform hover:-translate-y-0.5', b.tier === 'legendary' && 'border-chart-1/60 shadow-[0_0_24px_-6px_var(--chart-1)]')}><img src={`/badges/${id}.png?v=4`} alt={b.name || id} className="size-7" /></span></Tip>; })}
+            <span tabIndex={0} className={cn('flex size-11 items-center justify-center rounded-xl  bg-background transition-transform hover:-translate-y-0.5', b.tier === 'legendary' && 'border-chart-1/60 shadow-[0_0_24px_-6px_var(--chart-1)]')}><img src={`/badges/${id}.png?v=4`} alt={b.name || id} className="size-7" /></span></Tip>; })}
         </div>}
       </div>
-      {!locked && <div className="relative mt-8 grid grid-cols-3 divide-x rounded-xl border bg-background/60 backdrop-blur">
+      {!locked && <div className="relative mt-8 grid grid-cols-3 divide-x rounded-xl  bg-surface-high backdrop-blur">
         {[[fmtHours(st.hours), 'всего прослушано'], [st.songs || 0, 'треков'], [fmtJoined(u.created), 'регистрация']].map(([b, s]) => <div key={String(s)} className="px-2 py-4"><div className="text-lg font-semibold tracking-tight">{b}</div><div className="text-xs text-muted-foreground">{s}</div></div>)}
       </div>}
     </motion.section>
     {showPl && <section className="mt-10"><SectionTitle title="Плейлисты" sub={u.mine && priv.playlists ? 'скрыто для других' : undefined} />
       {pls.length ? <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">{pls.map((p: any) => <button key={p.id} type="button" onClick={() => nav({ view: 'shared', handle: (u.handle || handle).toLowerCase(), slug: p.slug || String(p.id) })}
-        className="group rounded-xl border bg-card p-2.5 text-left transition-[border-color,transform] hover:-translate-y-0.5 hover:border-foreground/20">
+        className="group rounded-xl  bg-card p-2.5 text-left transition-[border-color,transform] hover:-translate-y-0.5 hover:bg-surface-high">
         <Cover src={p.custom_cover || p.cover} name={p.name} className="aspect-square rounded-lg" /><div className="mt-2 truncate text-sm font-medium">{p.name}</div><div className="text-xs text-muted-foreground">{p.count || 0} треков</div></button>)}</div>
         : <p className="text-sm text-muted-foreground">Нет плейлистов.</p>}</section>}
     {showLikes && <section className="mt-10"><SectionTitle title="Liked Songs" sub={u.mine && priv.likes ? 'скрыто для других' : undefined} />
@@ -83,7 +83,7 @@ function ListingCard({ c, rank, onLike, onUnpublish, i }: { c: Listing; rank?: n
   const nav = useRouter((s) => s.navigate);
   const reduce = useReducedMotion();
   return <motion.div initial={reduce ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25, delay: reduce ? 0 : Math.min(i * 0.03, 0.3) }}
-    className={cn('group relative rounded-xl border bg-card p-3 transition-[border-color,transform] hover:-translate-y-0.5 hover:border-foreground/20', rank && 'p-4')}>
+    className={cn('group relative rounded-xl  bg-card p-3 transition-[border-color,transform] hover:-translate-y-0.5 hover:bg-surface-high', rank && 'p-4')}>
     <button type="button" className="block w-full text-left" onClick={() => nav({ view: 'shared', handle: c.owner.handle, slug: c.slug })}>
       <div className="relative">
         <Cover src={c.custom_cover || c.cover} name={c.name} className="aspect-square rounded-lg" />
@@ -93,7 +93,7 @@ function ListingCard({ c, rank, onLike, onUnpublish, i }: { c: Listing; rank?: n
       <div className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground"><Avatar user={c.owner} size={16} /><span className="truncate">@{c.owner.handle} · {c.count} tracks</span></div>
     </button>
     <div className="mt-3 flex items-center justify-between">
-      <button type="button" onClick={onLike} className={cn('flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition-[color,transform] active:scale-95', c.liked ? 'text-foreground' : 'text-muted-foreground hover:text-foreground')}>
+      <button type="button" onClick={onLike} className={cn('flex items-center gap-1.5 rounded-md  px-2 py-1 text-xs transition-[color,transform] active:scale-95', c.liked ? 'text-foreground' : 'text-muted-foreground hover:text-foreground')}>
         <Heart className={cn('size-3.5', c.liked && 'fill-current')} />{c.likes}</button>
       {c.mine && <Tip label="Remove from Marketplace"><button type="button" onClick={onUnpublish} className="rounded-md p-1 text-muted-foreground hover:text-destructive"><Trash2 className="size-3.5" /></button></Tip>}
     </div>

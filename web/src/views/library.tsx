@@ -31,7 +31,7 @@ export function LikedView() {
   const tracks = shownTracks(data?.tracks).filter((t) => likedIds.size === 0 || likedIds.has(t.id));
   return <Page>
     <ViewHeader kind="Playlist" title="Liked Songs" sub={`${tracks.length} tracks · @${me.handle}`} tracks={tracks} source="liked"
-      coverNode={<div className="flex size-36 items-center justify-center rounded-xl border bg-gradient-to-br from-foreground to-foreground/60 text-background shadow-lg md:size-44"><Heart className="size-14 fill-current" /></div>} />
+      coverNode={<div className="flex size-36 items-center justify-center rounded-xl  bg-gradient-to-br from-foreground to-foreground/60 text-background shadow-lg md:size-44"><Heart className="size-14 fill-current" /></div>} />
     {loading && !data ? <RowsSkeleton /> : tracks.length ? <TrackList tracks={tracks} source="liked"
       onReorder={async (next) => { setData({ tracks: next }); try { await req('PATCH', '/api/likes/order', { video_ids: next.map((t) => t.id) }); } catch (e: any) { toast.error(e.message); } }} />
       : <Empty icon={Heart} title="No liked songs yet" sub="Tap the heart on any song to save it here." />}
@@ -54,7 +54,7 @@ export function OwnPlaylistView({ slug }: { slug: string }) {
   return <Page>
     <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) open({ kind: 'cover', target: meta.id, file: f }); e.target.value = ''; }} />
     <ViewHeader kind={meta.listed ? 'Playlist · on Marketplace' : 'Playlist'} title={meta.name} sub={`${tracks.length} tracks · @${me.handle}`} tracks={tracks} source="playlist" sourceId={meta.id}
-      coverNode={<button type="button" onClick={() => fileRef.current?.click()} className="group relative block size-36 overflow-hidden rounded-xl border shadow-lg md:size-44" title="Change cover">
+      coverNode={<button type="button" onClick={() => fileRef.current?.click()} className="group relative block size-36 overflow-hidden rounded-xl  shadow-lg md:size-44" title="Change cover">
         <Cover src={cover} name={meta.name} className="size-full" />
         <span className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-black/55 text-xs text-white opacity-0 transition-opacity group-hover:opacity-100"><ImagePlus className="size-5" />Change cover</span>
       </button>}

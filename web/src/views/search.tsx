@@ -48,7 +48,7 @@ export function SearchView({ q, mode }: { q: string; mode: 'songs' | 'people' })
       mode === 'people' ? (res.users!.length ? <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         {res.users!.map((u, i) => <motion.button key={u.handle} type="button" onClick={() => nav({ view: 'user', handle: u.handle })}
           initial={reduce ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25, delay: reduce ? 0 : i * 0.03 }}
-          className="flex flex-col items-center gap-3 rounded-xl border bg-card p-5 text-center transition-[border-color,transform] hover:-translate-y-0.5 hover:border-foreground/20">
+          className="flex flex-col items-center gap-3 rounded-xl  bg-card p-5 text-center transition-[border-color,transform] hover:-translate-y-0.5 hover:bg-surface-high">
           <Avatar user={u} size={72} online={u.online} />
           <div className="min-w-0"><div className="truncate text-sm font-medium">{u.display || u.handle}</div><div className="truncate text-xs text-muted-foreground">{u.online ? 'онлайн' : `@${u.handle}`}</div></div>
         </motion.button>)}

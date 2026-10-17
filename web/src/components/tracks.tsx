@@ -27,7 +27,7 @@ export function Thumb({ t, className, eager }: { t: Track; className?: string; e
   return <img src={src} alt="" draggable={false} decoding="async" loading={eager ? 'eager' : 'lazy'}
     onLoad={() => setLoaded(true)}
     onError={() => setSrc(`https://i.ytimg.com/vi/${t.id}/mqdefault.jpg`)}
-    className={cn('object-cover bg-muted transition-opacity duration-300', loaded ? 'opacity-100' : 'opacity-0', className)} />;
+    className={cn('object-cover bg-surface-high transition-opacity duration-300', loaded ? 'opacity-100' : 'opacity-0', className)} />;
 }
 
 export function TrackMenu({ t, children, onRemove, align = 'end' }: { t: Track; children: React.ReactNode; onRemove?: () => void; align?: 'start' | 'end' }) {
@@ -122,11 +122,6 @@ function TrackSheet({ t, children, onRemove }: { t: Track; children: React.React
   </>;
 }
 
-function spot(e: React.PointerEvent<HTMLElement>) {
-  const r = e.currentTarget.getBoundingClientRect();
-  e.currentTarget.style.setProperty('--mx', `${e.clientX - r.left}px`);
-  e.currentTarget.style.setProperty('--my', `${e.clientY - r.top}px`);
-}
 
 /* Grid card: hover lifts (transform), spotlight glow, play button scales in. */
 export function TrackCard({ t, i, list, source, sourceId, reason }: { t: Track; i: number; list: Track[]; source: string; sourceId?: any; reason?: string }) {
@@ -138,24 +133,23 @@ export function TrackCard({ t, i, list, source, sourceId, reason }: { t: Track; 
     <motion.div
       initial={reduce ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.25, delay: reduce ? 0 : Math.min(i * 0.03, 0.3), ease: [0.22, 1, 0.36, 1] }}
-      onPointerMove={spot}
-      className="spotlight group relative rounded-xl border bg-card p-2.5 transition-[border-color,transform] duration-200 ease-out hover:-translate-y-0.5 hover:border-foreground/20"
+      className="group relative rounded-[20px] p-2 transition-[background-color,transform] duration-150 ease-out hover:bg-surface-high active:scale-[.98]"
     >
-      <button type="button" className="block w-full text-left outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 rounded-lg"
+      <button type="button" className="block w-full rounded-2xl text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
         onClick={() => usePlayer.getState().play(t, list, source, sourceId)} title="Play">
-        <div className="relative aspect-video overflow-hidden rounded-lg bg-muted">
+        <div className="relative aspect-video overflow-hidden rounded-2xl bg-surface-high">
           <Thumb t={t} eager={i < 4} className="size-full transition-transform duration-500 ease-out group-hover:scale-[1.03]" />
           <span className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent opacity-0 transition-opacity duration-200 group-hover:opacity-100" />
-          <span className={cn('absolute bottom-2 right-2 flex size-10 items-center justify-center rounded-full bg-white text-black shadow-lg transition-[opacity,transform] duration-200 ease-out',
-            isCur ? 'opacity-100 scale-100' : 'opacity-0 scale-90 translate-y-1 group-hover:opacity-100 group-hover:scale-100 group-hover:translate-y-0')}>
+          <span className={cn('absolute bottom-2 right-2 flex h-10 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-[opacity,transform,width,border-radius] duration-200 ease-out',
+            isCur && playing ? 'w-14 rounded-[14px]' : 'w-10', isCur ? 'opacity-100 scale-100' : 'opacity-0 scale-90 translate-y-1 group-hover:opacity-100 group-hover:scale-100 group-hover:translate-y-0')}>
             {isCur && playing ? <Eq /> : <Play className="size-4 fill-current translate-x-[1px]" />}
           </span>
-          {!!t.duration && <span className="absolute left-2 top-2 rounded bg-black/60 px-1.5 py-0.5 font-mono text-[10px] text-white backdrop-blur-sm">{fmt(t.duration)}</span>}
+          {!!t.duration && <span className="absolute left-2 top-2 rounded-full bg-black/60 px-2 py-0.5 text-[10px] font-medium tabular-nums text-white">{fmt(t.duration)}</span>}
         </div>
-        <h3 className={cn('mt-2.5 line-clamp-2 text-sm font-medium leading-snug', isCur && 'text-foreground underline decoration-foreground/30 underline-offset-4')}>{prettyTitle(t.title)}</h3>
-        {(reason || t.uploader) && <p className="mt-0.5 truncate text-xs text-muted-foreground">{reason || t.uploader}</p>}
+        <h3 className={cn('mt-2.5 line-clamp-2 px-1 text-sm font-medium leading-snug', isCur && 'font-bold text-m3-primary')}>{prettyTitle(t.title)}</h3>
+        {(reason || t.uploader) && <p className="mt-0.5 truncate px-1 text-xs text-muted-foreground">{reason || t.uploader}</p>}
       </button>
-      <div className="absolute right-3.5 top-3.5 flex gap-1 pointer-coarse:gap-2 opacity-0 transition-opacity duration-150 group-hover:opacity-100 focus-within:opacity-100 max-md:opacity-100">
+      <div className="absolute right-3.5 top-3.5 flex gap-1 opacity-0 transition-opacity duration-150 group-hover:opacity-100 focus-within:opacity-100 pointer-coarse:gap-2 pointer-coarse:opacity-100">
         <button type="button" onClick={() => toggleLike(t)} aria-label="Like"
           className={cn('tap flex size-7 pointer-coarse:size-9 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur-sm transition-transform active:scale-90', liked && 'opacity-100')}>
           <Heart className={cn('size-3.5', liked && 'fill-current')} />
@@ -164,7 +158,7 @@ export function TrackCard({ t, i, list, source, sourceId, reason }: { t: Track; 
           <button type="button" aria-label="More" className="tap flex size-7 pointer-coarse:size-9 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur-sm active:scale-90"><MoreHorizontal className="size-4" /></button>
         </TrackMenu>
       </div>
-      {liked && <Heart className="pointer-events-none absolute right-4 top-4 size-3.5 fill-white text-white drop-shadow group-hover:opacity-0 max-md:hidden" />}
+      {liked && <Heart className="pointer-events-none absolute right-4 top-4 size-3.5 fill-white text-white drop-shadow group-hover:opacity-0 pointer-coarse:hidden" />}
     </motion.div>
   );
 }
@@ -184,31 +178,31 @@ export function TrackRow({ t, i, list, source, sourceId, onRemove, drag }: {
   const playing = usePlayer((s) => s.playing);
   const liked = useSession((s) => s.likedIds.has(t.id));
   return (
-    <div data-row={i} className={cn('group grid grid-cols-[2rem_1fr_auto] items-center gap-3 rounded-lg px-2 py-1.5 transition-colors hover:bg-accent/60',
-      isCur && 'bg-accent/40', drag?.dragging && 'opacity-40')}
+    <div data-row={i} style={{ ['--i' as any]: i }} className={cn('track-row group grid grid-cols-[1.75rem_1fr_auto] items-center gap-3 rounded-xl px-2 py-1.5 md:gap-4 md:px-[18px] md:py-2.5',
+      isCur && 'playing', drag?.dragging && 'opacity-40')}
       onDoubleClick={() => usePlayer.getState().play(t, list, source, sourceId)}>
-      <div className="relative flex h-full items-center justify-center text-xs tabular-nums text-muted-foreground">
+      <div className="relative flex h-full items-center justify-center text-xs tabular-nums text-outline">
         {drag ? <span onPointerDown={drag.onPointerDown} className="absolute inset-0 hidden cursor-grab items-center justify-center touch-none group-hover:flex active:cursor-grabbing"><GripVertical className="size-4" /></span> : null}
         <span className={cn(drag && 'group-hover:invisible')}>{isCur ? <Eq paused={!playing} /> : i + 1}</span>
       </div>
       <button type="button" className="flex min-w-0 items-center gap-3 text-left outline-none" onClick={() => usePlayer.getState().play(t, list, source, sourceId)}>
-        <div className="relative size-10 shrink-0 overflow-hidden rounded-md bg-muted">
+        <div className="relative size-11 shrink-0 overflow-hidden rounded-xl bg-surface-highest">
           <Thumb t={t} className="size-full" />
-          <span className="absolute inset-0 flex items-center justify-center bg-black/45 opacity-0 transition-opacity group-hover:opacity-100"><Play className="size-4 fill-white text-white" /></span>
+          <span className="absolute inset-0 hidden items-center justify-center bg-black/45 opacity-0 transition-opacity group-hover:opacity-100 pointer-fine:flex"><Play className="size-4 fill-white text-white" /></span>
         </div>
         <div className="min-w-0">
-          <div className={cn('truncate text-sm font-medium', isCur && 'underline decoration-foreground/30 underline-offset-4')}>{prettyTitle(t.title)}</div>
+          <div className="tr-title truncate text-sm font-medium">{prettyTitle(t.title)}</div>
           {t.uploader && <div className="truncate text-xs text-muted-foreground">{t.uploader}</div>}
         </div>
       </button>
       <div className="flex items-center gap-1 pointer-coarse:gap-2">
         <button type="button" aria-label="Like" onClick={() => toggleLike(t)}
-          className={cn('tap flex size-8 pointer-coarse:size-11 items-center justify-center rounded-md text-muted-foreground transition-[opacity,color] hover:text-foreground', liked ? 'text-foreground' : 'opacity-0 group-hover:opacity-100 max-md:opacity-100')}>
+          className={cn('control-btn size-9 pointer-coarse:size-11 transition-[opacity,color,border-radius]', liked ? '!text-m3-primary' : 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100')}>
           <Heart className={cn('size-4', liked && 'fill-current')} />
         </button>
-        <span className="hidden w-12 text-right font-mono text-xs text-muted-foreground sm:block">{t.duration ? fmt(t.duration) : ''}</span>
+        <span className="hidden w-12 text-right text-xs tabular-nums text-outline sm:block">{t.duration ? fmt(t.duration) : ''}</span>
         <TrackMenu t={t} onRemove={onRemove}>
-          <button type="button" aria-label="More" className="tap flex size-8 pointer-coarse:size-11 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"><MoreHorizontal className="size-4" /></button>
+          <button type="button" aria-label="More" className="control-btn size-9 pointer-coarse:size-11"><MoreHorizontal className="size-4" /></button>
         </TrackMenu>
       </div>
     </div>
@@ -253,15 +247,15 @@ export function TrackList({ tracks, source, sourceId, onRemove, onReorder }: {
 
 export function GridSkeleton({ n = 10 }: { n?: number }) {
   return <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
-    {Array.from({ length: n }, (_, i) => <div key={i} className="rounded-xl border p-2.5" style={{ animationDelay: `${i * 50}ms` }}>
-      <div className="aspect-video animate-pulse rounded-lg bg-muted" /><div className="mt-3 h-3.5 w-4/5 animate-pulse rounded bg-muted" /><div className="mt-2 h-3 w-1/2 animate-pulse rounded bg-muted" />
+    {Array.from({ length: n }, (_, i) => <div key={i} className="rounded-[20px] p-2" style={{ animationDelay: `${i * 50}ms` }}>
+      <div className="aspect-video animate-pulse rounded-2xl bg-muted" /><div className="mt-3 h-3.5 w-4/5 animate-pulse rounded bg-muted" /><div className="mt-2 h-3 w-1/2 animate-pulse rounded bg-muted" />
     </div>)}
   </div>;
 }
 
 export function Empty({ icon: Icon = ListMusic, title, sub, children }: { icon?: any; title: string; sub?: string; children?: React.ReactNode }) {
-  return <div className="flex flex-col items-center justify-center rounded-xl border border-dashed px-6 py-16 text-center">
-    <div className="mb-4 flex size-12 items-center justify-center rounded-full border bg-card"><Icon className="size-5 text-muted-foreground" /></div>
+  return <div className="flex flex-col items-center justify-center rounded-xl  border-dashed px-6 py-16 text-center">
+    <div className="mb-4 flex size-12 items-center justify-center rounded-full  bg-card"><Icon className="size-5 text-muted-foreground" /></div>
     <h3 className="text-sm font-semibold">{title}</h3>
     {sub && <p className="mt-1 max-w-sm text-sm text-muted-foreground">{sub}</p>}
     {children && <div className="mt-5">{children}</div>}

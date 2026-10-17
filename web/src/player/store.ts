@@ -5,16 +5,31 @@ import { cookiesAll, isAndroidApp, isIOS, lane, tellAndroid } from '@/lib/env';
 import { useSession } from '@/lib/session';
 import type { Track } from '@/lib/types';
 import { hiddenTrack, prettyTitle, ytThumb } from '@/lib/utils';
+import { setThemeCover } from '@/hooks/theme';
+import { RiffAudioEngine, defaultAudioSettings, defaultHqSettings, type AudioSettings, type HqSettings } from './riff-engine';
 
 export type Repeat = 'off' | 'all' | 'one';
+/* Quick presets (Muse) expressed as Riff engine settings: speedPitch = rate with pitch,
+   eq.low = Riff's 200 Hz low shelf, reverb = Riff convolver mix. */
 export const FX_MODES = [
-  { id: 'normal', name: 'Normal', rate: 1, bass: 0 },
-  { id: 'nightcore', name: 'Nightcore', rate: 1.25, bass: 0 },
-  { id: 'daycore', name: 'Daycore', rate: 0.82, bass: 0 },
-  { id: 'bass', name: 'Bass Boost', rate: 1, bass: 10 },
-  { id: 'nightbass', name: 'Nightcore + Bass', rate: 1.25, bass: 8 },
-  { id: 'slowed', name: 'Slowed', rate: 0.85, bass: 4 },
+  { id: 'normal', name: 'Normal', rate: 1, bass: 0, reverb: 0 },
+  { id: 'nightcore', name: 'Nightcore', rate: 1.25, bass: 0, reverb: 0 },
+  { id: 'daycore', name: 'Daycore', rate: 0.82, bass: 0, reverb: 0 },
+  { id: 'bass', name: 'Bass Boost', rate: 1, bass: 10, reverb: 0 },
+  { id: 'nightbass', name: 'Nightcore + Bass', rate: 1.25, bass: 8, reverb: 0 },
+  { id: 'slowed', name: 'Slowed + reverb', rate: 0.85, bass: 4, reverb: 28 },
 ] as const;
+
+export interface SoundState { settings: AudioSettings; hqEnabled: boolean; hq: HqSettings; crossfade: number }
+const SOUND_KEY = 'muse:sound';
+function loadSound(): SoundState {
+  const base: SoundState = { settings: defaultAudioSettings(), hqEnabled: false, hq: defaultHqSettings(), crossfade: 0 };
+  try {
+    const j = JSON.parse(localStorage.getItem(SOUND_KEY) || 'null');
+    if (j && typeof j === 'object') return { ...base, ...j, settings: { ...base.settings, ...(j.settings || {}), eq: { ...base.settings.eq, ...(j.settings?.eq || {}) } }, hq: { ...base.hq, ...(j.hq || {}) } };
+  } catch {}
+  return base;
+}
 
 interface PlayerState {
   current: Track | null;
@@ -32,6 +47,8 @@ interface PlayerState {
   fx: string;
   sleepMins: number;
   expanded: boolean;
+  sound: SoundState;
+  routed: boolean;
   play: (t: Track, list?: Track[] | null, source?: string, sourceId?: string | number | null) => void;
   toggle: () => void;
   next: () => Promise<void>;
@@ -45,6 +62,8 @@ interface PlayerState {
   playNext: (t: Track) => void;
   addToQueue: (t: Track) => void;
   setExpanded: (on: boolean) => void;
+  setSound: (patch: Partial<Omit<SoundState, 'settings' | 'hq'>> & { settings?: Partial<AudioSettings>; hq?: Partial<HqSettings> }) => void;
+  resetSound: () => void;
 }
 
 /* ---------- audio engine ---------- */
@@ -66,26 +85,109 @@ export function streamUrl(id: string) {
   return `/api/audio?${p}`;
 }
 
-let fxCtx: AudioContext | null = null;
-let fxBass: BiquadFilterNode | null = null;
-function applyFx(id: string) {
-  const spec = FX_MODES.find((m) => m.id === id) || FX_MODES[0];
-  try { audio.playbackRate = spec.rate; (audio as any).preservesPitch = false; } catch {}
-  if (spec.bass && !isIOS && audio.engine !== 'yt') {
-    try {
-      if (!fxCtx) {
-        const Ctx = window.AudioContext || window.webkitAudioContext;
-        fxCtx = new Ctx();
-        const src = fxCtx!.createMediaElementSource(audioEl);
-        fxBass = fxCtx!.createBiquadFilter();
-        fxBass.type = 'lowshelf'; fxBass.frequency.value = 160;
-        src.connect(fxBass); fxBass.connect(fxCtx!.destination);
-      }
-      if (fxCtx.state === 'suspended') fxCtx.resume();
-      fxBass!.gain.value = spec.bass;
-    } catch {}
-  } else if (fxBass) fxBass.gain.value = 0;
+/* ---------- Riff audio engine (Web Audio graph on the same <audio>) ----------
+   Routed where it is safe: desktop browsers, the Windows/Linux shells and Android web.
+   Not routed (element plays natively, effects degrade gracefully):
+   - iOS Safari / the iPhone lane: a MediaElementSource'd element is silenced when the
+     AudioContext gets suspended in the background / on the lock screen, and element
+     volume is read-only — so iPhone keeps the plain media path (background audio,
+     lock-screen controls). Speed & pitch still work (playbackRate); EQ, enhancer,
+     reverb/echo/distortion, crossfade and the visualizer are disabled.
+   - the YouTube iframe engine (pc lane + cookies): no media element to route.
+   - Android app WebView: routed lazily, only once a Web Audio feature is switched on. */
+export const engine = new RiffAudioEngine();
+try { (window as any).__museEngine = engine; } catch {}
+const routeMode = (): 'always' | 'lazy' | 'never' => {
+  if (isIOS || lane() === 'iphone' || audio !== audioEl || audio.engine === 'yt') return 'never';
+  try { if (localStorage.getItem('muse:engine') === 'native') return 'never'; } catch {}
+  return isAndroidApp ? 'lazy' : 'always';
+};
+export const engineSupported = () => routeMode() !== 'never';
+function needsGraph(s: SoundState) {
+  const a = s.settings;
+  return s.hqEnabled || s.crossfade > 0 || a.reverb > 0 || a.echo > 0 || a.distortion > 0 || a.volume !== 1 ||
+    a.eq.low !== 0 || a.eq.mid !== 0 || a.eq.high !== 0 || a.eqBands.some((v) => v !== 0);
 }
+/* Must run inside a user gesture the first time (AudioContext autoplay policy). */
+function initEngine() {
+  const mode = routeMode();
+  const st = usePlayer.getState();
+  /* only with transient user activation: an AudioContext created without one starts
+     suspended and would silence the routed element (bridge/media-key/autoplay starts) */
+  const act = (navigator as any).userActivation;
+  const gesture = !act || act.isActive;
+  if (mode !== 'never' && !engine.ready && gesture && (mode === 'always' || needsGraph(st.sound))) {
+    engine.init(audioEl);
+    if (engine.ready) { try { audioEl.volume = 1; } catch {} usePlayer.setState({ routed: true }); }
+  } else if (engine.ready) engine.resumeAudioContext();
+  pushSound();
+}
+function pushSound() {
+  const { sound, volume } = usePlayer.getState();
+  if (crossFadeInPending) {
+    /* mid-crossfade: graph settings are unchanged; don't stomp the master-gain ramp */
+    try { engine.volume = volume; engine.applyRate(audioEl); } catch {}
+    return;
+  }
+  engine.setHqEnabled(sound.hqEnabled);
+  engine.setHqSettings(sound.hq);
+  engine.setAudioSettings({ ...sound.settings, eq: { ...sound.settings.eq }, eqBands: sound.settings.eqBands.slice() });
+  engine.setVolume(volume, false);
+  try { engine.applySettings(audioEl); } catch {}
+  if (!engine.ready) { try { audio.volume = volume; } catch {} }
+}
+function presetSettings(id: string): Partial<AudioSettings> {
+  const m = FX_MODES.find((x) => x.id === id) || FX_MODES[0];
+  return { speed: 1, speedPitch: m.rate, pitch: 0, reverb: m.reverb, eq: { low: m.bass, mid: 0, high: 0 } };
+}
+
+/* Plays started without a gesture get routed on the next tap anywhere. */
+document.addEventListener('pointerdown', () => { if (!engine.ready && usePlayer.getState().current) initEngine(); }, { capture: true, passive: true });
+
+/* Riff playSmooth / pauseSmooth: ~60 ms gain ramps around play/pause when routed. */
+let smoothFadeToken = 0;
+function playSmooth() {
+  const tok = ++smoothFadeToken;
+  initEngine();
+  const fg = engine.fadeGain, ctx = engine.ctx;
+  if (fg && ctx && !crossFadeInPending) { try { fg.gain.cancelScheduledValues(ctx.currentTime); fg.gain.setValueAtTime(0, ctx.currentTime); } catch {} }
+  const p = audio.play();
+  if (fg && ctx) { try { fg.gain.setTargetAtTime(1, ctx.currentTime, 0.05); } catch {} }
+  void tok;
+  return p;
+}
+function pauseSmooth() {
+  const tok = ++smoothFadeToken;
+  const fg = engine.fadeGain, ctx = engine.ctx;
+  if (!fg || !ctx || audio.paused || document.hidden) { try { audio.pause(); } catch {} engine.flushEffects(); return; }
+  try { fg.gain.cancelScheduledValues(ctx.currentTime); fg.gain.setTargetAtTime(0, ctx.currentTime, 0.06); } catch {}
+  usePlayer.setState({ playing: false });
+  setTimeout(() => { if (tok !== smoothFadeToken) return; try { audio.pause(); } catch {} engine.flushEffects(); }, 280);
+}
+
+/* hls.js where relevant (Riff: data.isHls). Muse's /api/audio is a progressive same-origin
+   stream, so this only kicks in for .m3u8 sources; Safari/iOS use native HLS. */
+let hls: any = null;
+function setSource(url: string) {
+  if (hls) { try { hls.destroy(); } catch {} hls = null; }
+  const isHls = /\.m3u8(\?|$)/i.test(url);
+  if (isHls && audio === audioEl && !audioEl.canPlayType('application/vnd.apple.mpegurl')) {
+    void import('hls.js').then(({ default: Hls }) => {
+      if (!Hls.isSupported()) { audio.src = url; return; }
+      hls = new Hls({ enableWorker: true, lowLatencyMode: true, maxBufferLength: 30, maxMaxBufferLength: 60, maxBufferSize: 30 * 1000 * 1000 });
+      hls.loadSource(url); hls.attachMedia(audioEl);
+      hls.on(Hls.Events.MANIFEST_PARSED, () => { audio.play().catch(() => {}); });
+    });
+    return;
+  }
+  audio.src = url;
+}
+
+/* Riff crossfade: X s before the end fade the master out over X/2 and start the next
+   track, which fades in over X/2. Only with the Web Audio route. */
+let crossTriggered = false;
+let crossFadeInPending = false;
+let nextPrefetched = false;
 
 const meId = () => useSession.getState().me?.id;
 function rememberHeard(id: string) {
@@ -137,7 +239,7 @@ function armWatchdog(token: number, id: string, attempt = 0) {
     if (token !== playToken || userPaused || usePlayer.getState().current?.id !== id) return;
     if (audio.currentTime > 0.2 && !audio.paused) return;
     if (attempt === 0) {
-      try { audio.src = streamUrl(id) + `&r=${Date.now()}`; audio.play().catch(() => {}); } catch {}
+      try { setSource(streamUrl(id) + `&r=${Date.now()}`); audio.play().catch(() => {}); } catch {}
       armWatchdog(token, id, 1);
       return;
     }
@@ -226,6 +328,8 @@ export const usePlayer = create<PlayerState>((set, get) => ({
   fx: (() => { try { return localStorage.getItem('muse:fx:0') || 'normal'; } catch { return 'normal'; } })(),
   sleepMins: 0,
   expanded: false,
+  sound: loadSound(),
+  routed: false,
 
   play: (t, list = null, source = 'search', sourceId = null) => {
     if (list) list = list.filter((r) => r && !hiddenTrack(r));
@@ -241,15 +345,18 @@ export const usePlayer = create<PlayerState>((set, get) => ({
     errTries = 0; userPaused = false;
     set({ current: cur, queue, qi, source: list ? source : get().source, sourceId: list ? sourceId : get().sourceId,
       playing: true, loading: true, time: 0, duration: item.duration || 0 });
-    try { audio.loop = get().repeat === 'one'; audio.volume = get().volume; } catch {}
-    try { audio.src = streamUrl(t.id); } catch {}
-    const p = audio.play();
+    crossTriggered = false; nextPrefetched = false;
+    setThemeCover(t.id);
+    try { audio.loop = get().repeat === 'one'; } catch {}
+    try { setSource(streamUrl(t.id)); } catch {}
+    if (engine.masterGain && engine.ctx && !crossFadeInPending) { try { engine.masterGain.gain.cancelScheduledValues(engine.ctx.currentTime); } catch {} }
+    const p = playSmooth();
     if (p && typeof p.then === 'function') p.catch((e: any) => {
       if (token !== playToken) return;
       if (e?.name === 'NotAllowedError') set({ playing: false });
     });
     armWatchdog(token, t.id);
-    applyFx(get().fx);
+    pushSound();
     mediaSession(cur, 'playing');
     useSession.getState().markLiked([t.id]);
     if (!item.title || !item.duration) {
@@ -270,8 +377,8 @@ export const usePlayer = create<PlayerState>((set, get) => ({
 
   toggle: () => {
     if (!get().current) return;
-    if (audio.paused) { userPaused = false; audio.play().catch(() => {}); if (audio.currentTime < 0.2) armWatchdog(playToken, get().current!.id, 1); }
-    else { userPaused = true; clearWatchdog(); audio.pause(); }
+    if (audio.paused) { userPaused = false; playSmooth()?.catch?.(() => {}); if (audio.currentTime < 0.2) armWatchdog(playToken, get().current!.id, 1); }
+    else { userPaused = true; clearWatchdog(); pauseSmooth(); }
   },
 
   next: async () => {
@@ -298,7 +405,7 @@ export const usePlayer = create<PlayerState>((set, get) => ({
   },
   setVolume: (v) => {
     v = Math.max(0, Math.min(1, v));
-    try { audio.volume = v; } catch {}
+    if (engine.ready) engine.setVolume(v, false); else { try { audio.volume = v; } catch {} }
     try { localStorage.setItem('muse:vol', String(v)); } catch {}
     set({ volume: v });
   },
@@ -308,12 +415,29 @@ export const usePlayer = create<PlayerState>((set, get) => ({
     try { audio.loop = r === 'one'; } catch {}
     localStorage.setItem('muse:repeat', r); set({ repeat: r });
   },
-  setFx: (id) => { try { localStorage.setItem('muse:fx:0', id); } catch {} set({ fx: id }); applyFx(id); },
+  setFx: (id) => {
+    try { localStorage.setItem('muse:fx:0', id); } catch {}
+    const ps = presetSettings(id);
+    set({ fx: id });
+    get().setSound({ settings: { ...ps, eq: { ...get().sound.settings.eq, ...ps.eq } } });
+  },
+  setSound: (patch) => {
+    const cur = get().sound;
+    const next: SoundState = {
+      ...cur, ...patch,
+      settings: { ...cur.settings, ...(patch.settings || {}), eq: { ...cur.settings.eq, ...(patch.settings?.eq || {}) }, eqBands: (patch.settings?.eqBands || cur.settings.eqBands).slice() },
+      hq: { ...cur.hq, ...(patch.hq || {}) },
+    };
+    set({ sound: next });
+    try { localStorage.setItem(SOUND_KEY, JSON.stringify(next)); } catch {}
+    if (!engine.ready && routeMode() === 'lazy' && needsGraph(next) && !audio.paused) initEngine(); else pushSound();
+  },
+  resetSound: () => { set({ fx: 'normal' }); try { localStorage.setItem('muse:fx:0', 'normal'); } catch {} get().setSound({ settings: defaultAudioSettings(), hqEnabled: false, hq: defaultHqSettings(), crossfade: 0 }); },
   cycleSleep: () => {
     const m = get().sleepMins;
     const n = m === 0 ? 15 : m === 15 ? 30 : m === 30 ? 60 : 0;
     if (sleepTimer) clearTimeout(sleepTimer);
-    sleepTimer = n ? setTimeout(() => { set({ sleepMins: 0 }); userPaused = true; audio.pause(); }, n * 60000) : null;
+    sleepTimer = n ? setTimeout(() => { set({ sleepMins: 0 }); userPaused = true; pauseSmooth(); }, n * 60000) : null;
     set({ sleepMins: n });
   },
   playNext: (t) => set((s) => {
@@ -330,6 +454,7 @@ export const usePlayer = create<PlayerState>((set, get) => ({
 let lastTick = 0;
 audio.addEventListener('playing', () => {
   clearWatchdog();
+  if (crossFadeInPending) { crossFadeInPending = false; const X = usePlayer.getState().sound.crossfade; if (X > 0 && engine.ready) engine.fadeIn(X / 2); else engine._applyMasterVolume(); }
   usePlayer.setState({ playing: true, loading: false }); tick(true);
   const { queue, qi, shuffle } = usePlayer.getState();
   if (!shuffle) prefetchStreams([queue[qi + 1]?.id]);
@@ -346,6 +471,20 @@ audio.addEventListener('timeupdate', () => {
   if (now - lastTick < 200) return;
   lastTick = now;
   usePlayer.setState({ time: audio.currentTime || 0 });
+  const st = usePlayer.getState();
+  const cur = audio.currentTime || 0, dur = audio.duration || st.duration || 0;
+  if (!nextPrefetched && st.playing && dur > 0 && cur / dur > 0.5) {
+    nextPrefetched = true;
+    const n = st.shuffle && st.queue.length > 1 ? st.queue[shuffleIndex()] : st.queue[st.qi + 1];
+    prefetchStreams([n?.id]);
+  }
+  const X = st.sound.crossfade;
+  if (X > 0 && engine.ready && !crossTriggered && st.repeat !== 'one' && dur > X && cur >= dur - X && !engine.isLiveStream(audioEl) && !userPaused) {
+    crossTriggered = true; crossFadeInPending = true;
+    engine.fadeOut(X / 2);
+    const tok = playToken;
+    setTimeout(() => { if (tok !== playToken || userPaused) { crossFadeInPending = false; if (tok === playToken) engine._applyMasterVolume(); return; } finalizePrev(true); void usePlayer.getState().next(); }, (X / 2) * 1000);
+  }
   if (lastPlay && !lastPlay.credited && listenSeconds(lastPlay) >= 30) {
     lastPlay.credited = true; const p = lastPlay;
     noteEvent('play', p, 30).then(() => rememberHeard(p.id));
@@ -368,7 +507,7 @@ audio.addEventListener('error', async () => {
     try { await api(`/api/play?v=${id}`); } catch {}
     if (usePlayer.getState().current?.id !== id) return;
     const t = audio.currentTime;
-    audio.src = streamUrl(id) + `&r=${Date.now()}`;
+    setSource(streamUrl(id) + `&r=${Date.now()}`);
     try { if (t > 1) audio.currentTime = t; await audio.play(); } catch {}
     return;
   }
@@ -379,8 +518,8 @@ audio.addEventListener('error', async () => {
 /* OS media keys / lock screen */
 try {
   const ms = navigator.mediaSession;
-  ms.setActionHandler('play', () => { audio.play().catch(() => {}); });
-  ms.setActionHandler('pause', () => { userPaused = true; audio.pause(); });
+  ms.setActionHandler('play', () => { userPaused = false; playSmooth()?.catch?.(() => {}); });
+  ms.setActionHandler('pause', () => { userPaused = true; pauseSmooth(); });
   ms.setActionHandler('nexttrack', () => usePlayer.getState().next());
   ms.setActionHandler('previoustrack', () => usePlayer.getState().prev());
   ms.setActionHandler('seekto', (d) => { if (d.seekTime != null) audio.currentTime = d.seekTime; });
@@ -423,7 +562,7 @@ export function beatPresence(away = false) {
     body: JSON.stringify(away ? { away: true, seq: presenceSeq } : { listening, seq: presenceSeq }) }, 8000).catch(() => {});
 }
 setInterval(() => beatPresence(false), 12000);
-document.addEventListener('visibilitychange', () => beatPresence(document.hidden));
+document.addEventListener('visibilitychange', () => { beatPresence(document.hidden); engine.setHidden(document.hidden); });
 window.addEventListener('pagehide', () => beatPresence(true));
 
 export const getAudio = () => audio;

@@ -72,19 +72,19 @@ export function HomeView() {
     { icon: Users, label: 'Friends', sub: 'Chat & listen', on: () => nav({ view: 'friends', handle: '' }) },
   ];
   return <Page>
-    <section className="relative mb-10 overflow-hidden rounded-2xl border bg-card px-6 py-10 md:px-10 md:py-14">
+    <section className="relative mb-10 overflow-hidden rounded-2xl  bg-card px-6 py-10 md:px-10 md:py-14">
       <div className="bg-grid pointer-events-none absolute inset-0" />
       <div aria-hidden className="pointer-events-none absolute -top-24 left-1/2 h-64 w-[36rem] -translate-x-1/2 rounded-full bg-foreground/[0.06] blur-3xl" />
       <motion.div initial={reduce ? false : { opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }} className="relative">
-        <span className="inline-flex items-center gap-1.5 rounded-full border bg-background/60 px-2.5 py-1 text-xs text-muted-foreground backdrop-blur"><Sparkles className="size-3" />{mode === 'fy' ? 'Picked for you today' : 'Trending today'}</span>
+        <span className="inline-flex items-center gap-1.5 rounded-full  bg-surface-high px-2.5 py-1 text-xs text-muted-foreground backdrop-blur"><Sparkles className="size-3" />{mode === 'fy' ? 'Picked for you today' : 'Trending today'}</span>
         <h1 className="mt-4 text-4xl font-bold tracking-tighter md:text-6xl">{me ? `${greet}, ${me.display}.` : 'Type. Stream. Done.'}</h1>
         <p className="mt-3 max-w-xl text-muted-foreground">{me ? 'Pick up where you left off, or search anything — every letter searches.' : 'Search any song and press play. Create an account to save likes and playlists.'}</p>
       </motion.div>
       <div className="relative mt-8 grid grid-cols-2 gap-2 md:grid-cols-4">
         {quick.map((q, i) => <motion.button key={q.label} type="button" onClick={q.on}
           initial={reduce ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: reduce ? 0 : 0.08 + i * 0.04 }}
-          className="group flex items-center gap-3 rounded-xl border bg-background/60 p-3 text-left backdrop-blur transition-[border-color,transform] duration-200 hover:-translate-y-0.5 hover:border-foreground/25">
-          <span className="flex size-9 items-center justify-center rounded-lg border bg-card transition-colors group-hover:bg-foreground group-hover:text-background"><q.icon className="size-4" /></span>
+          className="group flex items-center gap-3 rounded-xl  bg-surface-high p-3 text-left backdrop-blur transition-[border-color,transform] duration-200 hover:-translate-y-0.5 hover:bg-surface-high">
+          <span className="flex size-9 items-center justify-center rounded-lg  bg-card transition-colors group-hover:bg-foreground group-hover:text-background"><q.icon className="size-4" /></span>
           <span className="min-w-0"><span className="block truncate text-sm font-medium">{q.label}</span><span className="block truncate text-xs text-muted-foreground">{q.sub}</span></span>
         </motion.button>)}
       </div>
@@ -94,10 +94,10 @@ export function HomeView() {
       {tracks === null ? <GridSkeleton /> : tracks.length ? <TrackGrid tracks={tracks} source={mode === 'fy' ? 'foryou' : 'home'} reasons={mode === 'fy'} /> : <p className="text-sm text-muted-foreground">Nothing here yet — try searching.</p>}
     </div>
     {showApps && <div className="mt-12 grid gap-3 md:grid-cols-2">
-      {!isAndroidWeb && <a href="/desktop/Muse-Setup.exe" className="group flex items-center gap-4 rounded-xl border p-4 transition-colors hover:border-foreground/25">
+      {!isAndroidWeb && <a href="/desktop/Muse-Setup.exe" className="group flex items-center gap-4 rounded-xl  p-4 transition-colors hover:bg-surface-high">
         <span className="flex size-10 items-center justify-center rounded-lg bg-foreground text-background"><Download className="size-4" /></span>
         <span><span className="block text-sm font-medium">Muse for Windows</span><span className="block text-xs text-muted-foreground">One window, tray, auto-update.</span></span></a>}
-      <a href="/android/Muse.apk" download="Muse.apk" className="group flex items-center gap-4 rounded-xl border p-4 transition-colors hover:border-foreground/25">
+      <a href="/android/Muse.apk" download="Muse.apk" className="group flex items-center gap-4 rounded-xl  p-4 transition-colors hover:bg-surface-high">
         <span className="flex size-10 items-center justify-center rounded-lg bg-foreground text-background"><Download className="size-4" /></span>
         <span><span className="block text-sm font-medium">Muse for Android</span><span className="block text-xs text-muted-foreground">Background play, auto-update.</span></span></a>
     </div>}

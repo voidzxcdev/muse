@@ -22,7 +22,7 @@ export default defineConfig({
     rollupOptions: {
       output: {
         // Long-lived vendor chunk so app deploys keep the library cache (splitting React-dependent libs apart creates init-order cycles).
-        manualChunks(id) { if (id.includes('node_modules')) return 'vendor'; }
+        manualChunks(id) { if (id.includes('node_modules/hls.js')) return 'hls'; if (id.includes('node_modules')) return 'vendor'; }
       },
     },
   },

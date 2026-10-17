@@ -7,7 +7,10 @@ import { useUI } from '@/lib/ui-store';
 import { useTheme } from '@/hooks/theme';
 import { registerSW, startNotifPoll, stopNotifPoll, checkUpdate, ensurePush } from '@/lib/services';
 import { LibrarySheet, MeSheet, Sidebar, TabBar, TopBar } from '@/components/layout';
-import { NowPlaying, PlayerBar } from '@/components/player';
+import { NowPlaying, PlayerBar, RightPanel } from '@/components/player';
+import { SoundPanel } from '@/components/sound-panel';
+import { AppearanceDialog } from '@/components/theme-picker';
+import { cn } from '@/lib/utils';
 import { AppPrompt, CookieBar, ModalHost, Onboarding } from '@/components/dialogs';
 import { TooltipProvider } from '@/components/ui/misc';
 import { HomeView } from '@/views/home';
@@ -42,7 +45,7 @@ export default function App() {
   const hasPlayer = usePlayer((s) => !!s.current);
   const route = useRouter((s) => s.route);
   useKeyboardInset();
-  React.useEffect(() => { const r = document.documentElement.style; r.setProperty('--player-h', hasPlayer ? '76px' : '0px'); r.setProperty('--player-h-md', hasPlayer ? '80px' : '0px'); }, [hasPlayer]);
+  React.useEffect(() => { const r = document.documentElement.style; r.setProperty('--player-h', hasPlayer ? '76px' : '0px'); r.setProperty('--shell-pb', hasPlayer ? '120px' : '16px'); }, [hasPlayer]);
 
   React.useEffect(() => {
     useSession.getState().refreshMe();
@@ -79,26 +82,30 @@ export default function App() {
 
   const chat = route.view === 'friends';
   return <TooltipProvider>
-    <div className="flex h-[var(--app-h,100dvh)] overflow-hidden">
-      <Sidebar />
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <TopBar />
-        <main id="main" className={chat ? 'nav-pad flex min-h-0 flex-1 flex-col overflow-hidden' : 'scroll-pane nav-pad min-h-0 flex-1'} style={{ viewTransitionName: 'main' }}>
+    <div aria-hidden className="mesh-bg" />
+    <div className="relative flex h-[var(--app-h,100dvh)] flex-col overflow-hidden">
+      <TopBar />
+      <div className="flex min-h-0 flex-1 md:gap-4 md:px-4 md:pb-[var(--shell-pb,16px)] md:pl-[max(1rem,env(safe-area-inset-left))] md:pr-[max(1rem,env(safe-area-inset-right))]">
+        <Sidebar />
+        <main id="main" className={cn(chat ? 'nav-pad flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden' : 'scroll-pane nav-pad min-h-0 min-w-0 flex-1', 'md:rounded-[28px] md:bg-surface-c')} style={{ viewTransitionName: 'main' }}>
           <React.Suspense fallback={<div className="flex h-40 items-center justify-center" aria-busy="true"><span className="size-5 animate-spin rounded-full border-2 border-muted border-t-foreground" /></div>}>
             <View />
           </React.Suspense>
         </main>
+        <RightPanel />
       </div>
     </div>
     <PlayerBar />
     <TabBar />
     <NowPlaying />
+    <SoundPanel />
+    <AppearanceDialog />
     <LibrarySheet />
     <MeSheet />
     <ModalHost />
     <Onboarding />
     <CookieBar />
     <AppPrompt />
-    <Toaster theme={theme === 'system' ? 'system' : theme} position="top-center" toastOptions={{ className: 'font-sans' }} />
+    <Toaster theme={theme === 'system' ? 'system' : theme === 'auto' ? 'dark' : theme} position="top-center" toastOptions={{ className: 'font-sans' }} />
   </TooltipProvider>;
 }

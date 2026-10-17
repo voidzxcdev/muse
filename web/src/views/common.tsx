@@ -29,9 +29,9 @@ export function ViewHeader({ kind, title, sub, cover, tracks, source, sourceId, 
   const reduce = useReducedMotion();
   const play = usePlayer((s) => s.play);
   return <motion.div initial={reduce ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-    className="relative mb-8 flex flex-col gap-6 overflow-hidden rounded-2xl border bg-card p-5 sm:flex-row sm:items-end md:p-7">
+    className="relative mb-8 flex flex-col gap-6 overflow-hidden rounded-2xl  bg-card p-5 sm:flex-row sm:items-end md:p-7">
     <div className="bg-grid pointer-events-none absolute inset-0 opacity-60" />
-    <div className="relative">{coverNode || <Cover src={cover} name={typeof title === 'string' ? title : undefined} className="size-36 rounded-xl border shadow-lg md:size-44" />}</div>
+    <div className="relative">{coverNode || <Cover src={cover} name={typeof title === 'string' ? title : undefined} className="size-36 rounded-xl  shadow-lg md:size-44" />}</div>
     <div className="relative min-w-0 flex-1">
       <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{kind}</p>
       <h1 className="mt-1 break-words text-3xl font-bold tracking-tighter md:text-5xl">{title}</h1>

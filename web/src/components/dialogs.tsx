@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { Slider } from './riff-ui';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { toast } from 'sonner';
 import { Bell, Download, Loader2, Minus, Plus, X, ZoomIn, ZoomOut, Camera } from 'lucide-react';
@@ -78,10 +79,10 @@ export function Onboarding() {
     <div aria-hidden className="pointer-events-none absolute inset-x-0 top-[6%] flex justify-center">
       {arts.filter((t) => t.thumbnail || t.id).slice(0, 5).map((t, i) => <motion.img key={t.id} src={ytThumb(t.id, t.thumbnail)} alt=""
         initial={reduce ? false : { opacity: 0, y: 30, rotate: 0 }} animate={{ opacity: 0.55, y: 0, rotate: (i - 2) * 6 }} transition={{ type: 'spring', stiffness: 120, damping: 18, delay: reduce ? 0 : 0.1 + i * 0.06 }}
-        className="-mx-6 aspect-video w-40 rounded-xl border object-cover shadow-2xl md:w-56" style={{ zIndex: 5 - Math.abs(i - 2) }} />)}
+        className="-mx-6 aspect-video w-40 rounded-xl  object-cover shadow-2xl md:w-56" style={{ zIndex: 5 - Math.abs(i - 2) }} />)}
     </div>
     <motion.div initial={reduce ? false : { opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ type: 'spring', stiffness: 260, damping: 28, delay: reduce ? 0 : 0.15 }}
-      className="relative mt-24 w-full max-w-sm rounded-2xl border bg-card/90 p-6 shadow-xl backdrop-blur-xl">
+      className="relative mt-24 w-full max-w-sm rounded-2xl  bg-card/90 p-6 shadow-xl backdrop-blur-xl">
       <div className="flex items-center gap-2"><img src="/muselogo.png?v=172" alt="" className="size-7 rounded-md" /><span className="font-semibold tracking-tight">Muse</span></div>
       <h1 className="mt-5 text-2xl font-bold tracking-tighter">{mode === 'signup' ? 'Your music starts here' : 'Welcome back'}</h1>
       <p className="mt-1 text-sm text-muted-foreground">{mode === 'signup' ? 'Create an account to save likes and playlists. Then press play.' : 'Sign in to pick up your likes and playlists.'}</p>
@@ -150,22 +151,22 @@ export function SettingsDialog() {
         <div className="grid flex-1 gap-1.5"><Label htmlFor="pfName">Имя</Label><Input id="pfName" value={name} maxLength={24} onChange={(e) => setName(e.target.value)} /></div>
       </div>
       <div className="mt-4 grid gap-1.5"><Label htmlFor="pfHandle">Handle</Label>
-        <div className="flex items-center rounded-md border bg-transparent pl-3 dark:bg-input/30"><span className="text-muted-foreground">@</span><input id="pfHandle" value={handle} disabled={!!wait} maxLength={24} onChange={(e) => setHandle(e.target.value)} autoComplete="off" spellCheck={false} className="h-9 flex-1 bg-transparent px-1 text-sm outline-none disabled:opacity-50" /></div>
+        <div className="flex items-center rounded-md  bg-transparent pl-3 dark:bg-input/30"><span className="text-muted-foreground">@</span><input id="pfHandle" value={handle} disabled={!!wait} maxLength={24} onChange={(e) => setHandle(e.target.value)} autoComplete="off" spellCheck={false} className="h-9 flex-1 bg-transparent px-1 text-sm outline-none disabled:opacity-50" /></div>
         <p className="font-mono text-xs text-muted-foreground">{publicLink(handle.trim().toLowerCase().replace(/^@/, '') || me.handle)}</p>
         <p className="text-xs text-muted-foreground">{wait || 'Можно менять раз в 30 дней.'}</p>
       </div>
       <p className="mb-2 mt-6 text-sm font-medium">Приватность</p>
-      <div className="divide-y rounded-lg border">{PRIV.map(([k, t, s]) => <label key={k} className="flex cursor-pointer items-center justify-between gap-4 px-3 py-2.5"><span><span className="block text-sm">{t}</span><span className="block text-xs text-muted-foreground">{s}</span></span><Switch checked={priv[k]} onCheckedChange={(v) => setPriv({ ...priv, [k]: v })} /></label>)}</div>
-      {lane() === 'pc' && <label className="mt-3 flex cursor-pointer items-center justify-between gap-4 rounded-lg border px-3 py-2.5"><span><span className="block text-sm">YouTube embed cookies</span><span className="block text-xs text-muted-foreground">Optional youtube.com cookies for the desktop iframe. Off uses Muse audio.</span></span>
+      <div className="divide-y rounded-lg ">{PRIV.map(([k, t, s]) => <label key={k} className="flex cursor-pointer items-center justify-between gap-4 px-3 py-2.5"><span><span className="block text-sm">{t}</span><span className="block text-xs text-muted-foreground">{s}</span></span><Switch checked={priv[k]} onCheckedChange={(v) => setPriv({ ...priv, [k]: v })} /></label>)}</div>
+      {lane() === 'pc' && <label className="mt-3 flex cursor-pointer items-center justify-between gap-4 rounded-lg  px-3 py-2.5"><span><span className="block text-sm">YouTube embed cookies</span><span className="block text-xs text-muted-foreground">Optional youtube.com cookies for the desktop iframe. Off uses Muse audio.</span></span>
         <Switch checked={cookiesChoice() === 'all'} onCheckedChange={(v) => { setCookies(v ? 'all' : 'needed'); location.reload(); }} /></label>}
-      <label className="mt-3 flex cursor-pointer items-center justify-between gap-4 rounded-lg border px-3 py-2.5"><span><span className="block text-sm">Уведомления</span><span className="block text-xs text-muted-foreground">Сообщения и заявки в друзья</span></span>
+      <label className="mt-3 flex cursor-pointer items-center justify-between gap-4 rounded-lg  px-3 py-2.5"><span><span className="block text-sm">Уведомления</span><span className="block text-xs text-muted-foreground">Сообщения и заявки в друзья</span></span>
         <Button size="sm" variant="outline" onClick={() => askNotifPerm()}><Bell />Enable</Button></label>
       <p className="mb-2 mt-6 text-sm font-medium">Your data</p>
       <p className="text-xs text-muted-foreground">No email. Export a JSON copy, or type your password to delete the account. There is no password reset.</p>
       <div className="mt-3 grid gap-2"><Button variant="outline" onClick={exportData}>Export my data</Button>
         <div className="flex gap-2"><Input type="password" placeholder="Password to delete" value={delPass} onChange={(e) => setDelPass(e.target.value)} autoComplete="current-password" /><Button variant="destructive" onClick={del}>Delete account</Button></div></div>
       <p className="mb-2 mt-6 text-sm font-medium">Legal</p>
-      <div className="grid grid-cols-3 gap-1.5">{LEGAL.map(([href, b, i]) => <a key={href} href={href} target="_blank" rel="noopener" className="rounded-md border px-2 py-1.5 transition-colors hover:bg-accent"><span className="block text-xs font-medium">{b}</span><span className="block truncate text-[10px] text-muted-foreground">{i}</span></a>)}</div>
+      <div className="grid grid-cols-3 gap-1.5">{LEGAL.map(([href, b, i]) => <a key={href} href={href} target="_blank" rel="noopener" className="rounded-md  px-2 py-1.5 transition-colors hover:bg-accent"><span className="block text-xs font-medium">{b}</span><span className="block truncate text-[10px] text-muted-foreground">{i}</span></a>)}</div>
       {showApps && <div className="mt-4 grid gap-2">{!isAndroidWeb && <Button variant="outline" asChild><a href="/desktop/Muse-Setup.exe"><Download />Download for Windows</a></Button>}<Button variant="outline" asChild><a href="/android/Muse.apk" download="Muse.apk"><Download />Download for Android</a></Button></div>}
       {err && <p className="mt-3 text-sm text-destructive">{err}</p>}
     </div>
@@ -219,11 +220,11 @@ export function CoverEditor({ target, file }: { target: 'avatar' | number; file:
   };
   return <Dialog open onOpenChange={(o) => !o && close()} title={target === 'avatar' ? 'Profile photo' : 'Playlist cover'} description="Drag to position, zoom to crop.">
     <div className="mt-4 flex flex-col items-center gap-4">
-      <div onPointerDown={drag} className={cn('relative cursor-grab touch-none overflow-hidden border bg-muted active:cursor-grabbing', target === 'avatar' ? 'rounded-full' : 'rounded-xl')} style={{ width: S, height: S }}>
+      <div onPointerDown={drag} className={cn('relative cursor-grab touch-none overflow-hidden  bg-muted active:cursor-grabbing', target === 'avatar' ? 'rounded-full' : 'rounded-xl')} style={{ width: S, height: S }}>
         {img && <img src={url} alt="" draggable={false} className="pointer-events-none absolute left-1/2 top-1/2 max-w-none select-none"
           style={{ width: img.naturalWidth * base, height: img.naturalHeight * base, transform: `translate(calc(-50% + ${off.x}px), calc(-50% + ${off.y}px)) scale(${z})` }} />}
       </div>
-      <div className="flex w-full items-center gap-3"><ZoomOut className="size-4 text-muted-foreground" /><input type="range" min={1} max={3} step={0.01} value={z} onChange={(e) => setZ(Number(e.target.value))} className="range flex-1" style={{ ['--val' as any]: `${((z - 1) / 2) * 100}%` }} /><ZoomIn className="size-4 text-muted-foreground" /></div>
+      <div className="flex w-full items-center gap-3"><ZoomOut className="size-4 text-muted-foreground" /><Slider label="Масштаб" min={1} max={3} step={0.01} value={z} onChange={setZ} /><ZoomIn className="size-4 text-muted-foreground" /></div>
       <div className="flex w-full justify-end gap-2"><Button variant="ghost" onClick={close}>Cancel</Button><Button onClick={save} disabled={busy || !img}>{busy && <Loader2 className="animate-spin" />}Save</Button></div>
     </div>
   </Dialog>;
@@ -309,7 +310,7 @@ export function CookieBar() {
   const [show, setShow] = React.useState(!cookiesChoice());
   const reduce = useReducedMotion();
   return <AnimatePresence>{show && <motion.div id="cookieBar" initial={reduce ? false : { y: 40, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 40, opacity: 0 }} transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-    className="kb-hide fixed bottom-[calc(var(--tab-h)+var(--sab)+var(--player-h,0px)+12px)] left-1/2 z-[45] w-[calc(100%-1.5rem-env(safe-area-inset-left)-env(safe-area-inset-right))] max-w-xl -translate-x-1/2 rounded-xl border bg-popover p-4 shadow-xl md:bottom-[calc(var(--player-h-md,0px)+16px)]">
+    className="kb-hide fixed bottom-[calc(var(--tab-h)+var(--sab)+var(--player-h,0px)+12px)] left-1/2 z-[45] w-[calc(100%-1.5rem-env(safe-area-inset-left)-env(safe-area-inset-right))] max-w-xl -translate-x-1/2 rounded-[28px] bg-surface-high p-5 shadow-xl md:bottom-[calc(var(--shell-pb,16px)+8px)]">
     <p className="text-sm text-muted-foreground">Muse uses a session cookie if you sign in. Optional: desktop can load YouTube cookies for the embed player. No ads. <a href="/cookies" target="_blank" rel="noopener" className="text-foreground underline">Cookies</a> · <a href="/gdpr" target="_blank" rel="noopener" className="text-foreground underline">GDPR</a></p>
     <div className="mt-3 flex justify-end gap-2">
       <Button variant="outline" size="sm" id="cbReject" onClick={() => { setCookies('needed'); setShow(false); }}>Reject</Button>
