@@ -68,6 +68,13 @@ ON_RENDER = bool(os.environ.get("RENDER"))
 PUBLIC_URL = (os.environ.get("PUBLIC_URL") or os.environ.get("RENDER_EXTERNAL_URL") or "").rstrip("/")
 DATABASE_URL = os.environ.get("DATABASE_URL") or ""  # set → Postgres (Supabase); unset → local SQLite
 ELISA_HOSTS = ("elisa.style", "www.elisa.style")
+# elisa.style song secret: the only media the elisa host may stream (official uploads).
+ELISA_TRACKS = (
+    "kXmNg_6lLiE",  # Bella Kay - Promise? (official lyric video, Bella Kay channel)
+    "QCQ4zz6Ep0w",  # Alyssa Grace - picking petals (Alyssa Grace - Topic, official audio)
+    "Y8DWY4vSJ2I",  # Bella Kay - tongue (official lyric video, Bella Kay channel)
+    "_4BBA8y3DPc",  # Chappell Roan - Casual (Official Audio)
+)
 BUILD = 320  # bump every release — the UI polls this and prompts reload
 # Never list or play these. Official audio of the same song stays.
 _HIDDEN_IDS = frozenset({
@@ -5351,6 +5358,35 @@ def _warm_audio(video_id, force=False):
     return True
 
 
+_elisa_warm_at = 0.0
+_elisa_warm_lock = threading.Lock()
+
+
+def _elisa_warm_all():
+    """Cache the 4 elisa.style secret tracks as AAC (iOS-safe) one after another, so
+    the secret plays from disk. Runs at most every 10 min; refreshes mtimes so the
+    stream-cache pruner keeps them."""
+    global _elisa_warm_at
+    with _elisa_warm_lock:
+        if time.time() - _elisa_warm_at < 600:
+            return
+        _elisa_warm_at = time.time()
+
+    def run():
+        for v in ELISA_TRACKS:
+            try:
+                p = _audio_file(v, aac_only=True)
+                if p:
+                    with contextlib.suppress(OSError):
+                        os.utime(p)
+                    continue
+                _warm_audio(v, force=True)
+                _wait_audio_file(v, timeout=120, aac_only=True)
+            except Exception:
+                pass
+    threading.Thread(target=run, daemon=True).start()
+
+
 _reco_cache = {}     # user_id -> (ts, tracks); mirrored in the reco table
 _reco_stale = set()  # taste changed since the cached mix was built
 _reco_busy = set()   # users with a rebuild in flight
@@ -6067,10 +6103,53 @@ class Handler(SimpleHTTPRequestHandler):
             self.end_headers()
             return
         if path in ("/", "/index.html"):
+            if self.command == "GET":
+                _elisa_warm_all()
             self.directory = STATIC
             self.path = "/eliza.html"
             return super().do_GET()
+        if path in ("/api/audio", "/api/art"):
+            # Song secret only: these 4 IDs, nothing else of Muse's API on this host.
+            qs = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            v = (qs.get("v") or [""])[0]
+            if v not in ELISA_TRACKS:
+                return self.send_error(404)
+            if path == "/api/art":
+                return self._send_art(v)
+            if "warm" in qs:
+                return self._json({"cached": bool(_audio_file(v, aac_only=True)),
+                                   "started": bool(_warm_audio(v, force=True))}, 202)
+            return self._proxy_audio(v, ios=self._client_ios(qs))
         self.send_error(404)
+
+    def _send_art(self, v):
+        # Full-size cover for the song secret (maxres), falls back to Muse's small art.
+        hit = _art_mem.get("mx:" + v)
+        data = hit[1] if hit and time.time() - hit[0] < _ART_TTL else None
+        if not data:
+            try:
+                req = urllib.request.Request(f"https://i.ytimg.com/vi/{v}/maxresdefault.jpg",
+                                             headers={"User-Agent": "Mozilla/5.0"})
+                with urllib.request.urlopen(req, timeout=8) as r:
+                    data = r.read()
+                if data and len(data) > 4000:
+                    _art_mem["mx:" + v] = (time.time(), data)
+                else:
+                    data = None
+            except Exception:
+                data = None
+        data = data or yt_art_bytes(v)
+        if not data:
+            self.send_response(404)
+            self.end_headers()
+            return
+        self.send_response(200)
+        self.send_header("Content-Type", "image/jpeg")
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Cache-Control", "public, max-age=86400")
+        self.end_headers()
+        if self.command != "HEAD":
+            self.wfile.write(data)
 
     def do_GET(self):
         parsed = urllib.parse.urlparse(self.path)
