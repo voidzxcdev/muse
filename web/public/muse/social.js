@@ -196,6 +196,7 @@
       '<div class="artist-content-section"><div class="section-sub-header"><h3>Account</h3></div><div class="m3-group">' +
       settingRow('Notifications', pushOn ? 'New messages and friend requests reach you here.' : 'Get notified about new messages and friend requests.', pushOn ? '<span class="view-subtitle">On</span>' : '<button class="btn-outline-pill" data-act="notif">' + ICON.bell + '<span>Turn on</span></button>') +
       settingRow('Public profile', publicLink(u.handle), '<button class="btn-outline-pill" data-act="profile">Open</button>') +
+      settingRow('Settings', 'Theme, playback, lyrics and audio.', '<button class="btn-outline-pill" data-act="settings">Open</button>') +
       settingRow('Sign out', 'Favorites and playlists stay in this browser.', '<button class="btn-outline-pill" data-act="logout">' + ICON.out + '<span>Sign out</span></button>') +
       '</div></div>';
     bindActs(box, {
@@ -204,6 +205,7 @@
       chats: function () { go('friends'); },
       notif: function () { askNotif(); },
       profile: function () { openUser(u.handle); },
+      settings: function () { var n = $('nav-settings'); if (n) n.click(); },
       logout: function () {
         confirmBox('Sign out', 'Sign out of @' + u.handle + ' on this device?', 'Sign out').then(function (ok) {
           if (!ok) return;
@@ -372,12 +374,14 @@
     if (needAuth(function () { openChat(handle); })) return;
     handle = String(handle || '').replace(/^@/, '');
     stopChatPoll();
-    C.handle = handle; C.peer = null; C.msgs = []; C.lastId = 0; C.since = 0; C.replyTo = null; C.editId = null; C.gen++;
+    C.handle = handle; C.peer = null; C.msgs = []; C.lastId = 0; C.since = 0; C.replyTo = null; C.editId = null; C.gen++; C.seen = null; C.sigs = null;
     $('chat-log').innerHTML = SPINNER;
     $('chat-peer-name').textContent = '@' + handle; $('chat-peer-status').textContent = '';
     $('chat-peer-avatar').innerHTML = avatar({ handle: handle }, 40);
     setReply(null);
     go('chat');
+    var shell = document.querySelector('#view-chat .muse-chat');
+    if (shell) { shell.classList.remove('muse-enter'); void shell.offsetWidth; shell.classList.add('muse-enter'); }
     pollChat(true);
     post('/api/notifs/seen', { handle: handle }).then(pollNotifs, function () {});
   }
@@ -447,18 +451,25 @@
     var log = $('chat-log'); if (!log) return;
     var nearBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 120;
     if (!C.msgs.length) { log.innerHTML = '<div class="empty-hint">No messages yet. Say hi or send a track.</div>'; return; }
-    var html = '', lastDay = '';
-    C.msgs.forEach(function (m) {
+    var html = '', lastDay = '', first = !C.seen, seen = C.seen || {}, sigs = C.sigs || {}, nNew = 0;
+    var firstFrom = first ? Math.max(0, C.msgs.length - 12) : 0;
+    C.msgs.forEach(function (m, idx) {
       var day = new Date(m.created * 1000).toDateString();
       if (day !== lastDay) { lastDay = day; html += '<div class="muse-day"><span>' + esc(new Date(m.created * 1000).toLocaleDateString([], { day: 'numeric', month: 'long' })) + '</span></div>'; }
       var media = /^(image|gif|video|round)$/.test(m.kind) && !m.body;
-      html += '<div class="muse-msg' + (m.mine ? ' mine' : '') + (media ? ' media' : '') + (m.kind === 'round' ? ' round' : '') + '" data-id="' + m.id + '">' +
+      var isNew = first ? idx >= firstFrom : !seen[m.id];
+      var sig = (m.reacts || []).map(function (r) { return r.e + r.n + (r.mine ? 1 : 0); }).join(',');
+      var pop = !first && seen[m.id] && sig && sigs[m.id] !== sig;
+      seen[m.id] = 1; sigs[m.id] = sig;
+      html += '<div class="muse-msg' + (m.mine ? ' mine' : '') + (media ? ' media' : '') + (m.kind === 'round' ? ' round' : '') + (isNew ? ' muse-new' : '') + (pop ? ' muse-popped' : '') + '" data-id="' + m.id + '"' + (isNew ? ' style="--i:' + (first ? idx - firstFrom : nNew++) + '"' : '') + '>' +
         '<div class="muse-bubble">' + (m.reply ? '<div class="muse-msg-reply" data-jump="' + m.reply.id + '">' + esc(snippet(m.reply)) + '</div>' : '') + bubbleBody(m) +
         '<span class="muse-msg-meta">' + (m.edited ? 'edited · ' : '') + timeOf(m.created) + (m.mine && m.kind !== 'deleted' ? ' <span class="muse-tick' + (m.read ? ' read' : '') + '">' + (m.read ? ICON.checks : ICON.check1) + '</span>' : '') + '</span></div>' +
         (m.reacts && m.reacts.length ? '<div class="muse-reacts">' + m.reacts.map(function (r) { return '<button class="muse-react' + (r.mine ? ' mine' : '') + '" data-react="' + esc(r.e) + '">' + esc(r.e) + (r.n > 1 ? ' ' + r.n : '') + '</button>'; }).join('') + '</div>' : '') +
         '</div>';
     });
     log.innerHTML = html;
+    C.seen = seen; C.sigs = sigs;
+    log.querySelectorAll('.muse-popped .muse-react').forEach(function (b) { b.classList.add('muse-pop'); });
     if (stick || nearBottom) log.scrollTop = log.scrollHeight;
   }
   function findMsg(id) { id = +id; for (var i = 0; i < C.msgs.length; i++) if (C.msgs[i].id === id) return C.msgs[i]; return null; }
@@ -606,7 +617,11 @@
 
   /* floating message menu (Riff dropdown look) */
   var menuEl = null;
-  function closeMenu() { if (menuEl) { menuEl.remove(); menuEl = null; } }
+  function closeMenu() {
+    if (!menuEl) return;
+    var d = menuEl; menuEl = null; d.classList.remove('open');
+    setTimeout(function () { d.remove(); }, 220);
+  }
   function openMsgMenu(m, x, y) {
     closeMenu(); if (!m || m.kind === 'deleted') return;
     var d = document.createElement('div');
@@ -619,7 +634,10 @@
     d.innerHTML = items; document.body.appendChild(d); menuEl = d;
     var w = d.offsetWidth, h = d.offsetHeight;
     d.style.left = Math.max(8, Math.min(x, window.innerWidth - w - 8)) + 'px';
-    d.style.top = Math.max(8, Math.min(y, window.innerHeight - h - 8)) + 'px';
+    var top = Math.max(8, Math.min(y, window.innerHeight - h - 8));
+    d.style.top = top + 'px';
+    if (top < y - 4) d.classList.add('up');
+    requestAnimationFrame(function () { requestAnimationFrame(function () { d.classList.add('open'); }); });
     d.querySelectorAll('[data-e]').forEach(function (b) { onTap(b, function () { closeMenu(); react(m.id, b.dataset.e); }); });
     d.querySelectorAll('[data-m]').forEach(function (b) {
       onTap(b, function () {
@@ -943,6 +961,58 @@
     var view = qs.get('view'); if (view && $('view-' + view)) go(view);
   }
 
+  /* ---------------- phone: mini player + full-screen now playing (BUILD 320) ----------------
+     Same Riff playbar, restyled by body.muse-np; nothing is cloned so Riff's handlers keep working. */
+  var npOpen = false;
+  function npResize() { setTimeout(function () { window.dispatchEvent(new Event('resize')); }, 30); setTimeout(function () { window.dispatchEvent(new Event('resize')); }, 420); }
+  function openNP() {
+    if (npOpen || !R.state.currentTrack) return;
+    npOpen = true; document.body.classList.remove('muse-np-closing'); document.body.classList.add('muse-np');
+    if (R.state.isRightPanelOpen) { var x = $('btn-close-right-panel'); if (x) x.click(); }
+    try { history.pushState({ museNp: 1 }, ''); } catch (e) {}
+    npResize();
+  }
+  function closeNP(instant, fromPop) {
+    if (!npOpen) return;
+    npOpen = false;
+    if (R.state.isRightPanelOpen) { var x = $('btn-close-right-panel'); if (x) x.click(); }
+    var done = function () { document.body.classList.remove('muse-np', 'muse-np-closing'); var pb = document.querySelector('.playbar'); if (pb) pb.style.transform = ''; npResize(); };
+    if (!fromPop) { try { if (history.state && history.state.museNp) history.back(); } catch (e) {} }
+    if (instant) done(); else { document.body.classList.add('muse-np-closing'); setTimeout(done, 280); }
+  }
+  function bindPhonePlayer(phone) {
+    var pb = document.querySelector('.playbar'); if (!pb) return;
+    var head = document.createElement('div'); head.id = 'muse-np-head';
+    head.innerHTML = '<button class="btn-icon-pill" id="muse-np-close" title="Close" aria-label="Close now playing"><svg viewBox="0 0 24 24" width="28" height="28"><path fill="currentColor" d="M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6z"/></svg></button>' +
+      '<span>Now playing</span>' +
+      '<button class="btn-icon-pill" id="muse-np-queue" title="Queue" aria-label="Queue"><svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M3 6h12v2H3zm0 4h12v2H3zm0 4h8v2H3zm14-4v6.18A3 3 0 1 0 19 19v-9h3V8h-5z"/></svg></button>';
+    pb.insertBefore(head, pb.firstChild);
+    onTap($('muse-np-close'), function () { closeNP(false); });
+    onTap($('muse-np-queue'), function () { closeNP(true); var q = $('nav-queue'); if (q) q.click(); });
+    var left = pb.querySelector('.playbar-left');
+    left.addEventListener('click', function (e) {
+      if (!phone() || npOpen || e.target.closest('button')) return;
+      e.stopPropagation(); e.preventDefault(); openNP();
+    }, true);
+    window.addEventListener('popstate', function () { if (npOpen) closeNP(false, true); });
+    window.addEventListener('resize', function () { if (npOpen && !phone()) closeNP(true); });
+    // swipe down on the artwork/header to close
+    var y0 = null, dy = 0;
+    pb.addEventListener('touchstart', function (e) {
+      if (!npOpen || !e.target.closest('#muse-np-head, .artwork-wrapper, .track-meta')) { y0 = null; return; }
+      y0 = e.touches[0].clientY; dy = 0;
+    }, { passive: true });
+    pb.addEventListener('touchmove', function (e) { if (y0 == null) return; dy = Math.max(0, e.touches[0].clientY - y0); pb.style.transform = 'translateY(' + dy + 'px)'; }, { passive: true });
+    pb.addEventListener('touchend', function () { if (y0 == null) return; y0 = null; if (dy > 110) closeNP(false); else pb.style.transform = ''; });
+    // thin progress line on the mini player
+    var audio = document.getElementById('native-audio');
+    if (audio) audio.addEventListener('timeupdate', function () {
+      if (!phone() || npOpen) return;
+      var p = audio.duration ? Math.min(100, audio.currentTime / audio.duration * 100) : 0;
+      pb.style.setProperty('--muse-p', p.toFixed(2) + '%');
+    });
+  }
+
   /* ---------------- boot ---------------- */
   function boot() {
     R = window.museRiff;
@@ -953,12 +1023,16 @@
     document.querySelectorAll('.sidebar .nav-item').forEach(function (n) {
       n.addEventListener('click', function () { if (phone() && R.state.isRightPanelOpen) { var x = $('btn-close-right-panel'); if (x) x.click(); } });
     });
+    bindPhonePlayer(phone);
     onTap($('nav-friends'), function () { go('friends'); });
     onTap($('nav-account'), function () { go('account'); });
     document.addEventListener('muse:view', function (e) {
       var v = e.detail;
       if (v !== 'chat') { stopChatPoll(); stopClip(); if (REC) stopRec(false); }
       if (v === 'chat' || v === 'user') { var n = $('nav-friends'); if (n) n.classList.add('active'); }
+      if (v === 'settings' && phone()) { var na = $('nav-account'); if (na) na.classList.add('active'); }
+      document.body.dataset.museView = v || '';
+      if (v !== 'chat' && document.body.classList.contains('muse-np')) closeNP(true);
       if (v === 'friends') { renderFriends(); loadFriends(); }
       if (v === 'account') renderAccount();
       if (v === 'chat' && C.handle && !C.timer) schedulePoll();

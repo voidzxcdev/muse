@@ -37,69 +37,6 @@ body { overflow: clip; } /* hidden + programmatic scroll on focus shifted the wh
 ::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--md-sys-color-on-surface) 22%, transparent); border-radius: 3px; }
 ::-webkit-scrollbar-track { background: transparent; }
 
-/* ---------- 2. phones: Riff's own <=600px layout, Сёма's rules ---------- */
-@media (max-width: 600px) {
-  html, body { height: 100dvh; overscroll-behavior: none; }
-  body { -webkit-tap-highlight-color: transparent; }
-  .titlebar { padding-top: env(safe-area-inset-top); height: calc(40px + env(safe-area-inset-top)); }
-  .toast-container { top: calc(48px + env(safe-area-inset-top)); }
-
-  /* labeled tab bar, flush to the bottom edge, safe-area inside it */
-  .sidebar {
-    height: calc(64px + env(safe-area-inset-bottom) + var(--android-nav, 0px)) !important;
-    padding: 0 4px calc(env(safe-area-inset-bottom) + var(--android-nav, 0px)) !important;
-    bottom: 0 !important;
-    border-radius: 0 !important;
-  }
-  .sidebar-nav { gap: 0; }
-  .sidebar .nav-item {
-    flex-direction: column; justify-content: center; align-items: center; gap: 3px;
-    min-height: 44px; min-width: 44px; padding: 6px 0 4px !important;
-    touch-action: manipulation;
-  }
-  .sidebar .nav-item .nav-indicator { width: 52px; height: 30px; }
-  .sidebar .nav-label {
-    display: block; font-size: 11px; line-height: 13px; font-weight: 600; letter-spacing: 0.1px;
-    max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    color: var(--md-sys-color-on-surface-variant);
-  }
-  .sidebar .nav-item.active .nav-label { color: var(--md-sys-color-on-surface); }
-  .sidebar .nav-item .nav-badge { top: -2px; right: 6px; }
-
-  /* the big player controls sit low, right above the tabs */
-  .playbar { bottom: calc(72px + env(safe-area-inset-bottom) + var(--android-nav, 0px)) !important; }
-  .playbar .btn-icon-pill, .playbar button { min-width: 44px; min-height: 44px; }
-  .playbar .btn-play-pause { width: 48px; height: 48px; }
-  .app-layout { margin-bottom: calc(164px + env(safe-area-inset-bottom) + var(--android-nav, 0px)) !important; }
-  /* Riff's <=600px rule leaves a 260px side strip over the list; on a phone it is a full-width sheet
-     above the player, opened with Riff's own lyrics button and closed with its X */
-  .right-panel {
-    left: 8px !important; right: 8px !important; width: auto !important; min-width: 0 !important; max-width: none !important;
-    top: calc(112px + env(safe-area-inset-top)) !important;
-    bottom: calc(164px + env(safe-area-inset-bottom) + var(--android-nav, 0px)) !important;
-    padding: 16px !important; z-index: 140;
-  }
-  .right-panel.hidden { width: auto !important; transform: translateY(24px); }
-
-  /* touch: 44px targets, nothing that only exists on hover */
-  .btn-icon-pill, .btn-pill-primary, .btn-outline-pill, .m3-dropdown-option, .m3-dropdown-trigger,
-  .settings-nav-btn, .lyrics-action-btn, .sp-modes button { min-height: 44px; }
-  .btn-icon-pill { min-width: 44px; }
-  .track-row { min-height: 56px; }
-  /* Riff's row actions only appear on hover; on touch the favorite and add buttons stay visible,
-     and the row number and cover-art button give their space back to the title */
-  .track-row { gap: 10px; padding-left: 8px; padding-right: 4px; }
-  .track-row .track-row-index, .track-row .btn-row-art { display: none !important; }
-  .track-row .track-row-actions { opacity: 1 !important; gap: 0; }
-  .track-row .track-row-actions .btn-icon-pill { width: 44px; height: 44px; background: transparent; }
-  input, textarea, select { font-size: 16px !important; } /* no iOS zoom-on-focus */
-  .modal-backdrop .dialog-card, .modal-backdrop .settings-card { max-height: calc(100dvh - 32px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); overflow-y: auto; }
-
-}
-@media (hover: none) {
-  .track-row .track-row-actions { opacity: 1 !important; }
-}
-
 /* ---------- 3. Muse social screens in Riff's language ---------- */
 .muse-avatar { --s: 40px; position: relative; display: inline-flex; flex: 0 0 auto; width: var(--s); height: var(--s); border-radius: 50%; }
 .muse-avatar img, .muse-avatar-letter { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: flex; align-items: center; justify-content: center; }
@@ -142,9 +79,8 @@ body { overflow: clip; } /* hidden + programmatic scroll on focus shifted the wh
 .muse-chat-log { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; padding: 8px 2px; overscroll-behavior: contain; }
 .muse-day { text-align: center; margin: 10px 0 6px; }
 .muse-day span { font-size: calc(12px * var(--font-scale, 1)); padding: 4px 12px; border-radius: 999px; background: var(--md-sys-color-surface-container-high); color: var(--md-sys-color-on-surface-variant); }
-.muse-msg { display: flex; flex-direction: column; align-items: flex-start; max-width: min(78%, 520px); animation: museMsgIn 220ms cubic-bezier(0.2, 0, 0, 1); }
+.muse-msg { display: flex; flex-direction: column; align-items: flex-start; max-width: min(78%, 520px); }
 .muse-msg.mine { align-self: flex-end; align-items: flex-end; }
-@keyframes museMsgIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 .muse-bubble { position: relative; padding: 8px 12px 6px; border-radius: 20px 20px 20px 6px; background: var(--md-sys-color-surface-container-high); color: var(--md-sys-color-on-surface); user-select: text; -webkit-user-select: text; -webkit-touch-callout: none; max-width: 100%; }
 .muse-msg.mine .muse-bubble { border-radius: 20px 20px 6px 20px; background: var(--md-sys-color-primary-container); color: var(--md-sys-color-on-primary-container); }
 .muse-msg.media .muse-bubble { padding: 4px; }
@@ -195,8 +131,7 @@ body { overflow: clip; } /* hidden + programmatic scroll on focus shifted the wh
 .muse-attach { position: relative; width: auto; flex: 0 0 auto; }
 .muse-attach .m3-dropdown-menu { top: auto; bottom: calc(100% + 6px); left: 0; right: auto; min-width: 220px; transform-origin: bottom left; border-radius: var(--md-shape-corner-m); }
 
-.muse-msg-menu { position: fixed; z-index: 10000; min-width: 210px; max-width: calc(100vw - 16px); padding: 6px 0; border-radius: var(--md-shape-corner-m); background: var(--md-sys-color-surface-container-high); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35); animation: museMenuIn 160ms cubic-bezier(0.2, 0, 0, 1); }
-@keyframes museMenuIn { from { opacity: 0; transform: scale(0.94); } to { opacity: 1; transform: none; } }
+.muse-msg-menu { position: fixed; z-index: 10000; min-width: 210px; max-width: calc(100vw - 16px); padding: 6px 0; border-radius: var(--md-shape-corner-m); background: var(--md-sys-color-surface-container-high); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);  }
 .muse-msg-menu .m3-dropdown-option { width: 100%; background: none; border: 0; color: inherit; text-align: left; }
 .muse-msg-menu .muse-danger { color: var(--md-sys-color-error); }
 .muse-react-row { display: flex; justify-content: space-between; gap: 0; padding: 2px 8px 6px; border-bottom: 1px solid var(--md-sys-color-outline-variant); margin-bottom: 4px; }
@@ -213,3 +148,228 @@ body { overflow: clip; } /* hidden + programmatic scroll on focus shifted the wh
 .muse-media-stage { max-width: 94vw; max-height: 88vh; display: flex; }
 .muse-media-stage img, .muse-media-stage video { max-width: 94vw; max-height: 88vh; border-radius: 16px; object-fit: contain; }
 .muse-media-close { position: fixed; top: calc(16px + env(safe-area-inset-top)); right: 16px; z-index: 2; }
+
+#muse-np-head { display: none; }
+/* ---------- 4. BUILD 320 polish: player bar, profile rhythm, chat motion (Riff tokens) ---------- */
+/* Riff's centre column is 48px controls + 8px gap + 40px scrubber = 96px inside an 88px bar, so it
+   overflows and the controls hug the top edge. Keep the 40px scrubber (its canvas is >=40px) but
+   let its empty half overlap: controls 8..56, squiggle line at 72, 8px under the thumb. */
+@media (min-width: 601px) {
+  .playbar .playbar-center { height: 100%; justify-content: flex-start; gap: 0; padding-top: 8px; box-sizing: border-box; }
+  .playbar .playbar-center .playback-controls { flex: 0 0 48px; }
+  .playbar .playbar-center .scrubber-bar-wrapper { margin-top: -4px; }
+}
+/* profile: Riff's artist-hero rhythm, bio visible (Riff fades it in from JS), even row cadence */
+.muse-hero .muse-bio { opacity: 1 !important; transform: none !important; margin: 0; color: var(--md-sys-color-on-surface-variant); font-size: 14px; line-height: 1.5; }
+.muse-hero .artist-meta-box { gap: 8px; min-width: 0; }
+.muse-hero .artist-title { margin: 0; line-height: 1.1; }
+.muse-hero .artist-actions-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
+.muse-hero .artist-actions-bar > button { display: inline-flex; align-items: center; gap: 8px; }
+#account-body .artist-content-section .section-sub-header { padding: 0 4px 8px; }
+#account-body .m3-group { display: flex; flex-direction: column; gap: 2px; }
+#account-body .setting-item { padding: 16px 18px; min-height: 72px; display: flex; flex-direction: column; justify-content: center; }
+.muse-setting-top > :last-child { flex: 0 0 auto; }
+.muse-setting-text { gap: 4px; }
+.muse-setting-text .setting-name { font-size: 15px; font-weight: 500; }
+
+/* chats: Riff motion system (m3FadeUp 350ms emphasized, 30ms stagger, jelly pops, m3 dropdown) */
+.muse-msg.muse-new { animation: m3FadeUp 350ms cubic-bezier(0.2, 0, 0, 1) both; animation-delay: calc(var(--i, 0) * 30ms); }
+.muse-react.muse-pop, .muse-react-row button.muse-pop { animation: musePop 400ms cubic-bezier(0.34, 1.56, 0.64, 1); }
+@keyframes musePop { 0% { transform: scale(0.6); } 100% { transform: scale(1); } }
+.muse-msg-menu {
+  opacity: 0; transform: scaleY(0.85) translateY(-8px); transform-origin: top center;
+  transition: opacity var(--transition-fast), transform var(--transition-m3); pointer-events: none;
+}
+.muse-msg-menu.up { transform-origin: bottom center; transform: scaleY(0.85) translateY(8px); }
+.muse-msg-menu.open { opacity: 1; transform: none; pointer-events: auto; }
+.muse-chat.muse-enter { animation: m3ContainerOpen 400ms cubic-bezier(0.2, 0, 0, 1) both; }
+.muse-chat-log { gap: 4px; padding: 12px 4px; }
+.muse-chat-head { gap: 12px; padding-bottom: 12px; }
+.muse-chat-compose { gap: 8px; padding-top: 8px; }
+.muse-reacts { gap: 4px; margin-top: 4px; }
+@media (prefers-reduced-motion: reduce) {
+  .muse-msg.muse-new, .muse-react.muse-pop, .muse-chat.muse-enter { animation: none !important; }
+  .muse-msg-menu { transition: none; }
+}
+/* ---------- 2. phones (BUILD 320 redesign pass): Riff's visual language, Сёма's thumb rules ----------
+   5 labeled tabs flush to the bottom, a one-row mini player above them, a full-screen now-playing
+   view with big controls low on the screen, roomier rows and a comfortable chat composer. */
+@media (max-width: 600px) {
+  :root {
+    --muse-tabs-h: calc(64px + env(safe-area-inset-bottom) + var(--android-nav, 0px));
+    --muse-mini-h: 72px;
+    --muse-dock: calc(var(--muse-tabs-h) + var(--muse-mini-h) + 16px);
+  }
+  html, body { height: 100dvh; overscroll-behavior: none; }
+  body { -webkit-tap-highlight-color: transparent; }
+  .titlebar { padding-top: env(safe-area-inset-top); height: calc(44px + env(safe-area-inset-top)); padding-left: 20px; }
+  .titlebar .logo-text { font-size: 17px; font-weight: 700; }
+  .muse-logo-mark { width: 22px; height: 22px; border-radius: 7px; }
+  .toast-container { top: calc(52px + env(safe-area-inset-top)); }
+  .top-nav { padding: 4px 16px 12px !important; }
+  .app-layout { padding: 0 8px !important; margin-bottom: var(--muse-dock) !important; }
+  .main-content { padding: 20px 16px 24px !important; border-radius: var(--md-shape-corner-xl) !important; }
+  .view-header { margin-bottom: 16px; padding-bottom: 8px; }
+  .view-header h2 { font-size: 26px; font-weight: 500; }
+  .view-subtitle { font-size: 13px; }
+  .section-sub-header h3 { font-size: 20px; }
+
+  /* tab bar: 5 tabs (Queue lives in now playing, Settings in Account) */
+  .sidebar {
+    height: var(--muse-tabs-h) !important;
+    padding: 0 8px calc(env(safe-area-inset-bottom) + var(--android-nav, 0px)) !important;
+    bottom: 0 !important; border-radius: 0 !important;
+  }
+  #nav-queue, #nav-settings, .sidebar .rail-divider { display: none !important; }
+  .sidebar-nav { gap: 0; }
+  .sidebar .nav-item {
+    flex-direction: column; justify-content: center; align-items: center; gap: 4px;
+    min-height: 56px; min-width: 56px; padding: 6px 0 4px !important; touch-action: manipulation;
+  }
+  .sidebar .nav-item .nav-indicator { width: 60px; height: 32px; border-radius: 16px; }
+  .sidebar .nav-label {
+    display: block; font-size: 12px; line-height: 14px; font-weight: 600; letter-spacing: 0.1px;
+    max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    color: var(--md-sys-color-on-surface-variant); transition: color var(--transition-fast);
+  }
+  .sidebar .nav-item.active .nav-label { color: var(--md-sys-color-on-surface); }
+  .sidebar .nav-item .nav-badge { top: -2px; right: 8px; }
+
+  /* touch: 44px+ targets, nothing that only exists on hover */
+  .btn-icon-pill, .btn-pill-primary, .btn-outline-pill, .m3-dropdown-option, .m3-dropdown-trigger,
+  .settings-nav-btn, .lyrics-action-btn, .sp-modes button { min-height: 44px; }
+  .btn-icon-pill { min-width: 44px; }
+  .btn-pill-primary, .btn-outline-pill { padding-left: 18px; padding-right: 18px; font-size: 14px; }
+  input, textarea, select { font-size: 16px !important; } /* no iOS zoom-on-focus */
+  .modal-backdrop .dialog-card, .modal-backdrop .settings-card { max-height: calc(100dvh - 32px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); overflow-y: auto; }
+
+  /* rows: bigger, calmer; favorite + add stay visible (no hover on touch) */
+  .track-row { min-height: 68px; gap: 14px; padding: 8px 4px 8px 8px; }
+  .track-row .track-row-index, .track-row .btn-row-art { display: none !important; }
+  .track-row .track-row-thumb { width: 52px; height: 52px; border-radius: 12px; }
+  .track-row .track-row-title { font-size: 15px; font-weight: 500; }
+  .track-row .track-row-artist { font-size: 13px; margin-top: 2px; }
+  .track-row .track-row-duration { font-size: 12px; }
+  .track-row .track-row-actions { opacity: 1 !important; gap: 0; }
+  .track-row .track-row-actions .btn-icon-pill { width: 44px; height: 44px; background: transparent; }
+  .muse-person-row { min-height: 72px; }
+  .muse-person-row .muse-avatar { --s: 48px; margin-right: 2px; }
+
+  /* mini player: one row above the tabs, big play + next; tap it for now playing */
+  body:not(.muse-np) .playbar {
+    display: flex !important; align-items: center; gap: 4px;
+    left: 8px !important; right: 8px !important; width: auto !important;
+    bottom: calc(var(--muse-tabs-h) + 8px) !important;
+    height: var(--muse-mini-h) !important; padding: 10px 8px 10px 10px !important;
+    border-radius: 22px !important; margin: 0 !important;
+    --muse-p: 0%;
+  }
+  body:not(.muse-np) .playbar::after {
+    content: ''; position: absolute; left: 20px; right: 20px; bottom: 5px; height: 3px; border-radius: 2px; pointer-events: none;
+    background: linear-gradient(90deg, var(--md-sys-color-primary) var(--muse-p), color-mix(in srgb, var(--md-sys-color-on-surface) 12%, transparent) var(--muse-p));
+  }
+  body:not(.muse-np) .playbar-left { flex: 1 1 auto; min-width: 0; gap: 12px; cursor: pointer; }
+  body:not(.muse-np) .playbar .artwork-wrapper { width: 52px; height: 52px; border-radius: 14px; }
+  body:not(.muse-np) .playbar .track-title { font-size: 15px; font-weight: 600; }
+  body:not(.muse-np) .playbar .track-artist { font-size: 13px; }
+  body:not(.muse-np) .playbar :is(#btn-toggle-fav, #btn-edit-current-track, #btn-shuffle, #btn-repeat, #btn-prev),
+  body:not(.muse-np) .playbar .scrubber-bar-wrapper,
+  body:not(.muse-np) .playbar .playbar-right,
+  body:not(.muse-np) #muse-np-head { display: none !important; }
+  body:not(.muse-np) .playbar-center { display: flex !important; flex: 0 0 auto; width: auto; margin: 0; }
+  body:not(.muse-np) .playback-controls { gap: 4px; }
+  body:not(.muse-np) .playbar .btn-play-pause { width: 52px; height: 52px; min-height: 52px; max-height: 52px; border-radius: 18px; }
+  body:not(.muse-np) .playbar #btn-next { width: 48px; height: 48px; }
+
+  /* full-screen now playing: art up top, everything you press sits low */
+  body.muse-np .playbar {
+    position: fixed !important; inset: 0 !important; width: auto !important; height: auto !important; margin: 0 !important;
+    display: flex !important; flex-direction: column; align-items: stretch; gap: 0;
+    padding: calc(env(safe-area-inset-top) + 8px) 24px calc(env(safe-area-inset-bottom) + var(--android-nav, 0px) + 20px) !important;
+    border-radius: 0 !important; z-index: 10000 !important;
+    background: var(--md-sys-color-surface-container) !important;
+    animation: museNpIn 400ms cubic-bezier(0.2, 0, 0, 1) both;
+    touch-action: pan-x;
+  }
+  body.muse-np.muse-np-closing .playbar { animation: museNpOut 280ms cubic-bezier(0.3, 0, 1, 1) both; }
+  body.muse-np #muse-np-head { display: flex; align-items: center; justify-content: space-between; min-height: 56px; }
+  body.muse-np #muse-np-head span { font-size: 13px; font-weight: 600; letter-spacing: 0.4px; color: var(--md-sys-color-on-surface-variant); text-transform: uppercase; }
+  body.muse-np #muse-np-head .btn-icon-pill { width: 48px; height: 48px; }
+  body.muse-np .playbar-left {
+    display: grid !important; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "art art" "meta fav";
+    align-items: center; row-gap: 28px; column-gap: 12px; flex: 1 1 auto; align-content: end; min-height: 0; padding-bottom: 8px;
+  }
+  body.muse-np .playbar .artwork-wrapper {
+    grid-area: art; justify-self: center; width: min(calc(100vw - 48px), 44dvh); height: min(calc(100vw - 48px), 44dvh);
+    border-radius: var(--md-shape-corner-xl); box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35); background: #000;
+  }
+  body.muse-np .playbar .track-meta { grid-area: meta; min-width: 0; }
+  body.muse-np .playbar .track-title { font-size: 22px; font-weight: 700; line-height: 1.25; }
+  body.muse-np .playbar .track-artist { font-size: 16px; margin-top: 4px; }
+  body.muse-np .playbar #btn-toggle-fav { grid-area: fav; display: flex !important; width: 52px; height: 52px; }
+  body.muse-np .playbar :is(#btn-edit-current-track, .visualizer-container, .volume-control-group) { display: none !important; }
+  body.muse-np .playbar-center { display: flex !important; flex-direction: column; gap: 12px; width: 100%; max-width: none; margin: 8px 0 0; flex: 0 0 auto; }
+  body.muse-np .scrubber-bar-wrapper { order: 1; display: flex !important; width: 100%; gap: 10px; }
+  body.muse-np .scrubber-bar-wrapper .time-label { font-size: 12px; width: 40px; }
+  body.muse-np .playback-controls { order: 2; justify-content: space-between; width: 100%; gap: 0; }
+  body.muse-np .playback-controls .control-btn, body.muse-np #btn-shuffle, body.muse-np #btn-repeat { display: flex !important; width: 56px; height: 56px; }
+  body.muse-np .playback-controls #btn-prev, body.muse-np .playback-controls #btn-next { width: 64px; height: 64px; }
+  body.muse-np .playback-controls .control-btn svg { transform: scale(1.35); }
+  body.muse-np .playbar .btn-play-pause { width: 84px; height: 84px; min-height: 84px; max-height: 84px; border-radius: 30px; }
+  body.muse-np .playbar .btn-play-pause svg { transform: scale(1.3); }
+  body.muse-np .playbar-right { display: flex !important; justify-content: space-around; margin-top: 20px; gap: 0; }
+  body.muse-np .playbar-right .btn-icon-pill { width: 56px; height: 56px; }
+  @keyframes museNpIn { from { opacity: 0; transform: translateY(48px); } to { opacity: 1; transform: none; } }
+  @keyframes museNpOut { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(40px); } }
+
+  /* lyrics / now-playing panel: a sheet over the list, or over the full player */
+  .right-panel {
+    left: 8px !important; right: 8px !important; width: auto !important; min-width: 0 !important; max-width: none !important;
+    top: calc(52px + env(safe-area-inset-top)) !important; bottom: calc(var(--muse-dock) - 8px) !important;
+    padding: 20px !important; z-index: 140; border-radius: var(--md-shape-corner-xl) !important;
+  }
+  .right-panel.hidden { width: auto !important; transform: translateY(24px); }
+  body.muse-np .right-panel { z-index: 10001; left: 0 !important; right: 0 !important; top: calc(env(safe-area-inset-top) + 8px) !important; bottom: 0 !important; border-radius: 28px 28px 0 0 !important; padding-bottom: calc(env(safe-area-inset-bottom) + 20px) !important; }
+
+  /* chat: no search bar above it, roomy header and composer */
+  body[data-muse-view="chat"] .top-nav { display: none !important; }
+  body[data-muse-view="chat"] .main-content { padding: 8px 12px 12px !important; }
+  .muse-chat-head { gap: 4px; padding-bottom: 10px; min-height: 60px; }
+  .muse-chat-head .btn-icon-pill { width: 48px; height: 48px; }
+  .muse-chat-peer { gap: 12px; padding: 4px 8px; min-height: 52px; }
+  .muse-chat-peer .muse-avatar { --s: 44px; }
+  .muse-chat-peer .track-row-title { font-size: 17px; font-weight: 600; }
+  .muse-chat-log { padding: 12px 4px; }
+  .muse-msg { max-width: 84%; }
+  .muse-bubble { padding: 10px 14px 8px; font-size: 16px; }
+  .muse-chat-compose { gap: 8px; padding: 8px 0 2px; }
+  .muse-chat-compose .btn-icon-pill { width: 48px; height: 48px; flex: 0 0 auto; }
+  .muse-chat-input { min-height: 48px; padding: 12px 18px; border-radius: 24px; line-height: 24px; }
+  .muse-send { width: 48px !important; height: 48px !important; }
+  .muse-chat-rec { min-height: 56px; }
+  .muse-msg-song { min-width: 0; width: min(280px, 70vw); }
+  .muse-round { width: min(220px, 60vw); height: min(220px, 60vw); }
+
+  /* profile: stacked, centered hero; rows wrap instead of squeezing */
+  .muse-hero { padding: 28px 20px 24px !important; margin-bottom: 24px !important; }
+  .muse-hero .artist-card-body { flex-direction: column; align-items: center; text-align: center; gap: 16px; }
+  .muse-hero .artist-meta-box { align-items: center; gap: 8px; width: 100%; }
+  .muse-hero .artist-title { font-size: 28px; overflow-wrap: anywhere; }
+  .muse-hero .artist-actions-bar { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 8px; }
+  .muse-hero .btn-back-artist { position: absolute; top: 16px; left: 16px; }
+  .muse-setting-top { flex-wrap: wrap; row-gap: 12px; }
+  .muse-setting-text { flex: 1 1 200px; }
+  .muse-setting-top > button { flex: 0 0 auto; }
+  .setting-item { padding: 16px 18px; }
+  .muse-setting-text .setting-name { font-size: 15px; }
+  .muse-setting-desc { font-size: 13px; }
+}
+@media (max-width: 600px) and (max-height: 700px) {
+  body.muse-np .playbar .artwork-wrapper { width: min(calc(100vw - 96px), 36dvh); height: min(calc(100vw - 96px), 36dvh); }
+  body.muse-np .playbar-left { row-gap: 18px; }
+  body.muse-np .playbar-right { margin-top: 10px; }
+}
+@media (hover: none) {
+  .track-row .track-row-actions { opacity: 1 !important; }
+}
+@media (max-width: 400px) { .track-row .track-row-duration { display: none; } }
