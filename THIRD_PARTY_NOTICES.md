@@ -59,10 +59,3 @@ Self-hosted (Latin and Cyrillic subsets); no request goes to Google Fonts.
 Copyright (c) 2017 Dailymotion. Licensed under the Apache License, Version 2.0
 (https://www.apache.org/licenses/LICENSE-2.0). Shipped as Riff ships it; Muse's
 streams are plain audio, so it is only used for `.m3u8` sources.
-
-## model-viewer 4.4.0 — https://github.com/google/model-viewer (`elisa_assets/model-viewer.min.js`)
-
-Copyright 2019 Google LLC. Licensed under the Apache License, Version 2.0
-(https://www.apache.org/licenses/LICENSE-2.0); bundles three.js (MIT, Copyright
-2010-2025 three.js authors). Self-hosted and served only on the elisa.style host;
-the model uses no Draco/KTX2, so no decoder is fetched from a CDN.
