@@ -5362,6 +5362,10 @@ _elisa_warm_at = 0.0
 _elisa_warm_lock = threading.Lock()
 
 
+ELISA_ASSETS = os.path.join(HERE, "elisa_assets")  # outside STATIC: never served on other hosts
+ELISA_M3D = {"/m3d/elisa.glb": "elisa.glb", "/m3d/model-viewer.min.js": "model-viewer.min.js"}
+
+
 def _elisa_warm_all():
     """Cache the 4 elisa.style secret tracks as AAC (iOS-safe) one after another, so
     the secret plays from disk. Runs at most every 10 min; refreshes mtimes so the
@@ -6108,6 +6112,9 @@ class Handler(SimpleHTTPRequestHandler):
             self.directory = STATIC
             self.path = "/eliza.html"
             return super().do_GET()
+        if path in ELISA_M3D:
+            # 3D surprise after the jar: the model + a self-hosted model-viewer, elisa host only.
+            return self._send_elisa_asset(ELISA_M3D[path])
         if path in ("/api/audio", "/api/art"):
             # Song secret only: these 4 IDs, nothing else of Muse's API on this host.
             qs = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
@@ -6121,6 +6128,22 @@ class Handler(SimpleHTTPRequestHandler):
                                    "started": bool(_warm_audio(v, force=True))}, 202)
             return self._proxy_audio(v, ios=self._client_ios(qs))
         self.send_error(404)
+
+    def _send_elisa_asset(self, name):
+        fp = os.path.join(ELISA_ASSETS, name)
+        try:
+            with open(fp, "rb") as f:
+                data = f.read()
+        except OSError:
+            return self.send_error(404)
+        ctype = "model/gltf-binary" if name.endswith(".glb") else "text/javascript; charset=utf-8"
+        self.send_response(200)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Cache-Control", "public, max-age=86400")
+        self.end_headers()
+        if self.command != "HEAD":
+            self.wfile.write(data)
 
     def _send_art(self, v):
         # Full-size cover for the song secret (maxres), falls back to Muse's small art.

@@ -219,6 +219,48 @@ body.jar{overflow:hidden}
 .jr-stage.done .jr-again{display:inline-block}
 .jr-spk{position:absolute;z-index:5;pointer-events:none;font-size:var(--s);color:var(--c);text-shadow:0 0 8px var(--c);left:0;top:0}
 @media (max-height:700px){.jr-paper{min-height:160px;padding:20px 20px 16px}.jr-text{font-size:21px}.jr-stage{--j:min(52vw,200px,calc(40dvh*.8))}}
+/* ===== 3D surprise (after the jar's final note) ===== */
+.jr-more{display:none;margin-top:12px;animation:m3In .7s cubic-bezier(.2,.8,.2,1) both}
+.jr-stage.done.more .jr-more{display:inline-block}
+.jr-stage.done.more .jr-again{margin-top:8px;height:44px;font-size:14px;background:none;border-color:#ffffff22;color:#ffffffa0}
+.jr-more{box-shadow:0 8px 26px #ff4f8b55,0 0 0 0 #ff4f8b88;animation:m3In .7s cubic-bezier(.2,.8,.2,1) both,m3Ping 2.4s 1s ease-out infinite}
+@keyframes m3Ping{0%{box-shadow:0 8px 26px #ff4f8b55,0 0 0 0 #ff4f8b88}70%,100%{box-shadow:0 8px 26px #ff4f8b55,0 0 0 16px #ff4f8b00}}
+@keyframes m3In{from{opacity:0;transform:translateY(14px) scale(.92)}}
+body.m3d{overflow:hidden}
+#m3d{position:fixed;inset:0;z-index:33;display:none;overflow-y:auto;-webkit-overflow-scrolling:touch;touch-action:pan-y;overscroll-behavior:contain}
+#m3d.on{display:block}
+#m3d button{-webkit-user-select:none;user-select:none}
+#m3d .m3-veil{position:fixed;inset:0;background:radial-gradient(90% 55% at 50% 58%,#5a1a44 0%,#1a0716 55%,#07030a 100%);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);opacity:0;transition:opacity .7s}
+#m3d.in .m3-veil{opacity:1}
+.m3-wrap{position:relative;min-height:100%;display:flex;flex-direction:column;max-width:560px;margin:0 auto;padding:calc(var(--sat) + 12px) 18px calc(var(--sab) + 20px)}
+.m3-top{display:flex;align-items:center;justify-content:space-between;min-height:48px}
+.m3-k{font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:var(--rose);opacity:.85;padding-left:6px}
+.m3-stage{position:relative;flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:min(78dvh,640px);transition:opacity .6s,transform .9s cubic-bezier(.2,.8,.2,1),filter .6s}
+#m3d:not(.in) .m3-stage{opacity:0;transform:translateY(40px) scale(.9);filter:blur(10px)}
+.m3-title{text-align:center;font-size:clamp(24px,7vw,32px);font-weight:800;letter-spacing:-.02em;margin:4px 0 0}
+.m3-box{position:relative;width:100%;height:min(64dvh,560px);min-height:340px}
+.m3-box model-viewer{position:absolute;inset:0;width:100%;height:100%;background:transparent;--poster-color:transparent;--progress-bar-color:transparent;outline:none;z-index:2}
+.m3-ped{position:absolute;left:50%;bottom:5%;width:min(62%,300px);aspect-ratio:3.2/1;transform:translateX(-50%);z-index:1;pointer-events:none}
+.m3-ped::before{content:"";position:absolute;inset:0;border-radius:50%;background:radial-gradient(closest-side,#ffb3d1 0%,#ff4f8b99 35%,#ff4f8b22 70%,transparent 100%);filter:blur(6px);animation:m3Glow 3.6s ease-in-out infinite}
+.m3-ped::after{content:"";position:absolute;inset:18% 8%;border-radius:50%;border:1.5px solid #ffd6e6aa;box-shadow:0 0 18px #ff4f8b,inset 0 0 14px #ff4f8b88;animation:m3Ring 3.6s ease-in-out infinite}
+@keyframes m3Glow{50%{opacity:.7;transform:scale(.94)}}
+@keyframes m3Ring{50%{transform:scale(1.05);opacity:.75}}
+.m3-halo{position:absolute;left:50%;top:46%;width:min(80%,420px);aspect-ratio:1;transform:translate(-50%,-50%);border-radius:50%;background:radial-gradient(closest-side,#ff4f8b40,#ff4f8b10 60%,transparent);filter:blur(18px);pointer-events:none;z-index:0;animation:m3Glow 5s ease-in-out infinite}
+.m3-pts{position:absolute;inset:0;pointer-events:none;z-index:3;overflow:hidden}
+.m3-pts i{position:absolute;bottom:-10px;left:var(--x);width:var(--s);height:var(--s);border-radius:50%;background:#ffd6e6;box-shadow:0 0 8px #ff4f8b,0 0 2px #fff;opacity:0;animation:m3Rise var(--d) linear var(--dl) infinite}
+@keyframes m3Rise{0%{transform:translateY(0) translateX(0);opacity:0}12%{opacity:.9}80%{opacity:.6}100%{transform:translateY(calc(-1 * min(60dvh,520px))) translateX(var(--w));opacity:0}}
+.m3-load{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:4;display:flex;flex-direction:column;align-items:center;gap:12px;transition:opacity .5s;pointer-events:none}
+.m3-load.done{opacity:0}
+.m3-bar{width:min(56vw,220px);height:6px;border-radius:3px;background:#ffffff1a;overflow:hidden}
+.m3-bar b{display:block;height:100%;width:0;border-radius:3px;background:linear-gradient(90deg,#ff4f8b,#ffb3d1);box-shadow:0 0 12px #ff4f8b;transition:width .25s}
+.m3-pct{font-size:13px;color:#ffffffa8;font-variant-numeric:tabular-nums}
+.m3-err{display:none;text-align:center;color:#ffffffc0;font-size:15px;max-width:260px;pointer-events:auto}
+.m3-load.err .m3-bar,.m3-load.err .m3-pct{display:none}.m3-load.err .m3-err{display:block}
+.m3-load.err{pointer-events:auto}
+.m3-cap{margin-top:6px;text-align:center;font-size:15px;color:#ffffffc8;letter-spacing:.01em}
+.m3-cap span{color:var(--rose)}
+.m3-tip{margin-top:6px;text-align:center;font-size:12px;color:#ffffff70}
+@media (max-height:700px){.m3-box{height:min(60dvh,520px);min-height:300px}.m3-title{font-size:24px}}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition-duration:.01ms!important}.t{filter:none;transform:none}}
 </style>
 </head>
@@ -312,7 +354,24 @@ body.jar{overflow:hidden}
         </svg>
       </button>
       <div class="jr-hint" id="jrHint">A note for every reason ✦</div>
+      <button class="btn solid jr-more" id="jrMore" type="button">One more surprise ✦</button>
       <button class="btn jr-again" id="jrAgain" type="button">Read again ↺</button>
+    </div>
+  </div>
+</div>
+<!-- ================= 3D SURPRISE (after the jar's final note) ================= -->
+<div id="m3d" aria-hidden="true"><div class="m3-veil"></div>
+  <div class="m3-wrap">
+    <div class="m3-top"><div class="m3-k">One more thing ✦</div><button class="sg-x" id="m3Close" type="button" aria-label="Закрыть">×</button></div>
+    <div class="m3-stage" id="m3Stage">
+      <div class="m3-title">You, in 3D ♥️</div>
+      <div class="m3-box" id="m3Box">
+        <div class="m3-halo"></div><div class="m3-ped"></div><div class="m3-pts" id="m3Pts"></div>
+        <div class="m3-load" id="m3Load"><div class="m3-bar"><b id="m3Bar"></b></div><div class="m3-pct" id="m3Pct">0%</div>
+          <div class="m3-err" id="m3Err">The model could not load.<br><button class="btn" id="m3Retry" type="button">Try again</button></div></div>
+      </div>
+      <div class="m3-cap" id="m3Cap">This model was built for 5 hours</div>
+      <div class="m3-tip">Drag to spin · pinch to zoom</div>
     </div>
   </div>
 </div>
@@ -582,7 +641,7 @@ function unlock(){
 }
 
 /* ================= interaction ================= */
-const isUI=el=>el&&el.closest&&el.closest('button,input,label,.chip,#drawpad,#drawbar,#envWrap,#songs,#jar');
+const isUI=el=>el&&el.closest&&el.closest('button,input,label,.chip,#drawpad,#drawbar,#envWrap,#songs,#jar,#m3d');
 function tapAt(x,y){
   if(mode!=='main')return;
   const r=secs[0].getBoundingClientRect();
@@ -792,7 +851,7 @@ function jrSparkle(x,y,n,cols){for(let k=0;k<n;k++){const s=document.createEleme
 function jrRel(el){const a=el.getBoundingClientRect(),b=jrStage.getBoundingClientRect();return{x:a.left-b.left+a.width/2,y:a.top-b.top+a.height/2}}
 function jrStart(){
   jrOpen=true;jrOrder=jrShuffle();jrPos=0;jrBusy=false;jrBuild();
-  jrCard.className='jr-card';jrStage.classList.remove('reading','done');jrCount.textContent=`0 / ${NOTES.length}`;jrHint.textContent='A note for every reason ✦';
+  jrCard.className='jr-card';jrStage.classList.remove('reading','done','more');jrCount.textContent=`0 / ${NOTES.length}`;jrHint.textContent='A note for every reason ✦';
   jrW.classList.add('on');jrW.setAttribute('aria-hidden','false');body.classList.add('jar');jrW.scrollTop=0;
   requestAnimationFrame(()=>requestAnimationFrame(()=>jrW.classList.add('in')));
 }
@@ -831,13 +890,55 @@ function jrEnd(){
   jrBusy=true;jrCard.classList.add('out');
   setTimeout(()=>{jrShow(0,true);jrStage.classList.add('done');jrHint.textContent='';const p=jrRel(jrCard);
     jrSparkle(p.x,p.y+40,26,['#ff4f8b','#ff9ec4','#ffe6a3','#c9b6ff']);buzz([20,40,20,40,80]);jrBusy=false;
-    window.__jarDone=true},RM?20:380);
+    window.__jarDone=true;setTimeout(()=>{if(jrOpen&&jrStage.classList.contains('done'))jrStage.classList.add('more')},RM?20:1600)},RM?20:380);
 }
 function jrClose(){jrOpen=false;jrW.classList.remove('in');setTimeout(()=>{jrW.classList.remove('on');jrW.setAttribute('aria-hidden','true');body.classList.remove('jar')},450)}
 $('#jarStar').addEventListener('click',e=>{e.stopPropagation();const r=e.currentTarget.getBoundingClientRect();spark(r.left+r.width/2,r.top+r.height/2,30,6,[1,.85,.6]);buzz([10,20,10]);jrStart()});
 jrJar.addEventListener('click',jrNext);jrCard.addEventListener('click',jrNext);
 $('#jrClose').addEventListener('click',jrClose);$('#jrAgain').addEventListener('click',()=>{jrStart()});
 window.__jar=()=>({open:jrOpen,pos:jrPos,order:jrOrder.slice(),text:$('#jrText').textContent,num:$('#jrNum').textContent,count:jrCount.textContent,done:jrStage.classList.contains('done'),busy:jrBusy});
+
+/* ---------- 3D surprise ---------- */
+const m3W=$('#m3d'),m3Box=$('#m3Box'),m3Load=$('#m3Load'),m3Bar=$('#m3Bar'),m3Pct=$('#m3Pct');
+let m3Open=false,m3MV=null,m3Lib=null,m3State={loaded:false,progress:0,error:null};
+function m3Lib_(){
+  if(m3Lib)return m3Lib;
+  m3Lib=new Promise((res,rej)=>{const sc=document.createElement('script');sc.type='module';sc.src='/m3d/model-viewer.min.js?v=440';
+    sc.onload=()=>customElements.whenDefined('model-viewer').then(res);sc.onerror=()=>{m3Lib=null;rej(new Error('viewer'))};document.head.appendChild(sc)});
+  return m3Lib;
+}
+function m3Prog(p){p=Math.max(0,Math.min(1,p));m3State.progress=p;m3Bar.style.width=(p*100).toFixed(0)+'%';m3Pct.textContent=Math.round(p*100)+'%'}
+function m3Fail(e){m3State.error=String(e&&e.message||e||'error');m3Load.classList.remove('done');m3Load.classList.add('err')}
+function m3Build(){
+  m3Load.classList.remove('err','done');m3Prog(0);m3State.error=null;
+  m3Lib_().then(()=>{
+    if(m3MV){m3MV.remove();m3MV=null}
+    const mv=document.createElement('model-viewer');m3MV=mv;
+    const at={alt:'Elisa in 3D','camera-controls':'','touch-action':'pan-y','auto-rotate':'','auto-rotate-delay':'600','rotation-per-second':'22deg',
+      'interaction-prompt':'none','environment-image':'neutral',exposure:'1.15','shadow-intensity':'1','shadow-softness':'0.9','tone-mapping':'neutral',
+      'camera-orbit':'0deg 82deg 105%','min-camera-orbit':'auto 20deg 45%','max-camera-orbit':'auto 100deg 180%','field-of-view':'30deg',
+      'interpolation-decay':'120',loading:'eager',reveal:'auto'};
+    for(const k in at)mv.setAttribute(k,at[k]);
+    mv.addEventListener('progress',e=>m3Prog(e.detail.totalProgress));
+    mv.addEventListener('load',()=>{m3State.loaded=true;m3Prog(1);setTimeout(()=>m3Load.classList.add('done'),250);
+      const r=m3Box.getBoundingClientRect();spark(r.left+r.width/2,r.top+r.height*.55,40,7,[1,.6,.8]);buzz([12,30,12])});
+    mv.addEventListener('error',e=>m3Fail(e.detail&&e.detail.type||'load'));
+    mv.src='/m3d/elisa.glb?v=2';
+    m3Box.appendChild(mv);
+  }).catch(m3Fail);
+}
+function m3Pts(){const box=$('#m3Pts');if(box.childElementCount)return;
+  for(let i=0;i<22;i++){const d=document.createElement('i');d.style.cssText=`--x:${(8+Math.random()*84).toFixed(1)}%;--s:${(2+Math.random()*3).toFixed(1)}px;--d:${(5+Math.random()*6).toFixed(1)}s;--dl:${(-Math.random()*10).toFixed(1)}s;--w:${(Math.random()*40-20).toFixed(0)}px`;box.appendChild(d)}}
+function m3Start(){
+  m3Open=true;m3Pts();m3W.classList.add('on');m3W.setAttribute('aria-hidden','false');body.classList.add('m3d');m3W.scrollTop=0;
+  requestAnimationFrame(()=>requestAnimationFrame(()=>m3W.classList.add('in')));
+  if(!m3MV||m3State.error)m3Build();
+}
+function m3Close(){m3Open=false;m3W.classList.remove('in');setTimeout(()=>{if(m3Open)return;m3W.classList.remove('on');m3W.setAttribute('aria-hidden','true');body.classList.remove('m3d')},600)}
+$('#jrMore').addEventListener('click',e=>{const r=e.currentTarget.getBoundingClientRect();spark(r.left+r.width/2,r.top+r.height/2,26,6,[1,.55,.75]);buzz([10,20,10]);m3Start()});
+$('#m3Close').addEventListener('click',m3Close);$('#m3Retry').addEventListener('click',m3Build);
+window.__m3d=()=>({open:m3Open,loaded:m3State.loaded,progress:m3State.progress,error:m3State.error,more:jrStage.classList.contains('more'),cap:$('#m3Cap').textContent});
+window.__m3orbit=o=>{if(m3MV){m3MV.autoRotate=false;m3MV.resetTurntableRotation(0);m3MV.cameraOrbit=o;m3MV.jumpCameraToGoal()}};
 
 window.__dbg={go:n=>{override={s:SH[n],x:W/2,y:H*.4,S:Math.min(W,H)*.9,until:performance.now()+4000}},fire:(x,y)=>fireworks(x,y,1)};
 requestAnimationFrame(frame);
