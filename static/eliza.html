@@ -161,6 +161,64 @@ body.songs{overflow:hidden}
 .sg-ends{margin-top:16px;font-size:18px;color:var(--rose);line-height:1.4}
 .sg-end .btn{margin-top:28px;min-width:160px}
 #songs button{-webkit-user-select:none;user-select:none}
+/* ===== jar of notes secret ===== */
+#jarStar{display:inline-grid;place-items:center;width:44px;height:44px;margin:-12px -14px -14px -4px;vertical-align:middle;border-radius:22px;touch-action:manipulation}
+#jarStar span{display:block;font-size:11px;line-height:1;color:#ffe2a8;opacity:.35;text-shadow:0 0 6px #ffcf7a;animation:jrTwinkle 4.2s ease-in-out infinite}
+#jarStar:active span{transform:scale(1.7)}
+@keyframes jrTwinkle{0%,100%{opacity:.25;transform:rotate(0) scale(.9)}45%{opacity:.9;transform:rotate(45deg) scale(1.15);text-shadow:0 0 10px #ffcf7a,0 0 18px #ff9ec4}60%{opacity:.5}}
+.sg-hint{margin-top:10px;font-size:11px;color:#ffe2a8;opacity:.3;animation:jrTwinkle 4.2s ease-in-out infinite;pointer-events:none}
+body.jar{overflow:hidden}
+#jar{position:fixed;inset:0;z-index:31;display:none;overflow-y:auto;-webkit-overflow-scrolling:touch;touch-action:pan-y;overscroll-behavior:contain}
+#jar.on{display:block}
+#jar .jr-veil{position:fixed;inset:0;background:radial-gradient(110% 60% at 50% 30%,#3a1430e8 0%,#120610f4 55%,#08040cfa 100%);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);opacity:0;transition:opacity .6s}
+#jar.in .jr-veil{opacity:1}
+#jar button{-webkit-user-select:none;user-select:none}
+.jr-wrap{position:relative;min-height:100%;display:flex;flex-direction:column;max-width:480px;margin:0 auto;padding:calc(var(--sat) + 12px) 20px calc(var(--sab) + 18px)}
+.jr-top{display:flex;align-items:center;justify-content:space-between;min-height:48px}
+.jr-count{min-width:72px;height:36px;padding:0 14px;border-radius:18px;display:grid;place-items:center;background:#ffffff10;border:1px solid #ffffff1c;font-size:14px;font-weight:600;color:var(--rose);font-variant-numeric:tabular-nums;transition:transform .3s cubic-bezier(.2,.9,.3,1.4)}
+.jr-count.bump{transform:scale(1.12)}
+.jr-stage{--j:min(60vw,250px,calc(42dvh*.8));position:relative;flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;min-height:calc(var(--j)*1.25 + 230px);padding-bottom:6px}
+#jar:not(.in) .jr-stage{opacity:0;transform:translateY(40px) scale(.94)}
+.jr-stage{transition:opacity .5s,transform .7s cubic-bezier(.2,.8,.2,1)}
+.jr-title{position:absolute;top:8px;left:0;right:0;text-align:center;transition:opacity .4s}
+.jr-title .k{font-size:12px}
+.jr-title b{display:block;margin-top:8px;font-size:clamp(24px,7vw,30px);font-weight:800;letter-spacing:-.02em}
+.jr-stage.reading .jr-title{opacity:0}
+.jr-jar{position:relative;width:var(--j);height:calc(var(--j)*1.25);flex:0 0 auto;transition:transform .5s cubic-bezier(.2,.8,.2,1),filter .5s;touch-action:manipulation}
+.jr-jar svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}
+.jr-jar.wobble{animation:jrWobble .55s cubic-bezier(.36,.07,.19,.97)}
+@keyframes jrWobble{20%{transform:rotate(-5deg) scale(.97)}45%{transform:rotate(4deg) scale(1.02)}70%{transform:rotate(-2deg)}100%{transform:none}}
+.jr-stage.reading .jr-jar{transform:translateY(10px) scale(.86);filter:brightness(.8)}
+.jr-glow{position:absolute;left:8%;right:8%;bottom:-4%;height:30%;border-radius:50%;background:radial-gradient(closest-side,#ff4f8b55,transparent);filter:blur(10px);animation:jrGlow 4s ease-in-out infinite}
+@keyframes jrGlow{50%{opacity:.55;transform:scaleX(.9)}}
+.jr-notes{position:absolute;left:13%;right:13%;top:44%;bottom:4.5%;pointer-events:none}
+.jr-note{position:absolute;width:27%;height:17%;border-radius:4px;background:var(--c);box-shadow:inset 0 -4px 0 #0000001a,0 2px 4px #0005;
+  background-image:linear-gradient(100deg,transparent 46%,#00000018 48%,#ffffff40 50%,transparent 53%);transform:rotate(var(--r));animation:jrFloat var(--d) ease-in-out var(--dl) infinite;transition:opacity .3s}
+.jr-note.gone{opacity:0;animation:none}
+@keyframes jrFloat{0%,100%{transform:translateY(0) rotate(var(--r))}50%{transform:translateY(-4px) rotate(calc(var(--r) + 5deg))}}
+.jr-fly{position:absolute;left:0;top:0;width:40px;height:26px;border-radius:5px;z-index:4;pointer-events:none;background:var(--c);box-shadow:0 6px 16px #0006;
+  background-image:linear-gradient(100deg,transparent 46%,#00000018 48%,#ffffff40 50%,transparent 53%)}
+.jr-card{position:absolute;left:50%;top:6px;width:min(86vw,340px);transform:translateX(-50%);z-index:3;perspective:900px;pointer-events:none;opacity:0}
+.jr-card.on{opacity:1;pointer-events:auto}
+.jr-paper{position:relative;min-height:190px;padding:26px 24px 20px;border-radius:20px;background:#fff6f9;color:#3a1426;text-align:center;display:flex;flex-direction:column;justify-content:center;
+  box-shadow:0 18px 50px #ff4f8b44,0 0 0 1px #ffffff40;transform-origin:50% 0;background-image:linear-gradient(180deg,transparent 49.6%,#3a142612 50%,transparent 50.6%),radial-gradient(120% 80% at 50% 0%,var(--c),transparent 70%)}
+.jr-card.on .jr-paper{animation:jrUnfold .8s cubic-bezier(.2,.8,.2,1) both}
+.jr-card.out .jr-paper{animation:jrAway .45s cubic-bezier(.4,0,1,1) both}
+@keyframes jrUnfold{0%{transform:rotateX(-88deg) scale(.55);opacity:0}55%{transform:rotateX(14deg) scale(1.02);opacity:1}100%{transform:none}}
+@keyframes jrAway{to{transform:translateY(-40px) rotate(-6deg) scale(.9);opacity:0}}
+.jr-k{font-size:12px;letter-spacing:.24em;text-transform:uppercase;color:#c2185b;opacity:.8}
+.jr-text{margin-top:12px;font-family:"Snell Roundhand","Bradley Hand","Segoe Print",Georgia,serif;font-size:clamp(22px,6.2vw,27px);line-height:1.35;font-weight:600;color:#3a1426}
+.jr-card.on .jr-text,.jr-card.on .jr-sig{animation:jrText .7s .45s cubic-bezier(.2,.8,.2,1) both}
+@keyframes jrText{from{opacity:0;transform:translateY(8px);filter:blur(4px)}}
+.jr-sig{margin-top:14px;font-size:15px;font-weight:700;color:#c2185b}
+.jr-card.final .jr-paper{min-height:230px;background-image:radial-gradient(120% 90% at 50% 0%,#ffc6dc,transparent 75%)}
+.jr-card.final .jr-text{font-size:clamp(24px,6.8vw,30px)}
+.jr-card.final .jr-heart{font-size:44px;line-height:1;margin-bottom:6px;animation:sgBeat 1.4s ease-in-out infinite}
+.jr-hint{margin-top:14px;min-height:20px;font-size:14px;color:#ffffff90;transition:opacity .4s}
+.jr-again{margin-top:10px;display:none}
+.jr-stage.done .jr-again{display:inline-block}
+.jr-spk{position:absolute;z-index:5;pointer-events:none;font-size:var(--s);color:var(--c);text-shadow:0 0 8px var(--c);left:0;top:0}
+@media (max-height:700px){.jr-paper{min-height:160px;padding:20px 20px 16px}.jr-text{font-size:21px}.jr-stage{--j:min(52vw,200px,calc(40dvh*.8))}}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition-duration:.01ms!important}.t{filter:none;transform:none}}
 </style>
 </head>
@@ -189,7 +247,7 @@ body.songs{overflow:hidden}
   </section>
   <section data-shape="date" data-s="0.9"><div class="t"><div class="k">Дата</div><div class="big">16.10.2026</div><div class="txt">Обычный осенний день.<br>Пока не наступил вечер.</div></div></section>
   <section data-shape="t1947" data-s="0.9"><div class="t"><div class="k">Время</div><div class="big">19:47</div><div class="txt">Минута, когда я наконец<br>сказал тебе главное.</div></div></section>
-  <section data-shape="stars" data-s="1" id="constSec"><div class="t"><div class="k">Созвездие</div><div class="txt">Даже звёзды в тот вечер<br>сложились правильно.</div></div></section>
+  <section data-shape="stars" data-s="1" id="constSec"><div class="t"><div class="k">Созвездие</div><div class="txt">Даже звёзды в тот вечер<br>сложились правильно.<button id="jarStar" type="button" aria-label="✦"><span>✦</span></button></div></div></section>
   <section data-shape="infinity" data-s="0.9"><div class="t"><div class="k">С той минуты прошло</div>
     <div class="cnt"><div><b id="cd">0</b><span>дн</span></div><div><b id="ch">0</b><span>ч</span></div><div><b id="cm">0</b><span>мин</span></div><div><b id="cs">0</b><span>сек</span></div></div>
     <div class="txt">И это только начало.<button id="songHeart" type="button" aria-label="♥"><span>♥</span></button></div></div></section>
@@ -223,10 +281,40 @@ body.songs{overflow:hidden}
         <div class="sg-ask">Do you love this song?</div>
         <div class="sg-btns"><button id="sgNo" type="button">No</button><button id="sgYes" type="button">Yes</button></div>
       </div>
-      <div class="sg-end" id="sgEnd"><div class="sg-heart">♥️</div><div class="sg-endh" id="sgEndH"></div><div class="sg-ends">wait till 2nd day secret surprise🤗</div><button class="btn solid" id="sgDone" type="button">Закрыть</button></div>
+      <div class="sg-end" id="sgEnd"><div class="sg-heart">♥️</div><div class="sg-endh" id="sgEndH"></div><div class="sg-ends">wait till 2nd day secret surprise🤗</div><div class="sg-hint" aria-hidden="true">✦</div><button class="btn solid" id="sgDone" type="button">Закрыть</button></div>
     </div>
   </div>
   <audio id="sgAudio" playsinline webkit-playsinline preload="auto"></audio>
+</div>
+<!-- ================= JAR OF NOTES (tiny ✦ in the constellation section) ================= -->
+<div id="jar" aria-hidden="true"><div class="jr-veil"></div>
+  <div class="jr-wrap">
+    <div class="jr-top"><div class="jr-count" id="jrCount">0 / 14</div><button class="sg-x" id="jrClose" type="button" aria-label="Закрыть">×</button></div>
+    <div class="jr-stage" id="jrStage">
+      <div class="jr-title"><div class="k">Reasons I love you</div><b>Tap the jar</b></div>
+      <div class="jr-card" id="jrCard"><div class="jr-paper" id="jrPaper"><div class="jr-heart" id="jrHeart" hidden>♥️</div><div class="jr-k" id="jrNum"></div><div class="jr-text" id="jrText"></div><div class="jr-sig" id="jrSig">Сёма</div></div></div>
+      <button class="jr-jar" id="jrJar" type="button" aria-label="Open a note">
+        <div class="jr-glow"></div>
+        <svg viewBox="0 0 200 250" aria-hidden="true"><defs>
+          <linearGradient id="jrG" x1="0" x2="1"><stop offset="0" stop-color="#ffffff" stop-opacity=".16"/><stop offset=".35" stop-color="#ffffff" stop-opacity=".04"/><stop offset=".8" stop-color="#ff9ec4" stop-opacity=".06"/><stop offset="1" stop-color="#ffffff" stop-opacity=".14"/></linearGradient>
+          </defs>
+          <path d="M60 36 L60 52 C60 62 22 66 22 100 L22 214 C22 232 36 242 54 242 L146 242 C164 242 178 232 178 214 L178 100 C178 66 140 62 140 52 L140 36 Z" fill="url(#jrG)" stroke="#ffd6e6" stroke-opacity=".38" stroke-width="2"/>
+        </svg>
+        <div class="jr-notes" id="jrNotes"></div>
+        <svg viewBox="0 0 200 250" aria-hidden="true"><defs>
+          <linearGradient id="jrL" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff9ec4"/><stop offset="1" stop-color="#e63d78"/></linearGradient></defs>
+          <path d="M34 104 C34 84 44 76 56 72" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="5" stroke-linecap="round"/>
+          <path d="M34 122 L34 200" fill="none" stroke="#fff" stroke-opacity=".22" stroke-width="5" stroke-linecap="round"/>
+          <path d="M166 120 L166 168" fill="none" stroke="#fff" stroke-opacity=".14" stroke-width="3" stroke-linecap="round"/>
+          <rect x="54" y="18" width="92" height="22" rx="7" fill="url(#jrL)"/>
+          <rect x="54" y="18" width="92" height="7" rx="3.5" fill="#fff" fill-opacity=".28"/>
+          <path d="M100 18 C92 6 80 6 82 14 C84 20 96 19 100 18 C104 19 116 20 118 14 C120 6 108 6 100 18 Z" fill="#ff4f8b" stroke="#ffd6e6" stroke-opacity=".5"/>
+        </svg>
+      </button>
+      <div class="jr-hint" id="jrHint">A note for every reason ✦</div>
+      <button class="btn jr-again" id="jrAgain" type="button">Read again ↺</button>
+    </div>
+  </div>
 </div>
 <div id="drawpad"></div>
 <div id="drawtip">Рисуй пальцем ✨</div>
@@ -235,6 +323,24 @@ body.songs{overflow:hidden}
 <script>
 (()=>{
 'use strict';
+/* ================= JAR OF NOTES (edit the notes here) ================= */
+const NOTES=[
+  "Your smile fixes my worst days.",
+  "The way you laugh at my dumb jokes.",
+  "Talking to you feels like home.",
+  "You're beautiful.",
+  "Every song sounds better when I think of you.",
+  "Your eyes. Just your eyes.",
+  "You're my favourite notification.",
+  "I can be completely myself with you.",
+  "You're kind even when nobody's watching.",
+  "Every day with you is my new favourite day.",
+  "I'd choose you again. Every time.",
+  "I think about you every time.",
+  "Your voice is my favourite sound.",
+  "I'm so lucky it's you."];
+const NOTES_FINAL="And that's just the beginning. I love you, Elisa ♥️";
+/* ================= /JAR OF NOTES ================= */
 const cap=document.getElementById('cap');const RM=matchMedia('(prefers-reduced-motion: reduce)').matches;
 const DPR=Math.min(devicePixelRatio||1,2);
 const $=s=>document.querySelector(s), body=document.body;
@@ -476,7 +582,7 @@ function unlock(){
 }
 
 /* ================= interaction ================= */
-const isUI=el=>el&&el.closest&&el.closest('button,input,label,.chip,#drawpad,#drawbar,#envWrap,#songs');
+const isUI=el=>el&&el.closest&&el.closest('button,input,label,.chip,#drawpad,#drawbar,#envWrap,#songs,#jar');
 function tapAt(x,y){
   if(mode!=='main')return;
   const r=secs[0].getBoundingClientRect();
@@ -666,6 +772,72 @@ $('#songHeart').addEventListener('click',e=>{e.stopPropagation();const r=e.curre
 sgYes.addEventListener('click',()=>sgAnswer('yes'));sgNo.addEventListener('click',()=>sgAnswer('no'));
 $('#sgClose').addEventListener('click',sgClose);$('#sgDone').addEventListener('click',sgClose);
 window.__songs=()=>({open:sgOpen,i:sgI,answers:sgAns.slice(),t:sgA.currentTime,paused:sgA.paused,src:sgA.getAttribute('src')||''});
+
+/* ================= jar of notes ================= */
+const jrW=$('#jar'),jrStage=$('#jrStage'),jrJar=$('#jrJar'),jrNotes=$('#jrNotes'),jrCard=$('#jrCard'),jrPaper=$('#jrPaper'),jrCount=$('#jrCount'),jrHint=$('#jrHint');
+const JR_COL=['#ff9ec4','#ffc6a8','#c9b6ff','#a8e6cf','#ffe6a3','#ff7aa8','#9fd4ff'];
+let jrOrder=[],jrPos=0,jrBusy=false,jrOpen=false,jrEls=[];
+function jrBuild(){
+  jrNotes.innerHTML='';jrEls=[];const n=NOTES.length,per=4;
+  for(let i=0;i<n;i++){const row=Math.floor(i/per),col=i%per,cols=Math.min(per,n-row*per),e=document.createElement('i');e.className='jr-note';
+    const x=(col+.5)/cols*100-13.5+(Math.random()-.5)*8,y=row*17+(Math.random()-.5)*5;
+    e.style.cssText=`left:${x.toFixed(1)}%;bottom:${Math.max(0,y).toFixed(1)}%;--c:${JR_COL[i%JR_COL.length]};--r:${((Math.random()-.5)*50).toFixed(0)}deg;--d:${(3+Math.random()*2.5).toFixed(2)}s;--dl:${(-Math.random()*4).toFixed(2)}s`;
+    jrNotes.appendChild(e);jrEls.push(e)}
+}
+function jrShuffle(){const a=NOTES.map((_,i)=>i);for(let i=a.length-1;i>0;i--){const j=(Math.random()*(i+1))|0;[a[i],a[j]]=[a[j],a[i]]}return a}
+function jrSparkle(x,y,n,cols){for(let k=0;k<n;k++){const s=document.createElement('i');s.className='jr-spk';s.textContent=Math.random()<.5?'✦':'·';
+  const c=cols?cols[k%cols.length]:JR_COL[k%JR_COL.length];s.style.setProperty('--c',c);s.style.setProperty('--s',(10+Math.random()*12|0)+'px');jrStage.appendChild(s);
+  const a=Math.random()*TAU,d=30+Math.random()*70;
+  s.animate([{transform:`translate(${x}px,${y}px) scale(.4)`,opacity:1},{transform:`translate(${x+Math.cos(a)*d}px,${y+Math.sin(a)*d-20}px) scale(1) rotate(90deg)`,opacity:0}],{duration:700+Math.random()*500,easing:'cubic-bezier(.2,.8,.2,1)'}).onfinish=()=>s.remove()}}
+function jrRel(el){const a=el.getBoundingClientRect(),b=jrStage.getBoundingClientRect();return{x:a.left-b.left+a.width/2,y:a.top-b.top+a.height/2}}
+function jrStart(){
+  jrOpen=true;jrOrder=jrShuffle();jrPos=0;jrBusy=false;jrBuild();
+  jrCard.className='jr-card';jrStage.classList.remove('reading','done');jrCount.textContent=`0 / ${NOTES.length}`;jrHint.textContent='A note for every reason ✦';
+  jrW.classList.add('on');jrW.setAttribute('aria-hidden','false');body.classList.add('jar');jrW.scrollTop=0;
+  requestAnimationFrame(()=>requestAnimationFrame(()=>jrW.classList.add('in')));
+}
+function jrShow(idx,final){
+  $('#jrHeart').hidden=!final;$('#jrSig').hidden=!!final;
+  $('#jrNum').textContent=final?'':`${jrPos} / ${NOTES.length}`;
+  $('#jrText').textContent=final?NOTES_FINAL:NOTES[idx];
+  jrPaper.style.setProperty('--c',final?'#ffc6dc':JR_COL[idx%JR_COL.length]+'66');
+  jrCard.className='jr-card'+(final?' final':'');void jrCard.offsetWidth;jrCard.classList.add('on');
+}
+function jrNext(){
+  if(!jrOpen||jrBusy)return;
+  if(jrPos>=NOTES.length){if(!jrStage.classList.contains('done'))jrEnd();return}
+  jrBusy=true;buzz(12);
+  jrJar.classList.remove('wobble');void jrJar.offsetWidth;jrJar.classList.add('wobble');
+  const wasOpen=jrCard.classList.contains('on');
+  if(wasOpen){jrCard.classList.add('out')}
+  const idx=jrOrder[jrPos++];
+  const src=jrEls[jrEls.length-jrPos]||jrJar;const from=jrRel(src);src.classList&&src.classList.add('gone');
+  const mouth=jrRel(jrJar);mouth.y-=jrJar.offsetHeight*.42;
+  const cardP=jrRel(jrCard);cardP.y=jrCard.offsetTop+90;
+  const f=document.createElement('i');f.className='jr-fly';f.style.setProperty('--c',JR_COL[idx%JR_COL.length]);jrStage.appendChild(f);
+  jrSparkle(mouth.x,mouth.y,8);
+  jrStage.classList.add('reading');
+  f.animate([
+    {transform:`translate(${from.x-20}px,${from.y-13}px) rotate(-10deg) scale(.7)`},
+    {transform:`translate(${mouth.x-20}px,${mouth.y-40}px) rotate(20deg) scale(1)`,offset:.45},
+    {transform:`translate(${cardP.x-20}px,${cardP.y-13}px) rotate(-4deg) scale(2.4)`,opacity:.9}],
+    {duration:RM?10:650,easing:'cubic-bezier(.3,.7,.3,1)'}).onfinish=()=>{
+      f.remove();jrShow(idx,false);jrSparkle(cardP.x,cardP.y,12);
+      jrCount.textContent=`${jrPos} / ${NOTES.length}`;jrCount.classList.remove('bump');void jrCount.offsetWidth;jrCount.classList.add('bump');
+      jrHint.textContent=jrPos<NOTES.length?'Tap the jar for the next note':'Tap once more ♥';
+      setTimeout(()=>{jrBusy=false},RM?50:450)};
+}
+function jrEnd(){
+  jrBusy=true;jrCard.classList.add('out');
+  setTimeout(()=>{jrShow(0,true);jrStage.classList.add('done');jrHint.textContent='';const p=jrRel(jrCard);
+    jrSparkle(p.x,p.y+40,26,['#ff4f8b','#ff9ec4','#ffe6a3','#c9b6ff']);buzz([20,40,20,40,80]);jrBusy=false;
+    window.__jarDone=true},RM?20:380);
+}
+function jrClose(){jrOpen=false;jrW.classList.remove('in');setTimeout(()=>{jrW.classList.remove('on');jrW.setAttribute('aria-hidden','true');body.classList.remove('jar')},450)}
+$('#jarStar').addEventListener('click',e=>{e.stopPropagation();const r=e.currentTarget.getBoundingClientRect();spark(r.left+r.width/2,r.top+r.height/2,30,6,[1,.85,.6]);buzz([10,20,10]);jrStart()});
+jrJar.addEventListener('click',jrNext);jrCard.addEventListener('click',jrNext);
+$('#jrClose').addEventListener('click',jrClose);$('#jrAgain').addEventListener('click',()=>{jrStart()});
+window.__jar=()=>({open:jrOpen,pos:jrPos,order:jrOrder.slice(),text:$('#jrText').textContent,num:$('#jrNum').textContent,count:jrCount.textContent,done:jrStage.classList.contains('done'),busy:jrBusy});
 
 window.__dbg={go:n=>{override={s:SH[n],x:W/2,y:H*.4,S:Math.min(W,H)*.9,until:performance.now()+4000}},fire:(x,y)=>fireworks(x,y,1)};
 requestAnimationFrame(frame);
