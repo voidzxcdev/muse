@@ -219,61 +219,7 @@ body.jar{overflow:hidden}
 .jr-stage.done .jr-again{display:inline-block}
 .jr-spk{position:absolute;z-index:5;pointer-events:none;font-size:var(--s);color:var(--c);text-shadow:0 0 8px var(--c);left:0;top:0}
 @media (max-height:700px){.jr-paper{min-height:160px;padding:20px 20px 16px}.jr-text{font-size:21px}.jr-stage{--j:min(52vw,200px,calc(40dvh*.8))}}
-/* ===== Memory film (after the jar's final note) ===== */
-.jr-more{display:none;margin-top:12px;box-shadow:0 8px 26px #ff4f8b55,0 0 0 0 #ff4f8b88;animation:flIn .7s cubic-bezier(.2,.8,.2,1) both,flPing 2.4s 1s ease-out infinite}
-.jr-stage.done.more .jr-more{display:inline-block}
-.jr-stage.done.more .jr-again{margin-top:8px;height:44px;font-size:14px;background:none;border-color:#ffffff22;color:#ffffffa0}
-@keyframes flPing{0%{box-shadow:0 8px 26px #ff4f8b55,0 0 0 0 #ff4f8b88}70%,100%{box-shadow:0 8px 26px #ff4f8b55,0 0 0 16px #ff4f8b00}}
-@keyframes flIn{from{opacity:0;transform:translateY(14px) scale(.92)}}
-body.film{overflow:hidden}
-#film{position:fixed;inset:0;z-index:33;display:none;overflow:hidden;overscroll-behavior:contain}
-#film.on{display:block}
-#film button{-webkit-user-select:none;user-select:none;touch-action:manipulation}
-#film .fl-veil{position:absolute;inset:0;background:radial-gradient(100% 60% at 50% 40%,#3d1532 0%,#16070f 58%,#08040c 100%);opacity:0;transition:opacity .6s}
-#film .fl-veil::after{content:"";position:absolute;inset:0;opacity:.07;background-image:radial-gradient(#fff 1px,transparent 1.2px);background-size:22px 22px}
-#film.in .fl-veil{opacity:1}
-.fl-wrap{position:relative;height:100%;height:100dvh;display:flex;flex-direction:column;max-width:720px;margin:0 auto;padding:calc(var(--sat) + 12px) 18px calc(var(--sab) + 16px);transition:opacity .5s,transform .7s cubic-bezier(.2,.8,.2,1)}
-#film:not(.in) .fl-wrap{opacity:0;transform:translateY(30px)}
-.fl-top{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:48px;flex:0 0 auto}
-.fl-k{font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:var(--rose);padding-left:4px}
-.fl-count{min-width:64px;height:34px;padding:0 12px;border-radius:17px;display:grid;place-items:center;background:#ffffff10;border:1px solid #ffffff1c;font-size:14px;font-weight:600;color:var(--rose);font-variant-numeric:tabular-nums;margin-left:auto;transition:transform .3s cubic-bezier(.2,.9,.3,1.4)}
-.fl-count.bump{transform:scale(1.12)}
-.fl-deck{--pw:min(74vw,330px,calc((100dvh - var(--sat) - var(--sab) - 250px) * .66));position:relative;flex:1 1 auto;min-height:0;touch-action:none;cursor:pointer;-webkit-tap-highlight-color:transparent}
-.pol{position:absolute;left:50%;top:50%;width:var(--pw);margin-left:calc(var(--pw) / -2);padding:calc(var(--pw) * .045) calc(var(--pw) * .045) 0;background:#fffdf7;border-radius:3px;
-  box-shadow:0 18px 34px #0000008c,0 3px 8px #00000059,inset 0 0 0 1px #00000010;transform-origin:50% 50%;
-  transform:translate(var(--dx),calc(-50% + var(--dy))) rotate(var(--r));transition:transform .95s cubic-bezier(.2,.85,.25,1.05),filter .6s,box-shadow .6s;will-change:transform}
-.pol.wait{visibility:hidden}
-.pol.drop{animation:flDrop .9s cubic-bezier(.25,.7,.3,1) both}
-@keyframes flDrop{0%{transform:translate(calc(var(--dx) * 3),calc(-50% - 105dvh)) rotate(var(--r0)) scale(1.08)}
-  60%{transform:translate(var(--dx),calc(-50% + var(--dy) + 14px)) rotate(var(--r)) scale(1)}
-  78%{transform:translate(var(--dx),calc(-50% + var(--dy) - 7px)) rotate(calc(var(--r) * .8))}
-  90%{transform:translate(var(--dx),calc(-50% + var(--dy) + 2px)) rotate(var(--r))}
-  100%{transform:translate(var(--dx),calc(-50% + var(--dy))) rotate(var(--r))}}
-.pol.under{filter:brightness(.82) saturate(.9);box-shadow:0 8px 18px #00000070,inset 0 0 0 1px #00000010}
-.pol-ph{position:relative;width:100%;aspect-ratio:4/5;overflow:hidden;background:#e9e1dc linear-gradient(135deg,#efe7e2,#ddd2cc)}
-.pol-ph img,.pol-ph video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;opacity:0;transition:opacity .5s}
-.pol-ph img.ok,.pol-ph video.ok{opacity:1}
-.pol-ph::after{content:"";position:absolute;inset:0;pointer-events:none;box-shadow:inset 0 0 0 1px #0000001a;background:linear-gradient(160deg,#ffffff1a,transparent 40%)}
-.pol-live{position:absolute;left:8px;top:8px;z-index:2;padding:3px 8px 3px 7px;border-radius:10px;background:#00000059;color:#fff;font-size:10px;font-weight:700;letter-spacing:.12em;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
-.pol-live::before{content:"";display:inline-block;width:6px;height:6px;margin-right:5px;border-radius:50%;background:#ff4f8b;box-shadow:0 0 6px #ff4f8b;vertical-align:1px}
-.pol-cap{display:flex;align-items:center;justify-content:center;height:calc(var(--pw) * .25);padding:0 6px;text-align:center;font-family:"Snell Roundhand","Bradley Hand","Segoe Print",Georgia,serif;font-weight:600;
-  font-size:calc(var(--pw) * .068);line-height:1.15;color:#3a1426}
-.pol.drop .pol-cap{animation:jrText .7s .55s cubic-bezier(.2,.8,.2,1) both}
-.pol-tape{position:absolute;left:50%;top:calc(var(--pw) * -.035);width:28%;height:calc(var(--pw) * .085);margin-left:-14%;background:#ffd6e6b8;transform:rotate(var(--tr,-3deg));box-shadow:0 1px 3px #0002}
-.fl-bot{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:10px;padding-top:12px;min-height:124px;justify-content:flex-end}
-.fl-hint{min-height:20px;font-size:14px;color:#ffffff90;text-align:center;transition:opacity .4s}
-.fl-next{margin-top:0;min-width:200px;height:56px;font-size:17px}
-.fl-final{display:none;text-align:center;font-family:"Snell Roundhand","Bradley Hand","Segoe Print",Georgia,serif;font-weight:600;font-size:clamp(24px,6.6vw,32px);line-height:1.25;color:#ffd6e6;text-shadow:0 0 18px #ff4f8b88;padding:0 8px}
-.fl-row{display:none;gap:10px;justify-content:center;flex-wrap:wrap}
-.fl-row .btn{margin-top:0;height:52px;min-width:140px}
-#film.done .fl-next,#film.done .fl-hint{display:none}
-#film.done .fl-final{display:block;animation:jrText .9s .5s cubic-bezier(.2,.8,.2,1) both}
-#film.done .fl-row{display:flex;animation:flIn .7s 1.1s cubic-bezier(.2,.8,.2,1) both}
-#film.done .fl-deck{cursor:default}
-#film.done .pol{filter:none;box-shadow:0 10px 22px #00000080,inset 0 0 0 1px #00000010}
-.fl-spk{position:absolute;z-index:40;pointer-events:none;font-size:var(--s);color:var(--c);text-shadow:0 0 8px var(--c);left:0;top:0}
-@media (min-width:700px) and (min-height:600px){.fl-deck{--pw:min(340px,calc((100dvh - 260px) * .68))}}
-@media (prefers-reduced-motion:reduce){*{animation:none!important;transition-duration:.01ms!important}.pol{transition:none}.t{filter:none;transform:none}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition-duration:.01ms!important}.t{filter:none;transform:none}}
 </style>
 </head>
 <body class="locked">
@@ -366,21 +312,7 @@ body.film{overflow:hidden}
         </svg>
       </button>
       <div class="jr-hint" id="jrHint">A note for every reason ✦</div>
-      <button class="btn solid jr-more" id="jrMore" type="button">One more surprise ✦</button>
       <button class="btn jr-again" id="jrAgain" type="button">Read again ↺</button>
-    </div>
-  </div>
-</div>
-<!-- ================= MEMORY FILM (after the jar's final note) ================= -->
-<div id="film" aria-hidden="true"><div class="fl-veil"></div>
-  <div class="fl-wrap">
-    <div class="fl-top"><div class="fl-k">Our memories ✦</div><div class="fl-count" id="flCount">0 / 6</div><button class="sg-x" id="flClose" type="button" aria-label="Закрыть">×</button></div>
-    <div class="fl-deck" id="flDeck" role="button" aria-label="Next photo" tabindex="0"></div>
-    <div class="fl-bot">
-      <div class="fl-hint" id="flHint">Tap or swipe for the next one</div>
-      <button class="btn solid fl-next" id="flNext" type="button">Next memory ›</button>
-      <div class="fl-final" id="flFinal"></div>
-      <div class="fl-row"><button class="btn" id="flAgain" type="button">Again ↺</button><button class="btn solid" id="flDone" type="button">Close ♥️</button></div>
     </div>
   </div>
 </div>
@@ -409,18 +341,6 @@ const NOTES=[
   "I'm so lucky it's you."];
 const NOTES_FINAL="And that's just the beginning. I love you, Elisa ♥️";
 /* ================= /JAR OF NOTES ================= */
-/* ================= MEMORY FILM (edit photos + captions here) ================= */
-// src: photo under /film/ (elisa host only); video: optional short muted loop shown as a "live" polaroid (src is its poster).
-const FILM=[
-  {src:"f1.webp", cap:"My favourite person in the whole world"},
-  {src:"f2.webp", cap:"Mirror selfie queen ✦"},
-  {src:"f3.webp", video:"f3.mp4", cap:"That smile. Every single time."},
-  {src:"f4.webp", cap:"Hi, beautiful ♥️"},
-  {src:"f5.webp", cap:"Cute without even trying"},
-  {src:"f6.webp", cap:"I'd follow you anywhere"}];
-const FILM_FINAL="To many more memories together ♥️";
-const FILM_V=1; // bump after changing the files (cache-busting ?v=)
-/* ================= /MEMORY FILM ================= */
 const cap=document.getElementById('cap');const RM=matchMedia('(prefers-reduced-motion: reduce)').matches;
 const DPR=Math.min(devicePixelRatio||1,2);
 const $=s=>document.querySelector(s), body=document.body;
@@ -662,7 +582,7 @@ function unlock(){
 }
 
 /* ================= interaction ================= */
-const isUI=el=>el&&el.closest&&el.closest('button,input,label,.chip,#drawpad,#drawbar,#envWrap,#songs,#jar,#film');
+const isUI=el=>el&&el.closest&&el.closest('button,input,label,.chip,#drawpad,#drawbar,#envWrap,#songs,#jar');
 function tapAt(x,y){
   if(mode!=='main')return;
   const r=secs[0].getBoundingClientRect();
@@ -872,7 +792,7 @@ function jrSparkle(x,y,n,cols){for(let k=0;k<n;k++){const s=document.createEleme
 function jrRel(el){const a=el.getBoundingClientRect(),b=jrStage.getBoundingClientRect();return{x:a.left-b.left+a.width/2,y:a.top-b.top+a.height/2}}
 function jrStart(){
   jrOpen=true;jrOrder=jrShuffle();jrPos=0;jrBusy=false;jrBuild();
-  jrCard.className='jr-card';jrStage.classList.remove('reading','done','more');jrCount.textContent=`0 / ${NOTES.length}`;jrHint.textContent='A note for every reason ✦';
+  jrCard.className='jr-card';jrStage.classList.remove('reading','done');jrCount.textContent=`0 / ${NOTES.length}`;jrHint.textContent='A note for every reason ✦';
   jrW.classList.add('on');jrW.setAttribute('aria-hidden','false');body.classList.add('jar');jrW.scrollTop=0;
   requestAnimationFrame(()=>requestAnimationFrame(()=>jrW.classList.add('in')));
 }
@@ -911,103 +831,13 @@ function jrEnd(){
   jrBusy=true;jrCard.classList.add('out');
   setTimeout(()=>{jrShow(0,true);jrStage.classList.add('done');jrHint.textContent='';const p=jrRel(jrCard);
     jrSparkle(p.x,p.y+40,26,['#ff4f8b','#ff9ec4','#ffe6a3','#c9b6ff']);buzz([20,40,20,40,80]);jrBusy=false;
-    window.__jarDone=true;setTimeout(()=>{if(jrOpen&&jrStage.classList.contains('done')){jrStage.classList.add('more');flPreload()}},RM?20:1600)},RM?20:380);
+    window.__jarDone=true},RM?20:380);
 }
 function jrClose(){jrOpen=false;jrW.classList.remove('in');setTimeout(()=>{jrW.classList.remove('on');jrW.setAttribute('aria-hidden','true');body.classList.remove('jar')},450)}
 $('#jarStar').addEventListener('click',e=>{e.stopPropagation();const r=e.currentTarget.getBoundingClientRect();spark(r.left+r.width/2,r.top+r.height/2,30,6,[1,.85,.6]);buzz([10,20,10]);jrStart()});
 jrJar.addEventListener('click',jrNext);jrCard.addEventListener('click',jrNext);
 $('#jrClose').addEventListener('click',jrClose);$('#jrAgain').addEventListener('click',()=>{jrStart()});
 window.__jar=()=>({open:jrOpen,pos:jrPos,order:jrOrder.slice(),text:$('#jrText').textContent,num:$('#jrNum').textContent,count:jrCount.textContent,done:jrStage.classList.contains('done'),busy:jrBusy});
-
-/* ---------- memory film ---------- */
-const flW=$('#film'),flDeck=$('#flDeck'),flCount=$('#flCount'),flHint=$('#flHint');
-const flURL=n=>`/film/${n}?v=${FILM_V}`;
-let flOpen=false,flPos=0,flBusy=false,flCards=[],flPre=false,flT=[];
-const flRnd=(a,b)=>a+Math.random()*(b-a);
-function flPreload(){if(flPre)return;flPre=true;FILM.forEach(f=>{const i=new Image();i.decoding='async';i.src=flURL(f.src)})}
-function flLater(fn,ms){flT.push(setTimeout(fn,ms))}
-function flMake(f,i){
-  const el=document.createElement('div');el.className='pol wait';
-  const r=flRnd(3,8)*(i%2?1:-1);
-  el.style.setProperty('--r',r.toFixed(1)+'deg');el.style.setProperty('--r0',(r*3+flRnd(-12,12)).toFixed(1)+'deg');
-  el.style.setProperty('--dx',flRnd(-12,12).toFixed(0)+'px');el.style.setProperty('--dy',flRnd(-10,10).toFixed(0)+'px');
-  el.style.setProperty('--tr',flRnd(-6,6).toFixed(1)+'deg');
-  const ph=document.createElement('div');ph.className='pol-ph';
-  const img=document.createElement('img');img.alt='';img.decoding='async';img.draggable=false;
-  img.onload=()=>img.classList.add('ok');img.src=flURL(f.src);ph.appendChild(img);
-  if(f.video){const v=document.createElement('video');v.muted=true;v.defaultMuted=true;v.loop=true;v.playsInline=true;
-    v.setAttribute('muted','');v.setAttribute('playsinline','');v.setAttribute('webkit-playsinline','');v.preload='auto';v.poster=flURL(f.src);
-    v.disablePictureInPicture=true;v.addEventListener('playing',()=>v.classList.add('ok'));v.src=flURL(f.video);ph.appendChild(v);
-    const b=document.createElement('div');b.className='pol-live';b.textContent='LIVE';ph.appendChild(b);el._v=v}
-  const tape=document.createElement('div');tape.className='pol-tape';
-  const c=document.createElement('div');c.className='pol-cap';c.textContent=f.cap;
-  el.append(tape,ph,c);el.style.zIndex=String(i+1);return el;
-}
-function flPlay(el){flCards.forEach(c=>{if(c._v&&c!==el){try{c._v.pause()}catch(_){}}});
-  if(el&&el._v){const p=el._v.play();if(p&&p.catch)p.catch(()=>{})}}
-function flSparkle(x,y,n){const cols=['#ff4f8b','#ff9ec4','#ffe6a3','#c9b6ff'];for(let k=0;k<n;k++){const e=document.createElement('div');e.className='fl-spk';e.textContent=Math.random()<.5?'✦':'♥';
-  e.style.setProperty('--s',(8+Math.random()*12).toFixed(0)+'px');e.style.setProperty('--c',cols[k%cols.length]);flW.appendChild(e);
-  const a=Math.random()*TAU,d=40+Math.random()*90;
-  const an=e.animate([{transform:`translate(${x}px,${y}px) scale(.4)`,opacity:1},{transform:`translate(${x+Math.cos(a)*d}px,${y+Math.sin(a)*d-30}px) scale(1)`,opacity:0}],{duration:900+Math.random()*500,easing:'cubic-bezier(.2,.8,.3,1)'});
-  an.onfinish=()=>e.remove()}}
-function flShow(i){
-  const el=flCards[i];if(!el)return;
-  flCards.forEach((c,k)=>c.classList.toggle('under',k<i));
-  el.classList.remove('wait');if(!RM){el.classList.remove('drop');void el.offsetWidth;el.classList.add('drop')}
-  flCount.textContent=`${i+1} / ${FILM.length}`;flCount.classList.remove('bump');void flCount.offsetWidth;flCount.classList.add('bump');
-  flLater(()=>{buzz(8);flPlay(el)},RM?0:520);
-}
-function flNext(){
-  if(!flOpen||flBusy||flW.classList.contains('done'))return;
-  if(flPos>=FILM.length){return flEnd()}
-  flBusy=true;flShow(flPos);flPos++;
-  if(flPos===1)flHint.textContent='Tap or swipe for the next one';
-  else if(flPos===FILM.length){flHint.textContent='One last look…';$('#flNext').textContent='See them all ✦'}
-  flLater(()=>{flBusy=false},RM?60:620);
-}
-function flLayout(){
-  // fan the pile out into a neat grid collage that fits the deck
-  const n=flCards.length,W=flDeck.clientWidth,H=flDeck.clientHeight;if(!n||!W||!H)return;
-  const w=flCards[0].offsetWidth,h=flCards[0].offsetHeight;
-  let best=null;for(let cols=1;cols<=n;cols++){const rows=Math.ceil(n/cols),s=Math.min(W/cols/w,H/rows/h)*.94;if(!best||s>best.s)best={cols,rows,s}}
-  const {cols,rows,s}=best,cw=W/cols,ch=H/rows;
-  flCards.forEach((c,i)=>{const row=Math.floor(i/cols),inRow=Math.min(cols,n-row*cols),col=i-row*cols;
-    const x=(col+.5)*cw+(cols-inRow)*cw/2-W/2,y=(row+.5)*ch-H/2;
-    c.style.transitionDelay=RM?'0s':(i*.07).toFixed(2)+'s';
-    c.style.transform=`translate(${x.toFixed(1)}px,calc(-50% + ${y.toFixed(1)}px)) rotate(${(i%2?1:-1)*flRnd(1.5,4).toFixed(1)}deg) scale(${s.toFixed(3)})`})
-}
-function flEnd(){
-  flBusy=true;flW.classList.add('done');flCount.textContent='♥';
-  flCards.forEach(c=>{c.classList.remove('drop','under','wait')});void flDeck.offsetWidth;
-  requestAnimationFrame(()=>{flLayout();flCards.forEach(c=>{if(c._v){const p=c._v.play();if(p&&p.catch)p.catch(()=>{})}})});
-  flLater(()=>{const r=flDeck.getBoundingClientRect();flSparkle(r.left+r.width/2,r.top+r.height/2,26);buzz([20,40,20,40,80]);flBusy=false;window.__filmDone=true},RM?20:1100);
-}
-function flReset(){
-  flT.forEach(clearTimeout);flT=[];flCards.forEach(c=>{if(c._v){try{c._v.pause()}catch(_){}c._v.removeAttribute('src');try{c._v.load()}catch(_){}}});
-  flDeck.textContent='';flCards=FILM.map(flMake);flDeck.append(...flCards);flPos=0;flBusy=false;window.__filmDone=false;
-  flW.classList.remove('done');flCount.textContent=`0 / ${FILM.length}`;flHint.textContent='Tap or swipe for the next one';$('#flNext').textContent='Next memory ›';
-  $('#flFinal').textContent=FILM_FINAL;
-}
-function flStart(){
-  flPreload();flReset();flOpen=true;flW.classList.add('on');flW.setAttribute('aria-hidden','false');body.classList.add('film');
-  requestAnimationFrame(()=>requestAnimationFrame(()=>{flW.classList.add('in');flLater(flNext,RM?30:450)}));
-}
-function flClose(){flOpen=false;flT.forEach(clearTimeout);flT=[];flCards.forEach(c=>{if(c._v)try{c._v.pause()}catch(_){}});flW.classList.remove('in');
-  setTimeout(()=>{if(flOpen)return;flW.classList.remove('on');flW.setAttribute('aria-hidden','true');body.classList.remove('film')},600)}
-// tap or swipe (any direction) on the pile = next photo
-let flPt=null;
-flDeck.addEventListener('pointerdown',e=>{flPt={x:e.clientX,y:e.clientY,t:performance.now()}});
-flDeck.addEventListener('pointerup',e=>{if(!flPt)return;const d=Math.hypot(e.clientX-flPt.x,e.clientY-flPt.y);flPt=null;if(d<12||d>36)flNext()});
-flDeck.addEventListener('pointercancel',()=>{flPt=null});
-flDeck.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();flNext()}});
-document.addEventListener('keydown',e=>{if(!flOpen)return;if(e.key==='Escape')flClose();else if(e.key==='ArrowRight'||e.key==='ArrowDown')flNext()});
-addEventListener('resize',()=>{if(flOpen&&flW.classList.contains('done'))flLayout()});
-$('#flNext').addEventListener('click',flNext);
-$('#jrMore').addEventListener('click',e=>{const r=e.currentTarget.getBoundingClientRect();spark(r.left+r.width/2,r.top+r.height/2,26,6,[1,.55,.75]);buzz([10,20,10]);flStart()});
-$('#flClose').addEventListener('click',flClose);$('#flDone').addEventListener('click',flClose);$('#flAgain').addEventListener('click',()=>{flReset();flLater(flNext,RM?30:300)});
-window.__film=()=>({open:flOpen,pos:flPos,n:FILM.length,done:flW.classList.contains('done'),busy:flBusy,more:jrStage.classList.contains('more'),count:flCount.textContent,
-  imgs:flCards.map(c=>{const i=c.querySelector('img');return i.complete&&i.naturalWidth>0}),video:flCards.filter(c=>c._v).map(c=>({paused:c._v.paused,t:+c._v.currentTime.toFixed(2),ready:c._v.readyState})),
-  final:$('#flFinal').textContent});
 
 window.__dbg={go:n=>{override={s:SH[n],x:W/2,y:H*.4,S:Math.min(W,H)*.9,until:performance.now()+4000}},fire:(x,y)=>fireworks(x,y,1)};
 requestAnimationFrame(frame);

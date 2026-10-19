@@ -5362,12 +5362,6 @@ _elisa_warm_at = 0.0
 _elisa_warm_lock = threading.Lock()
 
 
-ELISA_ASSETS = os.path.join(HERE, "elisa_assets")  # outside STATIC: never served on other hosts
-# Memory film after the jar: polaroid photos + one short muted "live" clip, elisa host only.
-ELISA_FILM = {"/film/" + n: n for n in ("f1.webp", "f2.webp", "f3.webp", "f3.mp4", "f4.webp", "f5.webp", "f6.webp")}
-ELISA_CTYPES = {".webp": "image/webp", ".jpg": "image/jpeg", ".mp4": "video/mp4"}
-
-
 def _elisa_warm_all():
     """Cache the 4 elisa.style secret tracks as AAC (iOS-safe) one after another, so
     the secret plays from disk. Runs at most every 10 min; refreshes mtimes so the
@@ -6114,9 +6108,6 @@ class Handler(SimpleHTTPRequestHandler):
             self.directory = STATIC
             self.path = "/eliza.html"
             return super().do_GET()
-        if path in ELISA_FILM:
-            # Memory film after the jar: its photos and the live clip, elisa host only.
-            return self._send_elisa_asset(ELISA_FILM[path])
         if path in ("/api/audio", "/api/art"):
             # Song secret only: these 4 IDs, nothing else of Muse's API on this host.
             qs = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
@@ -6130,40 +6121,6 @@ class Handler(SimpleHTTPRequestHandler):
                                    "started": bool(_warm_audio(v, force=True))}, 202)
             return self._proxy_audio(v, ios=self._client_ios(qs))
         self.send_error(404)
-
-    def _send_elisa_asset(self, name):
-        fp = os.path.join(ELISA_ASSETS, "film", name)
-        try:
-            with open(fp, "rb") as f:
-                data = f.read()
-        except OSError:
-            return self.send_error(404)
-        size, start, end = len(data), 0, len(data) - 1
-        # Byte ranges: iOS Safari only plays <video> when the server answers Range with 206.
-        m = re.match(r"bytes=(\d*)-(\d*)$", (self.headers.get("Range") or "").strip())
-        if m and (m.group(1) or m.group(2)):
-            if m.group(1):
-                start = int(m.group(1))
-                end = min(int(m.group(2)), size - 1) if m.group(2) else size - 1
-            else:
-                start = max(0, size - int(m.group(2)))
-            if start > end or start >= size:
-                self.send_response(416)
-                self.send_header("Content-Range", f"bytes */{size}")
-                self.send_header("Content-Length", "0")
-                self.end_headers()
-                return
-            self.send_response(206)
-            self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
-        else:
-            self.send_response(200)
-        self.send_header("Content-Type", ELISA_CTYPES.get(os.path.splitext(name)[1], "application/octet-stream"))
-        self.send_header("Content-Length", str(end - start + 1))
-        self.send_header("Accept-Ranges", "bytes")
-        self.send_header("Cache-Control", "public, max-age=86400")
-        self.end_headers()
-        if self.command != "HEAD":
-            self.wfile.write(data[start:end + 1])
 
     def _send_art(self, v):
         # Full-size cover for the song secret (maxres), falls back to Muse's small art.
